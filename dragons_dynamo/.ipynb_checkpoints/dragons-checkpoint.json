@@ -1,0 +1,16 @@
+[
+  {
+    "dragon_name": "sparky",
+    "drgaon_type": "green",
+    "description": "breaths acid",
+    "attack": 5,
+    "defense": 4
+  },
+  {
+    "dragon_name": "tallie",
+    "drgaon_type": "red",
+    "description": "breaths fire",
+    "attack": 7,
+    "defense": 9
+  }
+]
