@@ -6,8 +6,6 @@ import json
 import logging
 import os
 from pprint import pprint
-import requests
-from zipfile import ZipFile
 import boto3
 import pandas as pd
 from boto3.dynamodb.conditions import Key, Attr
@@ -33,8 +31,11 @@ class DynamoTable:
         if not table_name:
             self.table_name = None
         elif not self.exists(table_name):
-            print("Table doesn't exist. To create use create_table() function.")
+            logger.error(
+                "Table %s doesn't exist. To create use create_table() function.",
+                table_name)
             self.table_name = None
+            raise
         else:
             self.select_table(table_name)
         
@@ -196,24 +197,19 @@ class DynamoTable:
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
 
-    def add_movie(self, title, year, plot, rating):
+    def add_item(self, item):
         """
-        Adds a movie to the table.
-        :param title: The title of the movie.
-        :param year: The release year of the movie.
-        :param plot: The plot summary of the movie.
-        :param rating: The quality rating of the movie.
+        Adds a item to the table.
+        :param item: The item to add to the table.
         """
         try:
             self.table.put_item(
-                Item={
-                    'year': year,
-                    'title': title,
-                    'info': {'plot': plot, 'rating': Decimal(str(rating))}})
+                Item=item
+            )
         except ClientError as err:
             logger.error(
-                "Couldn't add movie %s to table %s. Here's why: %s: %s",
-                title, self.table.name,
+                "Couldn't add item to table %s. Here's why: %s: %s",
+                self.table.name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
 
