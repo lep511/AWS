@@ -3,11 +3,13 @@ from io import BytesIO
 from datetime import datetime
 import ast
 import json
+import gzip
 import logging
 import os
 from pprint import pprint
 import boto3
 import pandas as pd
+from boto3.dynamodb.types import Binary
 from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
@@ -20,6 +22,8 @@ class DecimalEncoder(json.JSONEncoder):
 
 
 class DynamoTable:
+    min_compress = 250
+    
     def __init__(self, table_name=None):
         """
         :param table_name: A DynamoDB table.
@@ -105,7 +109,7 @@ class DynamoTable:
                      partition_key_type, 
                      sort_key=None, 
                      sort_key_type=None, 
-                     provisioned=True, # or 'PAY_PER_REQUEST'
+                     provisioned=False, # or 'PAY_PER_REQUEST'
                      rcu=10, 
                      wcu=10
                     ):
@@ -158,14 +162,14 @@ class DynamoTable:
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
     
-    def batch_pandas(self, dataframe):
-        df_c = dataframe.copy()
-        json_df = df_c.to_json(orient="records")
+    def batch_pandas(self, dataframe, compress=False):
+        json_df = dataframe.fillna("").to_json(orient="records")
         parsed = json.loads(json_df, parse_float=Decimal)
+        if compress:
+            parsed = self.convert_binary(parsed)      
         self.write_batch(parsed)
-    
-    def load_json(self, json_file):
-
+        
+    def load_json(self, json_file, compress=False):
         try:
             with open(json_file) as json_data:
                 parsed = json.load(json_data, parse_float=Decimal)
@@ -173,6 +177,8 @@ class DynamoTable:
             logger.error(
                 "Couldn't load data from %s or the file does not exist.", json_file)
             raise
+        if compress:
+            parsed = self.convert_binary(parsed)
         self.write_batch(parsed)
     
     def write_batch(self, items):
@@ -197,11 +203,18 @@ class DynamoTable:
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
 
-    def add_item(self, item):
+    def add_item(self, item, compress=False):
         """
         Adds a item to the table.
         :param item: The item to add to the table.
         """
+        if compress:
+            for att in item:
+                if type(att) == str:
+                    if len(item[att]) > self.min_compress:
+                        s_in = bytes(item[att], 'utf-8')
+                        s_out = gzip.compress(s_in)
+                        item[att] = s_out
         try:
             self.table.put_item(
                 Item=item
@@ -235,7 +248,7 @@ class DynamoTable:
             elif type(pk_value) != type(act_pk_type):
                 print(f"The format of the main key is incorrect, it should be: {type(act_pk_type)}")
                 return
-            elif type(se_value) != type(act_pk_type):
+            elif type(se_value) != type(act_sh_type):
                 print(f"The format of the sort key is incorrect, it should be: {type(act_pk_type)}")
                 return
             response = self.table.get_item(Key={pk_name: pk_value, sh_name: se_value})
@@ -245,6 +258,8 @@ class DynamoTable:
                 return
             response = self.table.get_item(Key={pk_name: pk_value})
         try:
+            if self.found_binary(response):
+                response = self.decompress_binary(response)
             js_data = json.dumps(response['Item'], cls=DecimalEncoder)
             result = json.loads(js_data)
             return result
@@ -314,7 +329,11 @@ class DynamoTable:
         if len(response['Items']) == 0:
             print("No items were found matching your search query.")
             return None
-        elif to_pandas:
+        
+        if self.found_binary(response, only_check=True):
+            response = self.decompress_binary(response)
+        
+        if to_pandas:
             return pd.DataFrame(response['Items'])
         else:
             return response['Items']
@@ -381,6 +400,65 @@ class DynamoTable:
                             ]
         )
         
+    def found_binary(self, response, only_check=False):
+        bin_found = []
+        elem = "Item" if "Item" in response else "Items"
+        
+        if elem == "Item":
+            for att in response[elem]:
+                if type(response[elem][att]) is Binary:
+                    bin_found.append(att)
+                    if only_check: return True
+        
+        else:
+            for i in range(len(response[elem])):
+                for att in response[elem][i]:
+                    if type(response[elem][i][att]) is Binary:
+                        bin_found.append(att)
+                        if only_check: return True
+                    
+        if len(bin_found) != 0:
+            return bin_found
+        else:
+            return False
+        
+    def check_binary(self, item):
+        if type(item) == str:
+            if len(item) > self.min_compress:
+                return True
+        return False
+    
+    def convert_binary(self, parsed):
+        for i in range(len(parsed)):
+            for key, value in parsed[i].items():
+                if self.check_binary(value):
+                    s_in = bytes(value, 'utf-8')
+                    s_out = gzip.compress(s_in)
+                    parsed[i][key] = s_out
+        return parsed
+    
+    def decompress_binary(self, response):
+        elem = "Item" if "Item" in response else "Items"
+        
+        if elem == "Item":
+            binary_att = self.found_binary(response)
+            for att in binary_att:
+                try:
+                    val_att = response[elem][att].value
+                    val_dec = gzip.decompress(val_att).decode()
+                    response[elem][att] = val_dec
+                except:
+                    pass
+        else:
+            for i in range(len(response[elem])):
+                for att in response[elem][i]:
+                    if type(response[elem][i][att]) is Binary:
+                        val_att = response[elem][i][att].value
+                        val_dec = gzip.decompress(val_att).decode()
+                        response[elem][i][att] = val_dec
+            
+        return response
+    
     def delete_table(self):
         """
         Deletes the table.
