@@ -15,22 +15,23 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 
 class DecimalEncoder(json.JSONEncoder):
-  def default(self, obj):
-    if isinstance(obj, Decimal):
-      return float(obj)
-    return json.JSONEncoder.default(self, obj)
-
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        elif isinstance(obj, set):
+            return list(obj)
+        return json.JSONEncoder.default(self, obj)
 
 class DynamoTable:
     min_compress = 250
     
-    def __init__(self, table_name=None):
+    def __init__(self, table_name=None, dyn_resource=None):
         """
         :param table_name: A DynamoDB table.
         """
         self.table_name = table_name
-        self.dyn_resource = boto3.resource('dynamodb')
-        self.dyn_client = boto3.client('dynamodb')
+        if dyn_resource is None:
+            self.dyn_resource = boto3.resource('dynamodb')
         self.__keyType = {"S": "s", "N": 0, "B": b"b"}
         if not table_name:
             self.table_name = None
@@ -82,17 +83,7 @@ class DynamoTable:
             self.table_name = None
         else:
             self.table_name = table_name
-            self.all_tags = self.dyn_client.get_paginator('list_tags_of_resource')
-            for i in self.all_tags.paginate(ResourceArn=self.table.table_arn):
-                try:
-                    if i['Tags'][0]['Key'] == "backup_num":
-                        count_it = i['Tags'][0]['Value']
-                        self.backup_count = int(count_it)
-                    else:
-                        self.backup_count = 0
-                except:
-                    self.backup_count = 0      
-            
+
     @property
     def item_count(self):
         """
@@ -153,9 +144,7 @@ class DynamoTable:
                     BillingMode="PAY_PER_REQUEST")
             self.table.wait_until_exists()
             self.table_name = table_name
-            self.dyn_client.tag_resource(ResourceArn=self.table.table_arn, 
-                           Tags=[{'Key': 'backup_num', 'Value': '0'}]
-            )
+
         except ClientError as err:
             logger.error(
                 "Couldn't create table %s. Here's why: %s: %s", table_name,
@@ -258,27 +247,48 @@ class DynamoTable:
                 return
             response = self.table.get_item(Key={pk_name: pk_value})
         try:
-            if self.found_binary(response):
-                response = self.decompress_binary(response)
+            #if self.found_binary(response):
+                #response = self.decompress_binary(response)
             js_data = json.dumps(response['Item'], cls=DecimalEncoder)
             result = json.loads(js_data)
             return result
         except:
             return (None, response)
 
-    def scan_att(self, att_name, query, to_pandas=True, consumed_capacity=False):
-        response = self.table.scan(
-            FilterExpression=Attr(att_name).begins_with(query),
-            ReturnConsumedCapacity="TOTAL"
-        )
+    def scan_att(self, att_name, query, to_pandas=True, consumed_capacity=False, pages=None):
+        scan_kwargs = {
+            'FilterExpression': Attr(att_name).eq(query),
+            'ReturnConsumedCapacity': "TOTAL"
+        }
+        done = False
+        start_key = None
+        response_total = []
+        response_final = []
+        consumed_capacity_count = 0
+        if pages is None:
+            pages = 1000
+        
+        while not done and pages != 0:
+            if start_key:
+                scan_kwargs['ExclusiveStartKey'] = start_key
+            response = self.table.scan(**scan_kwargs)
+            response_total.append(response['Items'])
+            start_key = response.get('LastEvaluatedKey', None)
+            done = start_key is None
+            consumed_capacity_count += response['ConsumedCapacity']['CapacityUnits']   
+            pages -= 1
+
         if consumed_capacity:
-            consumed_text = f"Consumed Capacity: {response['ConsumedCapacity']['CapacityUnits']}"
-            print(consumed_text)
+            print(f"Consumed Capacity: {consumed_capacity_count}")
+        
+        for elem in response_total:
+            for item in elem:
+                response_final.append(item)
         
         if to_pandas:
-            return pd.DataFrame(response['Items'])
+            return pd.DataFrame(response_final)
         else:
-            return response['Items']
+            return response_final
         
     def update_movie(self, title, year, rating, plot):
         """
@@ -382,24 +392,7 @@ class DynamoTable:
                 "Couldn't delete movie %s. Here's why: %s: %s", title,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
-
-    def create_backup(self, name="automatic"):
-        if name == "automatic":
-            self.backup_count += 1
-            count_b = str(self.backup_count).zfill(5)
-            name = f"Backup-{count_b}"
-        else:
-            name = name.replace(" ", "_")
-        self.dyn_client.create_backup(
-            TableName=self.table_name,
-            BackupName=name
-        )
-        self.dyn_client.tag_resource(ResourceArn=self.table.table_arn, 
-                           Tags=[{'Key': 'backup_num', 
-                                  'Value': str(self.backup_count)}
-                            ]
-        )
-        
+       
     def found_binary(self, response, only_check=False):
         bin_found = []
         elem = "Item" if "Item" in response else "Items"
