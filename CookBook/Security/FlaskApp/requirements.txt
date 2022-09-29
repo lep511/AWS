@@ -1,0 +1,6 @@
+Flask
+Flask-WTF
+mysql_connector_python
+boto3
+pillow
+requests
