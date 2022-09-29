@@ -1,5 +1,0 @@
-{
-  "bucket":"sagemaker-sample-data-us-east-1",
-  "prefix":"tensorflow/mnist/",
-  "file": "train_data.npy"
-}

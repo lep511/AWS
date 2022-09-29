@@ -1,5 +1,0 @@
-requests
-joblib
-xgboost==1.1.1
-pandas
-sklearn

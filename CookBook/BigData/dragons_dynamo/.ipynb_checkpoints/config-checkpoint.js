@@ -1,1 +1,0 @@
-readme https://u2kwb6rtkl.execute-api.us-east-1.amazonaws.com/prod
