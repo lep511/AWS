@@ -1,0 +1,471 @@
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: Building a three tier network
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: '192.168.0.0/16'
+  PublicACidr:
+    Type: String
+    Default: 192.168.1.0/24
+  PublicBCidr:
+    Type: String
+    Default: 192.168.2.0/24
+  PublicCCidr:
+    Type: String
+    Default: 192.168.3.0/24
+  AppACidr:
+    Type: String
+    Default: 192.168.5.0/24
+  AppBCidr:
+    Type: String
+    Default: 192.168.6.0/24
+  AppCCidr:
+    Type: String
+    Default: 192.168.7.0/24
+  DbACidr:
+    Type: String
+    Default: 192.168.9.0/24
+  DbBCidr:
+    Type: String
+    Default: 192.168.10.0/24
+  DbCCidr:
+    Type: String
+    Default: 192.168.11.0/24
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    
+Resources:
+  MyVpc:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags: 
+        - Key: Name
+          Value: myVpc
+  
+  PublicA:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: us-east-1a
+      CidrBlock: !Ref PublicACidr
+      MapPublicIpOnLaunch: true
+      Tags: 
+        - Key: Name
+          Value: PublicA
+      VpcId: !Ref MyVpc
+  
+  PublicB:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: us-east-1b
+      CidrBlock: !Ref PublicBCidr
+      MapPublicIpOnLaunch: true
+      Tags: 
+        - Key: Name
+          Value: PublicB
+      VpcId: !Ref MyVpc
+  
+  PublicC:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: us-east-1c
+      CidrBlock: !Ref PublicCCidr
+      MapPublicIpOnLaunch: true
+      Tags: 
+        - Key: Name
+          Value: PublicC
+      VpcId: !Ref MyVpc
+  
+  AppA:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: us-east-1a
+      CidrBlock: !Ref AppACidr
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: appA
+      VpcId: !Ref MyVpc
+  
+  AppB:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: us-east-1b
+      CidrBlock: !Ref AppBCidr
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: appB
+      VpcId: !Ref MyVpc
+  
+  AppC:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: us-east-1c
+      CidrBlock: !Ref AppCCidr
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: appC
+      VpcId: !Ref MyVpc
+  
+  DbA:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: us-east-1a
+      CidrBlock: !Ref DbACidr
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: dbA
+      VpcId: !Ref MyVpc
+  
+  DbB:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: us-east-1b
+      CidrBlock: !Ref DbBCidr
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: dbB
+      VpcId: !Ref MyVpc
+  
+  DbC:
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: us-east-1c
+      CidrBlock: !Ref DbCCidr
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: dbC
+      VpcId: !Ref MyVpc
+  
+  MyIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: myIgw
+  
+  myPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+      - Key: Name
+        Value: PublicRoute
+  
+  myRouteToIgw:
+    Type: AWS::EC2::Route
+    Properties:
+       RouteTableId: !Ref myPublicRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref MyIGW
+  
+  vpcAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      InternetGatewayId: !Ref MyIGW
+      VpcId: !Ref MyVpc
+
+  myPublicASubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicA
+      RouteTableId: !Ref myPublicRouteTable
+  
+  myPublicBSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicB
+      RouteTableId: !Ref myPublicRouteTable
+  
+  myPublicCSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicC
+      RouteTableId: !Ref myPublicRouteTable
+  
+  myPrivateARouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+      - Key: Name
+        Value: PrivateARoute
+  
+  myPrivateBRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+      - Key: Name
+        Value: PrivateBRoute
+  
+  myPrivateCRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+      - Key: Name
+        Value: PrivateCRoute
+  
+  appASubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppA
+      RouteTableId: !Ref myPrivateARouteTable
+  
+  dbASubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DbA
+      RouteTableId: !Ref myPrivateARouteTable
+  
+  appBSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppB
+      RouteTableId: !Ref myPrivateBRouteTable
+  
+  dbBSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DbB
+      RouteTableId: !Ref myPrivateBRouteTable
+  
+  appCSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppC
+      RouteTableId: !Ref myPrivateCRouteTable
+  
+  dbCSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DbC
+      RouteTableId: !Ref myPrivateCRouteTable
+      
+#  NatA:
+#   Type: AWS::EC2::NatGateway
+#   DependsOn: EipA
+#   Properties:
+#      AllocationId: !GetAtt EipA.AllocationId
+#      SubnetId: !Ref PublicA
+#      Tags:
+#      - Key: Name
+#        Value: NatA
+#  
+#  EipA:
+#    Type: AWS::EC2::EIP
+#    DependsOn : vpcAttachment
+#    Properties:
+#      Domain: vpc
+#
+#  myRouteToNatA:
+#    Type: AWS::EC2::Route
+#    DependsOn: MyIGW
+#    Properties:
+#      DestinationCidrBlock: 0.0.0.0/0
+#      NatGatewayId: !Ref NatA
+#      RouteTableId: !Ref myPrivateARouteTable
+#
+#  NatB:
+#   Type: AWS::EC2::NatGateway
+#   DependsOn: EipA
+#   Properties:
+#      AllocationId: !GetAtt EipB.AllocationId
+#      SubnetId: !Ref PublicB
+#      Tags:
+#      - Key: Name
+#        Value: NatB
+#  
+#  EipB:
+#    Type: AWS::EC2::EIP
+#    DependsOn : vpcAttachment
+#    Properties:
+#      Domain: vpc
+#
+#  myRouteToNatB:
+#    Type: AWS::EC2::Route
+#    DependsOn: MyIGW
+#    Properties:
+#      DestinationCidrBlock: 0.0.0.0/0
+#      NatGatewayId: !Ref NatB
+#      RouteTableId: !Ref myPrivateBRouteTable
+#
+#  NatC:
+#   Type: AWS::EC2::NatGateway
+#   DependsOn: EipC
+#   Properties:
+#      AllocationId: !GetAtt EipC.AllocationId
+#      SubnetId: !Ref PublicC
+#      Tags:
+#      - Key: Name
+#        Value: NatC
+#  
+#  EipC:
+#    Type: AWS::EC2::EIP
+#    DependsOn : vpcAttachment
+#    Properties:
+#      Domain: vpc
+#
+#  myRouteToNatC:
+#    Type: AWS::EC2::Route
+#    DependsOn: MyIGW
+#    Properties:
+#      DestinationCidrBlock: 0.0.0.0/0
+#      NatGatewayId: !Ref NatC
+#      RouteTableId: !Ref myPrivateCRouteTable
+  
+  # PublicInstanceA: 
+  #   Type: AWS::EC2::Instance
+  #   Properties: 
+  #     ImageId: !Ref LatestAmiId
+  #     InstanceType: t2.micro
+  #     KeyName: myKeyPair
+  #     SubnetId: !Ref PublicA
+  #     Tags:
+  #     - Key: Name
+  #       Value: PublicInstanceA
+  
+  # PublicInstanceB: 
+  #   Type: AWS::EC2::Instance
+  #   Properties: 
+  #     ImageId: !Ref LatestAmiId
+  #     InstanceType: t2.micro
+  #     KeyName: myKeyPair
+  #     SubnetId: !Ref PublicB
+  #     Tags:
+  #     - Key: Name
+  #       Value: PublicInstanceB
+  
+  # PublicInstanceC: 
+  #   Type: AWS::EC2::Instance
+  #   Properties: 
+  #     ImageId: !Ref LatestAmiId
+  #     InstanceType: t2.micro
+  #     KeyName: myKeyPair
+  #     SubnetId: !Ref PublicC
+  #     Tags:
+  #     - Key: Name
+  #       Value: PublicInstanceC
+  
+  # PrivateAppInstanceA: 
+  #   Type: AWS::EC2::Instance
+  #   Properties: 
+  #     ImageId: !Ref LatestAmiId
+  #     InstanceType: t2.micro
+  #     KeyName: myKeyPair
+  #     SubnetId: !Ref AppA
+  #     Tags:
+  #     - Key: Name
+  #       Value: PrivateAppA
+  
+  # PrivateAppInstanceB: 
+  #   Type: AWS::EC2::Instance
+  #   Properties: 
+  #     ImageId: !Ref LatestAmiId
+  #     InstanceType: t2.micro
+  #     KeyName: myKeyPair
+  #     SubnetId: !Ref AppB
+  #     Tags:
+  #     - Key: Name
+  #       Value: PrivateAppB
+  
+  # PrivateAppInstanceC: 
+  #   Type: AWS::EC2::Instance
+  #   Properties: 
+  #     ImageId: !Ref LatestAmiId
+  #     InstanceType: t2.micro
+  #     KeyName: myKeyPair
+  #     SubnetId: !Ref AppC
+  #     Tags:
+  #     - Key: Name
+  #       Value: PrivateAppC
+
+Outputs:
+  MyVpc:
+    Description: VPC Id
+    Value: !Ref MyVpc
+    Export:
+      Name: MyVpc
+
+  PublicA:
+    Description: Public Subnet A
+    Value: !Ref PublicA
+    Export:
+      Name: PublicA
+      
+  PublicB:
+    Description: Public Subnet B
+    Value: !Ref PublicB
+    Export:
+      Name: PublicB
+
+  PublicC:
+    Description: Public Subnet C
+    Value: !Ref PublicC
+    Export:
+      Name: PublicC
+
+  AppA:
+    Description: Private Subnet A
+    Value: !Ref AppA
+    Export:
+      Name: AppSubnetA
+
+  AppB:
+    Description: Private Subnet B
+    Value: !Ref AppB
+    Export:
+      Name: AppSubnetB
+
+  AppC:
+    Description: Private Subnet C
+    Value: !Ref AppC
+    Export:
+      Name: AppSubnetC
+
+  DbA:
+    Description: Private DB Subnet A
+    Value: !Ref DbA
+    Export:
+      Name: DbSubnetA
+
+  DbB:
+    Description: Private DB Subnet B
+    Value: !Ref DbB
+    Export:
+      Name: DbSubnetb
+
+  DbC:
+    Description: Private DB Subnet C
+    Value: !Ref DbC
+    Export:
+      Name: DbSubnetC
+  
+  myPrivateARouteTable:
+    Description: Private Route A table
+    Value: !Ref myPrivateARouteTable
+    Export:
+      Name: PrivateARouteTable
+  
+  myPrivateBRouteTable:
+    Description: Private Route B table
+    Value: !Ref myPrivateBRouteTable
+    Export:
+      Name: PrivateBRouteTable
+  
+  myPrivateCRouteTable:
+    Description: Private Route C table
+    Value: !Ref myPrivateCRouteTable
+    Export:
+      Name: PrivateCRouteTable

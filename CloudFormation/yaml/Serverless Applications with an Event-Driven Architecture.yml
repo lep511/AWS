@@ -1,0 +1,1157 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Building Serverless Applications with an Event-Driven Architecture.
+
+Parameters:
+  S3PathPrefix:
+    Type: String
+    Description: "The path prefix where lab resources are stored (Leading and trailing slash required!)"
+    Default: "courses/spl-254/v1.0.10.prod-535c3d37"
+    #Default: awsu-spl-dev/spl-254/1.0.0.dev
+  S3ResourceBucket:
+    Type: String
+    Description: "S3 Bucket suffix (e.g. us-west-2-aws-training) of were to pull lab resources from"
+    Default: "aws-training"
+  invocationResourcePath:
+    Type: String
+    Description: "Name of the API"
+    Default: invocation
+  createBookBindingResourcePath:
+    Type: String
+    Description: "Name of the API"
+    Default: bookprint
+  stageName:
+    Type: String
+    Description: "Name of the API"
+    Default: stage
+
+Resources:
+  #API Gateway CloudWatch Roles
+  APIGatewayCLRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+        Version: "2012-10-17"
+      Path: /
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+  # APIGateway account setting      
+  ApiGwAccountConfig:
+    Type: "AWS::ApiGateway::Account"
+    Properties:
+      CloudWatchRoleArn: !GetAtt APIGatewayCLRole.Arn
+
+
+  # IAM Roles
+  BackendProcessingLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: "2012-10-17"
+      Path: /DigitalBooks/
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowLogging
+            Version: "2012-10-17"
+          PolicyName: LambdaWriteCWLogs
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:Get*
+                  - s3:List*
+                Effect: Allow
+                Resource: arn:aws:s3:::*
+            Version: "2012-10-17"
+          PolicyName: ReadFromUserImagesS3Bucket
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:PutObject
+                Effect: Allow
+                Resource:
+                  Fn::Sub: arn:aws:s3:::${UserImagesS3Bucket}/*
+            Version: "2012-10-17"
+          PolicyName: WriteToUserImagesS3Bucket
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - dynamodb:UpdateItem
+                  - dynamodb:PutItem
+                  - dynamodb:get*
+                  - dynamodb:list*
+                  - dynamodb:describe*
+                Effect: Allow
+                Resource:
+                  Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ImageMetadataDDBTable}
+                Sid: WriteToImageMetadataDDBTable
+            Version: "2012-10-17"
+          PolicyName: WriteToImageMetadataDDBTable
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - rekognition:Detect*
+                Effect: Allow
+                Resource: "*"
+                Sid: RekognitionDetectLabels
+            Version: "2012-10-17"
+          PolicyName: RekognitionDetectLabels
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - states:StartExecution
+                Effect: Allow
+                Resource: "*"
+                Sid: StepFunctionStartExecution
+            Version: "2012-10-17"
+          PolicyName: StepFunctionStartExecution
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - "sqs:SendMessage"
+                  - "sqs:DeleteMessage"
+                  - "sqs:GetQueueAttributes"
+                  - "sqs:ReceiveMessage"
+                Resource:
+                  Fn::Sub: "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:*"
+                Effect: Allow
+          PolicyName: sqsInvoke
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - "SNS:Publish"
+                Resource: !Sub "arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:*"
+                Effect: Allow
+          PolicyName: SNSSendEmailPolicy
+
+  StateMachineRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: Allow
+            Principal:
+              Service: "states.amazonaws.com"
+      Path: /DigitalBooks/
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - "lambda:InvokeFunction"
+                Resource: "*"
+                Effect: Allow
+                Sid: InvokeLambda
+          PolicyName: InvokeLambda
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - "sqs:SendMessage"
+                Resource:
+                  Fn::Sub: "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:*"
+                Effect: Allow
+                Sid: InvokeSQS
+          PolicyName: InvokeSQS
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - "states:StartExecution"
+                Resource:
+                  Fn::Sub: "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:*"
+                Effect: Allow
+                Sid: StepFunctionStartExecution
+          PolicyName: StepFunctionStartExecution
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - "SNS:Publish"
+                Resource: !Sub "arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:*"
+                Effect: Allow
+                Sid: SNSPolicy
+          PolicyName: SNSPolicy
+
+  CustomResourceHelperRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+        Version: "2012-10-17"
+      Path: /DigitalBooks/
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowLogging
+            Version: "2012-10-17"
+          PolicyName: LambdaWriteCWLogs
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:PutBucketNotification
+                Effect: Allow
+                Resource:
+                  Fn::Sub: arn:aws:s3:::${UserImagesS3Bucket}
+                Sid: PutS3EventNotification
+              - Action:
+                  - lambda:AddPermission
+                Effect: Allow
+                Resource: "*"
+                Sid: AddPermissionToLambda
+            Version: "2012-10-17"
+          PolicyName: AddS3EventTrigger
+
+  #Lambda Layer for image processing related Lambda functions.
+  ImageMarkerLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - nodejs12.x
+      Content:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/ll-image-magick.zip
+      Description: This layer is used to process the image, watermark, resize and image process Lambda functions will use.
+      LayerName: !Sub image-magick-layer-${AWS::Region}
+
+  #Majority of Lambda functions section
+  ResizeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ResizeFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/resize.zip
+      Description: Resize of images before they are ready for book prints.
+      Handler: index.handler
+      MemorySize: 1536
+      Layers:
+        - !Ref ImageMarkerLayer
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: nodejs12.x
+      Timeout: 300
+      TracingConfig:
+        Mode: Active
+
+  ImageProcStartInvocationFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: UserImagesS3Bucket
+    Properties:
+      FunctionName: ImageProcStartInvocationFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/startmachine.zip
+      Description: Invoked by an S3 image upload to the repo bucket and starts the image
+        processing Step Functions workflow.
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN:
+            Ref: ImageProcessStateMachine
+      Handler: index.handler
+      MemorySize: 256
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: nodejs12.x
+      Timeout: 60
+      TracingConfig:
+        Mode: Active
+
+  ExtractImageMetadataFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ExtractImageMetadataFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/imagemetadata.zip
+      Description: Extract image metadata such as format, size, geolocation, etc.
+      Handler: index.handler
+      MemorySize: 1024
+      Layers:
+        - !Ref ImageMarkerLayer
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: nodejs12.x
+      Timeout: 200
+      TracingConfig:
+        Mode: Active
+
+  TransformMetadataFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: TransformMetadataFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/transform.zip
+      Description: Transform extracted image metadata into JSON format.
+      Handler: index.handler
+      MemorySize: 256
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: nodejs12.x
+      Timeout: 60
+      TracingConfig:
+        Mode: Active
+
+  S3EventInvocationForStateMachineFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: S3EventInvocationForStateMachineFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/s3eventtrigger.zip
+      Description: Used with CloudFormation as a custom resource helper to enable
+        an S3 event invocation to activate the start Step Functions Lambda function.
+      Handler: index.handler
+      MemorySize: 1024
+      Role:
+        Fn::GetAtt:
+          - CustomResourceHelperRole
+          - Arn
+      Runtime: nodejs12.x
+      Timeout: 200
+      TracingConfig:
+        Mode: Active
+
+  StoreImageMetadataFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: StoreImageMetadataFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/storemetadata.zip
+      Description: Stores image metadata into a DynamoDB table.
+      Environment:
+        Variables:
+          IMAGE_METADATA_DDB_TABLE:
+            Ref: ImageMetadataDDBTable
+      Handler: index.handler
+      MemorySize: 256
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: nodejs12.x
+      Timeout: 60
+      TracingConfig:
+        Mode: Active
+
+  ImageValidationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ImageValidationFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/imagevalidation.zip
+      Description: Validate images according to company policies.
+      Handler: index.handler
+      MemorySize: 256
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: python3.9
+      Timeout: 60
+      TracingConfig:
+        Mode: Active
+
+  WatermarkFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: UserImagesS3Bucket
+    Properties:
+      FunctionName: WatermarkFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/watermark.zip
+      Description: Watermark the images.
+      Handler: index.handler
+      MemorySize: 1024
+      Layers:
+        - !Ref ImageMarkerLayer
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: nodejs12.x
+      Timeout: 60
+      TracingConfig:
+        Mode: Active
+
+  DigitalBindingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: DigitalBindingFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/bookbind.zip
+      Description: Print the books from the watermark images.
+      Environment:
+        Variables:
+          BUCKET_NAME:
+            Ref: UserImagesS3Bucket
+      Handler: album.handler
+      MemorySize: 1024
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: python3.9
+      Timeout: 60
+      TracingConfig:
+        Mode: Active
+
+  CreateBookBindingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CreateBookBindingFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/CreateBookBinding.zip
+      Description: Print the books form the watermark images.
+      Environment:
+        Variables:
+          BUCKET_NAME:
+            Ref: UserImagesS3Bucket
+      Handler: index.handler
+      MemorySize: 1024
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: python3.9
+      Timeout: 60
+      TracingConfig:
+        Mode: Active
+
+  # This gives you the API Gateway invocation on the Lambda function.
+  CreateBookBindingFunctionInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !GetAtt CreateBookBindingFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${InvocationApi}/*/POST/${createBookBindingResourcePath} # Update the method type (GET POST ANY) here
+
+  ReadyForBookPrintFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ReadyForBookPrintFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/ReadyForBookPrint.zip
+      Description: Print the books from the watermark images.
+      Environment:
+        Variables:
+          BUCKET_NAME:
+            Ref: UserImagesS3Bucket
+      Handler: index.handler
+      MemorySize: 1024
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: python3.9
+      Timeout: 60
+      TracingConfig:
+        Mode: Active
+
+  PrintVendorInvokeFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - BookPrintQueue
+    Properties:
+      FunctionName: PrintVendorInvokeFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/sqstrigger.zip
+      Description: This function gets invoked by the SQS queue to send a book request to a 3rd party vendor.
+      Handler: index.handler
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: "BOOK_PRINT_STATE_MACHINE_ARN"
+      MemorySize: 256
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: nodejs12.x
+      Timeout: 30
+      TracingConfig:
+        Mode: Active
+
+  PrintVendorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: PrintVendorFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/printvendor.zip
+      Description: This function is to simulate print vendor activities and finish the rest of the book printing activities.
+      Handler: index.handler
+      MemorySize: 256
+      Role:
+        Fn::GetAtt:
+          - BackendProcessingLambdaRole
+          - Arn
+      Runtime: nodejs12.x
+      Timeout: 30
+      TracingConfig:
+        Mode: Active
+
+  ImageProcessStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: ImageProcessStateMachine
+      RoleArn: !GetAtt StateMachineRole.Arn
+      DefinitionString: !Sub
+        - |-
+          {
+            "Comment": "Image Processing workflow",
+            "StartAt": "ExtractImageMetadata",
+            "States": {
+              "ExtractImageMetadata": {
+                "Type": "Task",
+                "Resource": "${ExtractImageMetadataLambdaArn}",
+                "InputPath": "$",
+                "ResultPath": "$.extractedMetadata",
+                "Next": "ImageTypeCheck",
+                "Catch": [
+                  {
+                    "ErrorEquals": [
+                      "ImageIdentifyError"
+                    ],
+                    "Next": "ImageDoesNotMeetRequirement"
+                  }
+                ],
+                "Retry": [
+                  {
+                    "ErrorEquals": [
+                      "ImageIdentifyError"
+                    ],
+                    "MaxAttempts": 0
+                  },
+                  {
+                    "ErrorEquals": [
+                      "States.ALL"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 1.5
+                  }
+                ]
+              },
+              "ImageTypeCheck": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Or": [
+                      {
+                        "Variable": "$.extractedMetadata.format",
+                        "StringEquals": "JPEG"
+                      },
+                      {
+                        "Variable": "$.extractedMetadata.format",
+                        "StringEquals": "PNG"
+                      }
+                    ],
+                    "Next": "TransformMetadata"
+                  }
+                ],
+                "Default": "ImageDoesNotMeetRequirement"
+              },
+              "ImageDoesNotMeetRequirement": {
+                "Type": "Fail",
+                "Cause": "Either image type is not supported or image validation failed",
+                "Error": "ImageNotValid"
+              },
+              "TransformMetadata": {
+                "Type": "Task",
+                "Resource": "${TransformMetadataLambdaArn}",
+                "InputPath": "$.extractedMetadata",
+                "ResultPath": "$.extractedMetadata",
+                "Retry": [
+                  {
+                    "ErrorEquals": [
+                      "States.ALL"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 1.5
+                  }
+                ],
+                "Next": "StoreMetadata"
+              },
+              "StoreMetadata": {
+                "Type": "Task",
+                "Resource": "${StoreImageMetadataLambdaArn}",
+                "InputPath": "$",
+                "Retry": [
+                  {
+                    "ErrorEquals": [
+                      "States.ALL"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 1.5
+                  }
+                ],
+                "Next": "ImageValidation"
+              },
+              "ImageValidation": {
+                "Type": "Task",
+                "Resource": "${ImageValidationLambdaArn}",
+                "Catch": [
+                  {
+                    "ErrorEquals": [ "States.ALL" ],
+                    "Next": "ImageDoesNotMeetRequirement"
+                  }
+                ],
+                "Next": "Resize"
+              },
+              "Resize": {
+                "Type": "Task",
+                "Resource": "${ImageResizeLambdaArn}",
+                "Retry": [
+                  {
+                    "ErrorEquals": [
+                      "States.ALL"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 1.5
+                  }
+                ],
+                "Next": "Watermark"
+              },
+              "Watermark": {
+                "Type": "Task",
+                "Resource": "${WatermarkLambdaArn}",
+                "Retry": [
+                  {
+                    "ErrorEquals": [
+                      "States.ALL"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 1.5
+                  }
+                ],
+                "Next": "ReadyForBookBind?"
+              },
+              "ReadyForBookBind?": {
+                "Type": "Task",
+                "Resource": "${ReadyForBookPrintLambdaArn}",
+                "InputPath": "$",
+                "ResultPath": "$.extractedMetadata",
+                "Next": "BookBindChoiceState"
+              },
+              "BookBindChoiceState": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.extractedMetadata.isBookReady",
+                    "StringEquals": "Ready",
+                    "Next": "DigitalBookBinding"
+                  },
+                  {
+                    "Variable": "$.extractedMetadata.isBookReady",
+                    "StringEquals": "NotReady",
+                    "Next": "NotReadyForBookBinding"
+                  }
+                ]
+              },
+              "NotReadyForBookBinding": {
+                "Type": "Pass",
+                "End": true
+              },
+              "DigitalBookBinding": {
+                "Type": "Task",
+                "Resource": "${DigitalBindingLambdaArn}",
+                "Retry": [
+                  {
+                    "ErrorEquals": [
+                      "States.ALL"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 1.5
+                  }
+                ],
+                "Next": "UserApproval"
+              },
+              "UserApproval": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+                "ResultPath": "$.extractedMetadata",
+                "Parameters": {
+                  "FunctionName": "${LambdaHumanApprovalSendEmailFunction.Arn}",
+                  "Payload": {
+                    "ExecutionContext.$": "$$",
+                    "APIGatewayEndpoint": "https://${InvocationApi}.execute-api.${AWS::Region}.amazonaws.com/stage"
+                  }
+                },
+                "Next": "ManualApprovalChoiceState"
+              },
+              "ManualApprovalChoiceState": {
+                "Type": "Choice",
+                "Choices": [
+                  {
+                    "Variable": "$.extractedMetadata.Status",
+                    "StringEquals": "Approved",
+                    "Next": "Approved"
+                  },
+                  {
+                    "Variable": "$.extractedMetadata.Status",
+                    "StringEquals": "Rejected",
+                    "Next": "Rejected"
+                  }
+                ]
+              },
+              "Approved": {
+                "Type": "Pass",
+                "Next": "3rdPartyPrinting(SQS)"
+              },
+              "Rejected": {
+                "Type": "Pass",
+                "End": true
+              },
+              "3rdPartyPrinting(SQS)": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::sqs:sendMessage",
+                "Parameters": {
+                  "QueueUrl": "${BookPrintQueue}",
+                  "MessageBody": {
+                    "s3Bucket.$": "$.s3Bucket",
+                    "s3Key.$": "$.s3Key",
+                    "albumName.$": "$.albumName",
+                    "dateAndTime.$": "$.timestamp"
+                  }
+                },
+                "Retry": [
+                  {
+                    "ErrorEquals": [
+                      "States.ALL"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 1.5
+                  }
+                ],
+                "End": true
+              }
+            }
+          }
+        - ExtractImageMetadataLambdaArn: !GetAtt ExtractImageMetadataFunction.Arn
+          ImageResizeLambdaArn: !GetAtt ResizeFunction.Arn
+          ImageValidationLambdaArn: !GetAtt ImageValidationFunction.Arn
+          StoreImageMetadataLambdaArn: !GetAtt StoreImageMetadataFunction.Arn
+          TransformMetadataLambdaArn: !GetAtt TransformMetadataFunction.Arn
+          WatermarkLambdaArn: !GetAtt WatermarkFunction.Arn
+          DigitalBindingLambdaArn: !GetAtt DigitalBindingFunction.Arn
+          ReadyForBookPrintLambdaArn: !GetAtt ReadyForBookPrintFunction.Arn
+
+  ImageMetadataDDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ImageMetadataDDBTable
+      AttributeDefinitions:
+        - AttributeName: albumID
+          AttributeType: S
+        - AttributeName: imageID
+          AttributeType: S
+        - AttributeName: uploadTime
+          AttributeType: N
+      GlobalSecondaryIndexes:
+        - IndexName: albumID-uploadTime-index
+          KeySchema:
+            - AttributeName: albumID
+              KeyType: HASH
+            - AttributeName: uploadTime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 3
+            WriteCapacityUnits: 3
+      KeySchema:
+        - AttributeName: imageID
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 3
+        WriteCapacityUnits: 3
+
+  S3EventInvocationForStateMachine:
+    Type: Custom::S3EventTrigger
+    Version: "1.0"
+    Properties:
+      PhotoRepoS3Bucket:
+        Ref: UserImagesS3Bucket
+      ServiceToken:
+        Fn::GetAtt:
+          - S3EventInvocationForStateMachineFunction
+          - Arn
+      FunctionName:
+        Ref: ImageProcStartInvocationFunction
+      FunctionArn:
+        Fn::GetAtt:
+          - ImageProcStartInvocationFunction
+          - Arn
+      accountId:
+        Ref: AWS::AccountId
+      TriggerFolder: "Bookbind/"
+
+  UserImagesS3Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            ExposedHeaders:
+              - ETag
+            AllowedMethods:
+              - PUT
+              - GET
+              - POST
+              - HEAD
+            AllowedOrigins:
+              - "*"
+  ## ## START ## API Gateway Resources ## START ## ##
+  # Begin API Gateway Resources
+
+  # This creates the API that you attach the resource to
+  InvocationApi:
+    Type: "AWS::ApiGateway::RestApi"
+    DependsOn: APIGatewayCLRole
+    Properties:
+      Name: !Sub DigitalBookPrintsAPI-${AWS::Region}
+      Description: "HTTP Endpoint backed by API Gateway and Lambda"
+      FailOnWarnings: true
+      Parameters:
+        endpointConfigurationTypes: REGIONAL
+
+  # This creates the resource for invoking the approval lambda function that the method attaches too.
+  InvocationResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref InvocationApi
+      ParentId: !GetAtt "InvocationApi.RootResourceId"
+      PathPart: !Ref invocationResourcePath
+
+  # This is the method that links the invocation resource to the approval lambda function
+  InvocationMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub >-
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaApprovalFunction.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: "302"
+            ResponseParameters:
+              method.response.header.Location: "integration.response.body.headers.Location"
+        RequestTemplates:
+          application/json: |
+            {
+              "body" : $input.json('$'),
+              "headers": {
+                #foreach($header in $input.params().header.keySet())
+                "$header": "$util.escapeJavaScript($input.params().header.get($header))" #if($foreach.hasNext),#end
+
+                #end
+              },
+              "method": "$context.httpMethod",
+              "params": {
+                #foreach($param in $input.params().path.keySet())
+                "$param": "$util.escapeJavaScript($input.params().path.get($param))" #if($foreach.hasNext),#end
+
+                #end
+              },
+              "query": {
+                #foreach($queryParam in $input.params().querystring.keySet())
+                "$queryParam": "$util.escapeJavaScript($input.params().querystring.get($queryParam))" #if($foreach.hasNext),#end
+
+                #end
+              }
+            }
+      ResourceId: !Ref InvocationResource
+      RestApiId: !Ref InvocationApi
+      MethodResponses:
+        - StatusCode: "302"
+          ResponseParameters:
+            method.response.header.Location: true
+
+  # This creates the resource for invoking the book binding process that the method attaches too.
+  createBookBindingResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref InvocationApi
+      ParentId: !GetAtt "InvocationApi.RootResourceId"
+      PathPart: !Ref createBookBindingResourcePath
+
+  # This is the method that links the createbookbinding resource to the createbookbinding Lambda function
+  createBookBindingMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      AuthorizationType: NONE
+      RequestParameters: !Ref AWS::NoValue
+      RestApiId: !Ref InvocationApi
+      ResourceId: !Ref createBookBindingResource
+      HttpMethod: "POST" # Set your method type here
+      #MethodResponses:
+      #  - StatusCode: "200"
+      #    ResponseModels: { "application/json": "Album" }
+      Integration:
+        ContentHandling: CONVERT_TO_TEXT
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST # Leave this as POST always.
+        IntegrationResponses:
+          - StatusCode: "200"
+        Uri: !Sub >-
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateBookBindingFunction.Arn}/invocations
+
+  # This deploys the invocation API gateway so you can use it.
+  ApiDeployment:
+    Type: "AWS::ApiGateway::Deployment"
+    DependsOn:
+      - InvocationMethod
+      - createBookBindingMethod
+    Properties:
+      RestApiId: !Ref InvocationApi
+      StageName: !Ref stageName
+      Description: "Invocation Api deployment"
+      StageDescription:
+        LoggingLevel: INFO
+        MetricsEnabled: true
+        TracingEnabled: false
+
+  # End API Gateway Resources
+  ## ## END ## API Gateway Resources ## END ## ##
+
+  # Begin
+  # Lambda that will be invoked by API Gateway
+  LambdaApprovalFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: LambdaApprovalFunction
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/LambdaApproval.zip
+      Description: Lambda function that does a callback to AWS Step Functions.
+      Handler: index.handler
+      Role: !GetAtt "LambdaApiGatewayIAMRole.Arn"
+      Runtime: nodejs12.x
+
+  LambdaApiGatewayInvoke:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !GetAtt "LambdaApprovalFunction.Arn"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${InvocationApi}/*"
+
+  LambdaApiGatewayIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:*"
+                Resource: !Sub "arn:${AWS::Partition}:logs:*:*:*"
+        - PolicyName: APIGatewayPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "states:SendTaskFailure"
+                  - "states:SendTaskSuccess"
+                  - "xray:PutTraceSegments"
+                  - "xray:PutTelemetryRecords"
+                Resource: "*"
+  # End Lambda that will be invoked by API Gateway
+
+  #Manual Approval step Resources
+  SNSTopicForUserCommunication:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: SNSTopicForUserCommunication
+
+  BookPrintQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: BookPrintQueue
+
+  LambdaHumanApprovalSendEmailFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: LambdaHumanApprovalSendEmailFunction
+      Handler: "index.lambda_handler"
+      Role: !GetAtt BackendProcessingLambdaRole.Arn
+      Runtime: nodejs12.x
+      Timeout: 25
+      Description: Sends an email for manual action to approve or reject the pdf album.
+      Code:
+        S3Bucket: !Sub ${AWS::Region}-${S3ResourceBucket}
+        S3Key: !Sub ${S3PathPrefix}/scripts/lambda-functions/LambdaHumanApprovalSendEmail.zip
+      Environment:
+        Variables:
+          emailSnsTopic:
+            Ref: SNSTopicForUserCommunication
+
+  LabVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: Lab VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref LabVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref LabVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs
+      Tags:
+        - Key: Name
+          Value: Public Subnet
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref LabVPC
+      Tags:
+        - Key: Name
+          Value: Public Route Table
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  #Cloud9 instance is a sandbox env for student curl activities
+  Cloud9ForDigitalBooks:
+    Type: AWS::Cloud9::EnvironmentEC2
+    Properties:
+      Name: !Sub DigitalBooks-${AWS::Region}
+      Description: IDE to handle all the project activities.
+      InstanceType: "t2.micro"
+      OwnerArn: !Sub arn:aws:sts::${AWS::AccountId}:federated-user/awsstudent
+      AutomaticStopTimeMinutes: 90
+      SubnetId: !Ref PublicSubnet
+
+  ReadOnlyGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+
+  GroupAssignment:
+    Type: AWS::IAM::UserToGroupAddition
+    Properties:
+      GroupName: !Ref ReadOnlyGroup
+      Users:
+        - awsstudent
+
+Outputs:
+  UserImagesS3Bucket:
+    Value: !Ref UserImagesS3Bucket
+  PrintVendorLambdaArn:
+    Value:
+      Fn::GetAtt: PrintVendorFunction.Arn
+  SNSTopicForUserCommunicationArn:
+    Value: !Ref SNSTopicForUserCommunication
+  ImageMetadataTable:
+    Value: !Ref ImageMetadataDDBTable
+  PresignedLambdaSourceCode:
+    Description: "Source Code for Lambda."
+    Value: !Sub "https://${AWS::Region}-${S3ResourceBucket}.s3.${AWS::Region}.amazonaws.com/${S3PathPrefix}/scripts/lambda-functions/presigned-lambda.zip"
+  CreateBookBindingUrl:
+    Description: "URL to create an image."
+    Value: !Sub "https://${InvocationApi}.execute-api.${AWS::Region}.amazonaws.com/${stageName}/${createBookBindingResourcePath}"

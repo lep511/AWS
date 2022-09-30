@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Example of a SAM template that includes a Serverless::Function resource
+  with a CodeUri pointing to a local directory.
+Resources:
+  HelloWorldFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: hello_world/
+      Handler: app.lambda_handler
+      Runtime: python3.6
+
+# Python function
+# Path: hello_world/app.py
+import json
+
+def lambda_handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }
+
+Deploy the application
+
+When you’re ready to deploy your application, you can use the AWS CLI to deploy the application. 
+  The following command will build and deploy the application to AWS.
+
+sam build
+sam deploy --guided
+
+The --guided flag will guide you through the deployment process. It will ask you to provide a stack name, 
+  an AWS Region, and a parameter for the S3 bucket that will be used to 
+  store your application’s deployment artifacts.
+
+Once you’ve provided these values, the AWS CLI will create a CloudFormation stack for your application. 
+  When the stack creation is complete, the AWS CLI will output the API Gateway endpoint URL and a 
+  generated API key. You can use this API key to invoke the API.
+
+Invoke the API
+
+You can invoke the API using the AWS CLI or by using a tool like Postman. The following command 
+will use the AWS CLI to invoke the API.
+
+aws apigateway test-invoke-method \
+    --rest-api-id <YOUR_API_ID> \
+    --resource-id <YOUR_RESOURCE_ID> \
+    --http-method GET \
+    --path-with-query-string "" \
+    --body "" \
+    --query-string-parameters "name=world" \
+    --headers "x-api-key=<YOUR_API_KEY>"
+
+The --rest-api-id and --resource-id values can be found in the AWS console. The --headers value is the API key 
+that was generated when you deployed the application. The --query-string-parameters value will be passed 
+to the API as a query string parameter.
+
+The response from the API will look something like the following.
+
+{
+    "statusCode": 200,
+    "body": "\"Hello world!\""
+}
+
+Conclusion
+
+In this post, we covered how to build a simple serverless application using AWS SAM. We also covered how to deploy 
+the application to AWS and how to invoke the API. If you have any questions or comments,

@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  eventbridge-integration-solution-aws-lambda
+
+  (qs-1qon1a2rh)
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: Amazon-EventBridge-Integration-Solution-AWS-Lambda
+    Description: This application demonstrates an integration with AWS Lambda for Amazon EventBridge SaaS Partner Integrations
+    Author: AWS Quick Start
+    LicenseUrl: LICENSE
+    ReadmeUrl: README.md
+    Labels: ['amazon', 'eventbridge', 'integration', 'solution', 'aws', 'lambda']
+    HomePageUrl: https://aws.amazon.com/quickstart/eventbridge/aws-lambda/
+    SemanticVersion: 0.1.8
+    SourceCodeUrl: https://github.com/aws-quickstart/eventbridge-integration-solution-aws-lambda
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Amazon EventBridge Integration Solution
+      Parameters:
+      - EventSourceName
+    ParameterLabels:
+      EventSourceName:
+        default: Event Source Name
+
+Parameters:
+  EventSourceName:
+    Type: String
+    AllowedPattern: aws\.partner(/[\.\-_A-Za-z0-9]+){2,}
+    MinLength: 1
+    MaxLength: 256
+    Description: Name of the Amazon EventBridge SaaS Partner Event Source to associate with an Event Bus. For example, aws.partner/example.com/1234567890/test-event-source.
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+
+Resources:
+  EventBridgeFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/eventbridge_function/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Events:
+        EventBridgeRule:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              account:
+              - !Ref AWS::AccountId
+            EventBusName: !Ref EventBridgeEventBus
+
+  EventBridgeEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      EventSourceName: !Ref EventSourceName
+      Name: !Ref EventSourceName
+
+#  EventBridgeRule:
+#    Type: AWS::Events::Rule
+#    Properties:
+#      Description: catch-all rule for event bus
+#      EventBusName: !Ref EventBridgeEventBus
+#      EventPattern:
+#        account:
+#        - !Ref AWS::AccountId
+#      Name: catch-all-rule
+#      State: ENABLED
+#      Targets:
+#      - Arn: !GetAtt EventBridgeFunction.Arn
+#        Id: lambda-function
+#
+#  EventBridgeInvokeFunctionPermission:
+#    Type: AWS::Lambda::Permission
+#    Properties:
+#      FunctionName: !Ref EventBridgeFunction
+#      Action: lambda:InvokeFunction
+#      Principal: events.amazonaws.com
+#      SourceArn: !GetAtt EventBridgeRule.Arn
+
+Outputs:
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#eventbridgerule
+  EventBridgeRule:
+    Description: "EventBridge Rule ARN"
+    Value: !GetAtt EventBridgeFunctionEventBridgeRule.Arn
+  EventBridgeFunction:
+    Description: "EventBridge Lambda Function ARN"
+    Value: !GetAtt EventBridgeFunction.Arn
+  EventBridgeFunctionIamRole:
+    Description: "Implicit IAM Role created for EventBridge function"
+    Value: !GetAtt EventBridgeFunctionRole.Arn

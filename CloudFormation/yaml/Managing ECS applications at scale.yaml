@@ -1,0 +1,828 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Managing ECS applications at scale 
+
+Parameters:
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.60.0.0/16
+
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.60.0.0/24
+
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.60.1.0/24
+  
+  PublicSubnet3CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the third Availability Zone
+    Type: String
+    Default: 10.60.2.0/24
+
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.60.3.0/24
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.60.4.0/24
+
+  PrivateSubnet3CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the third Availability Zone
+    Type: String
+    Default: 10.60.5.0/24
+ 
+  SourceCidr:
+    Default: 0.0.0.0/0
+    Description: Optional - CIDR/IP range for instance ssh/http access and load balancer http
+      access
+    Type: String
+
+  ECSAMI:
+    Description: ECS-Optimized AMI ID
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ecs/optimized-ami/amazon-linux/recommended/image_id
+
+  LatestAL2AmiId: # Locate latest Amazon Linux 2 AMI from public parameter store
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+  AccountName:
+    Type: String
+    Description: The name of a valid account to attach Cloud9 to
+    Default: 'federated-user/awsstudent'
+
+
+Resources:
+
+# Create VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.60.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: CookieAppScalingVPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: "CookieAppScalingInternetGateway" 
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs:
+              Ref: AWS::Region
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "CookieAppScaling PublicSubnet1"
+      VpcId: !Ref VPC
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs:
+              Ref: AWS::Region
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "CookieAppScaling PublicSubnet2"
+      VpcId: !Ref VPC
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs:
+              Ref: AWS::Region
+      CidrBlock: !Ref PublicSubnet3CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: "CookieAppScaling publicSubnet3"
+      VpcId: !Ref VPC
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs:
+              Ref: AWS::Region
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      Tags:
+        - Key: Name
+          Value: "CookieAppScaling PrivateSubnet1"
+      VpcId: !Ref VPC
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs:
+              Ref: AWS::Region
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      Tags:
+        - Key: Name
+          Value: "CookieAppScaling PrivateSubnet2"
+      VpcId: !Ref VPC
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    DependsOn: AttachGateway
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs:
+              Ref: AWS::Region
+      CidrBlock: !Ref PrivateSubnet3CIDR
+      Tags:
+        - Key: Name
+          Value: "CookieAppScaling PrivateSubnet3"
+      VpcId: !Ref VPC
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn:
+      - PublicSubnet1
+      - PublicSubnet2
+      - PublicSubnet3
+    Properties:
+      Tags:
+        - Key: Name
+          Value: "CookieAppScaling Public Route Table"
+      VpcId: !Ref VPC
+
+  RouteTablePrivate:
+    Type: AWS::EC2::RouteTable
+    DependsOn:
+      - PrivateSubnet1
+      - PrivateSubnet2
+      - PrivateSubnet3
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: "CookieAppScaling Private Route Table"
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+      RouteTableId: !Ref RouteTablePrivate
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+      - PublicRoute
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+      - PublicRoute
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+      - PublicRoute
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+      - PrivateRoute
+    Properties:
+      RouteTableId: !Ref RouteTablePrivate
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+      - PrivateRoute
+    Properties:
+      RouteTableId: !Ref RouteTablePrivate
+      SubnetId: !Ref PrivateSubnet2
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+      - PrivateRoute
+    Properties:
+      RouteTableId: !Ref RouteTablePrivate
+      SubnetId: !Ref PrivateSubnet3
+
+  EIPNATGateway:
+    Type: AWS::EC2::EIP
+    DependsOn:
+      - AttachGateway
+      - VPC 
+    Properties:
+      Domain: VPC
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn:
+      - PublicSubnet1RouteTableAssociation
+    Properties:
+      AllocationId: !GetAtt EIPNATGateway.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  AutoScalingServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
+    Properties:
+      AWSServiceName: autoscaling.amazonaws.com
+      Description: Default Service-Linked Role enables access to AWS Services and 
+            Resources used or managed by Auto Scaling
+
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: LBSecurityGroup
+      GroupDescription: Allow all traffic from internet
+      SecurityGroupIngress:
+        - CidrIp: !Ref SourceCidr
+          IpProtocol: "-1"
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: LoadBalancers
+
+  EC2InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EC2InstanceSecurityGroup
+      GroupDescription: Allow traffic from ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        # Only allow inbound access to Instance from the ELB
+        - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: Instances
+
+  EC2InstanceSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EC2InstanceSecurityGroup
+      IpProtocol: "-1"
+      SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+
+# Create ECS components
+
+  DockerEC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - ECRRepository
+    Properties:
+      ImageId: !Ref LatestAL2AmiId
+      InstanceType: t2.small
+      IamInstanceProfile: !Ref InstanceProfile
+      InstanceInitiatedShutdownBehavior: terminate
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            DeleteOnTermination: true
+            VolumeType: gp2
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet: [ !Ref EC2InstanceSecurityGroup ]
+          SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: Docker Instance
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            yum update -y
+            amazon-linux-extras install docker
+            service docker start
+            systemctl enable docker
+            REGION=$(curl http://169.254.169.254/latest/meta-data/placement/region)
+            ACCOUNTID=$(aws sts get-caller-identity --query Account --output text)
+            mkdir shop
+            cd shop
+            wget https://aws-tc-largeobjects.s3.us-west-2.amazonaws.com/ContainerApp/shop-frontend.zip
+            unzip shop-frontend.zip
+            rm -fr __MACOSX
+            cd client
+            docker build -t $ACCOUNTID-cookieapp .
+            aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNTID.dkr.ecr.$REGION.amazonaws.com
+            docker tag $ACCOUNTID-cookieapp:latest $ACCOUNTID.dkr.ecr.$REGION.amazonaws.com/$ACCOUNTID-cookieapp:latest
+            docker push $ACCOUNTID.dkr.ecr.$REGION.amazonaws.com/$ACCOUNTID-cookieapp:latest
+  
+  ECSSpotAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - ECSInstanceLaunchTemplate
+    Properties:
+      AutoScalingGroupName: ECSSpotAutoScalingGroup
+      VPCZoneIdentifier: [!Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3] 
+      MixedInstancesPolicy:
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateName: CookieAppCPLaunch
+            Version: "1"
+          Overrides:
+          - InstanceType: m5.large
+          - InstanceType: c5.large
+        InstancesDistribution:
+          OnDemandAllocationStrategy: prioritized
+          OnDemandBaseCapacity: 3
+          OnDemandPercentageAboveBaseCapacity: 0
+          SpotAllocationStrategy: capacity-optimized
+      MinSize: "0"
+      MaxSize: "3"
+      DesiredCapacity: "0"
+      Cooldown: "300"
+      HealthCheckGracePeriod: 180
+      HealthCheckType: EC2
+      TerminationPolicies: 
+        - AllocationStrategy
+      NewInstancesProtectedFromScaleIn: true
+      Tags:
+        - Key: Name
+          Value: ECSSpotAutoScalingGroup
+          PropagateAtLaunch: false
+
+  ECSOnDemandAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - ECSInstanceLaunchTemplate
+    Properties:
+      AutoScalingGroupName: ECSOnDemandAutoScalingGroup
+      VPCZoneIdentifier: [!Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3]
+      MixedInstancesPolicy:
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateName: CookieAppCPLaunch
+            Version: "1"
+          Overrides:
+          - InstanceType: t3.large
+        InstancesDistribution:
+          OnDemandAllocationStrategy: prioritized
+          OnDemandBaseCapacity: 1
+          OnDemandPercentageAboveBaseCapacity: 0
+          SpotAllocationStrategy: capacity-optimized
+      MinSize: "0"
+      MaxSize: "3"
+      DesiredCapacity: "0"
+      Cooldown: "300"
+      HealthCheckGracePeriod: 180
+      HealthCheckType: EC2
+      TerminationPolicies: 
+        - AllocationStrategy
+      NewInstancesProtectedFromScaleIn: true
+      Tags:
+        - Key: Name
+          Value: ECSOnDemandAutoScalingGroup
+          PropagateAtLaunch: false
+
+  ECSServiceALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: "CookieAppALB"
+      Scheme: internet-facing
+      SecurityGroups: [!Ref LoadBalancerSecurityGroup]
+      Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2, !Ref PublicSubnet3]
+
+  ECSServiceTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 50
+      HealthCheckPath: /
+      HealthCheckPort: traffic-port
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 45
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: "200"
+      Name: "CookieAppTargetGroup"
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 4
+      VpcId: !Ref VPC
+
+  ECSServiceALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+      - ECSServiceALB
+      - ECSServiceTG
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSServiceTG
+      LoadBalancerArn: !Ref ECSServiceALB
+      Port: 80
+      Protocol: HTTP
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ECSInstanceRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+        - arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilderECRContainerBuilds
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    DependsOn:
+      - InstanceRole
+    Properties:
+      InstanceProfileName: CookieApp-InstanceProfile
+      Path: /
+      Roles:
+        - Ref: InstanceRole
+
+  ECSInstanceLaunchTemplate:
+    DependsOn:
+      - ECSInstanceProfile
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        InstanceType: t3.large
+        ImageId: !Ref ECSAMI
+        IamInstanceProfile:
+          Arn:
+            Fn::GetAtt:
+              - ECSInstanceProfile
+              - Arn
+        SecurityGroupIds: [ !Ref EC2InstanceSecurityGroup ]
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: "CookieAppCPLaunch"
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            echo "ECS_CLUSTER=CookieAppCluster" >> /etc/ecs/ecs.config
+            echo "ECS_CONTAINER_STOP_TIMEOUT=90s" >> /etc/ecs/ecs.config
+            echo "ECS_ENABLE_CONTAINER_METADATA=true" >> /etc/ecs/ecs.config
+      LaunchTemplateName: "CookieAppCPLaunch"
+
+
+  ECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      RoleName: ECSRole
+      AssumeRolePolicyDocument: |
+        {
+            "Statement": [{
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "ec2.amazonaws.com"
+                }
+            }]
+        }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument: |
+            {
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "ecs:CreateCluster",
+                        "ecs:DeregisterContainerInstance",
+                        "ecs:DiscoverPollEndpoint",
+                        "ecs:Poll",
+                        "ecs:RegisterContainerInstance",
+                        "ecs:StartTelemetrySession",
+                        "ecs:Submit*",
+                        "ecr:BatchCheckLayerAvailability",
+                        "ecr:BatchGetImage",
+                        "ecr:GetDownloadUrlForLayer",
+                        "ecr:GetAuthorizationToken"
+                    ],
+                    "Resource": "*"
+                }]
+            }
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      RoleName: TaskRole
+      AssumeRolePolicyDocument: |
+        {
+            "Statement": [{
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "ecs-tasks.amazonaws.com"
+                }
+            }]
+        }
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  ECSInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref ECSRole
+
+  ECSServiceAutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ECSServiceAutoScalingRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Action:
+            - "sts:AssumeRole"
+          Effect: Allow
+          Principal:
+            Service:
+              - application-autoscaling.amazonaws.com
+      Path: /
+      Policies:
+        - PolicyName: ecs-service-autoscaling
+          PolicyDocument:
+            Statement:
+              Effect: Allow
+              Action:
+                - application-autoscaling:*
+                - cloudwatch:DescribeAlarms
+                - cloudwatch:PutMetricAlarm
+                - ecs:DescribeServices
+                - ecs:UpdateService
+              Resource: "*"
+
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${AWS::AccountId}-cookieapp
+
+  ECSServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: ECSServiceRole
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+                  - 'elasticloadbalancing:DeregisterTargets'
+                  - 'elasticloadbalancing:Describe*'
+                  - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+                  - 'elasticloadbalancing:RegisterTargets'
+                  - 'ec2:Describe*'
+                  - 'ec2:AuthorizeSecurityGroupIngress'
+                Resource: '*'
+
+  TaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: 'cookie-app'
+      RequiresCompatibilities: 
+        - EC2
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+        - Name: cookie-app
+          Cpu: 10
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${AWS::AccountId}-cookieapp:latest
+          Memory: 300
+          PortMappings:
+            - ContainerPort: 80
+
+# Create Cloud9 Instance and update EBS volume
+  Cloud9Instance:
+    Type: AWS::Cloud9::EnvironmentEC2
+    Properties: 
+      OwnerArn: !Sub "arn:aws:sts::${AWS::AccountId}:${AccountName}"
+      AutomaticStopTimeMinutes: 180
+      Description: Cloud9 development environment
+      InstanceType: t3.micro
+      SubnetId: !Ref PublicSubnet1
+      Name: Cloud9Instance
+
+# Update EBS volume for Cloud9 instance
+  UpdateEBSVolumeSize:
+    Type: AWS::Lambda::Function
+    DependsOn: Cloud9Instance
+    Properties:
+      Code:
+        ZipFile: !Sub |
+          import json, boto3, logging, os, time
+
+          # Set up logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          def lambda_handler(event, context):
+              responseData = {'status': 'NONE', 'VolumeId': 'NONE'}
+              client = boto3.client('ec2')
+              response = client.describe_instances(
+                  Filters=[
+                      {
+                          'Name': 'instance-state-name',
+                          'Values': ['running']
+                      },
+                  ]
+              )
+
+              logger.info("InstanceId Loop")
+              for instance in response['Reservations']: # Could be multiple reservations running
+                  for tag in instance['Instances'][0]['Tags']:
+                      if tag['Key'] == 'Name' and 'Cloud9Instance' in tag['Value'] and '${Cloud9Instance}' in tag['Value']:
+                          logger.info(tag['Value'])
+                          logger.info(instance['Instances'][0]['InstanceId']) # Only one instance for Cloud9
+                          instanceId=instance['Instances'][0]['InstanceId']
+                          logger.info(instance['Instances'][0]['BlockDeviceMappings'][0]['Ebs']['VolumeId']) # Only one volume for Cloud9
+                          volumeId=instance['Instances'][0]['BlockDeviceMappings'][0]['Ebs']['VolumeId']
+              try:
+                client.modify_volume(    
+                    VolumeId=volumeId,    
+                    Size=100
+                )
+                logger.info('In modify try')
+                logger.info(response)
+                responseData['status'] = 'UPDATED'
+                responseData['VolumeId'] = volumeId
+              except:
+                responseData['status'] = 'FAILED'
+                sendResponse(event, context, "FAILED", responseData, event["LogicalResourceId"])
+
+              response =  client.describe_volumes_modifications(VolumeIds=[volumeId])
+              logger.info('describe modifications')
+              logger.info(response)
+              logger.info(response['VolumesModifications'][0]['ModificationState'])
+              
+              while response['VolumesModifications'][0]['ModificationState'] == 'modifying':
+                logger.info('In while')
+                response =  client.describe_volumes_modifications(VolumeIds=[volumeId])
+                logger.info(response['VolumesModifications'][0]['ModificationState'])
+                time.sleep(3)
+
+              logger.info('Starting reboot.')
+              response = client.reboot_instances(
+                  InstanceIds=[
+                      instanceId,
+                  ]
+              )
+              logger.info('After reboot.')
+              logger.info(response)
+
+              sendResponse(event, context, "SUCCESS", responseData, event["LogicalResourceId"])
+
+          # This sends the data to CFN to signal success or fail. I am using this code instead of using cfn_response because
+          # Lambda is deprecating support for the requests module. This uses Curl instead.
+          def sendResponse(event, context, responseStatus, responseData, physicalResourceId=None, noEcho=False):
+            # Setup Arrays to pass data to CloudFormation so it gets a success signal
+            responseBody = {}
+            responseBody['Status'] = responseStatus
+            responseBody['Reason'] = 'Configuration Complete. See the details in CloudWatch Log Stream: ' + context.log_stream_name
+            responseBody['PhysicalResourceId'] = physicalResourceId or context.log_stream_name
+            responseBody['StackId'] = event['StackId']
+            responseBody['RequestId'] = event['RequestId']
+            responseBody['LogicalResourceId'] = event['LogicalResourceId']
+            responseBody['UniqueId'] = 'RequestPassed1' # Add auto-increment to this if multiple counts
+            responseBody['Data'] = responseData
+            json_responseBody = json.dumps(responseBody)
+            # print("Response body:\n" + json_responseBody)
+            curlCMD = "curl -X PUT -H 'Content-Type:' --data-binary '" + json_responseBody + "' \"" + event["ResponseURL"] + "\""
+            # print(curlCMD)
+            try:
+              os.system(curlCMD)
+            except Exception as e:
+              print('Error: ' + str(e))
+      Handler: "index.lambda_handler"
+      Timeout: 120
+      MemorySize: 512
+      Role: !GetAtt UpdateEBSVolumeSizeRole.Arn
+      Runtime: python3.7
+
+  UpdateEBSVolumeSizeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: customLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'ec2:Desc*'
+                  - 'ec2:AttachVolume'
+                  - 'ec2:ModifyVolume'
+                  - 'ec2:RebootInstances'
+                Resource: '*'
+
+  UpdateEBSVolumeSizeTrigger:
+    Type: 'Custom::UpdateEBSVolumeSizeTrigger'
+    DependsOn:
+      - UpdateEBSVolumeSizeRole
+    Properties:
+      ServiceToken: !GetAtt UpdateEBSVolumeSize.Arn
+
+  EC2EnforcerStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "https://us-west-2-aws-training.s3.amazonaws.com/awsu-spl/SPL-DD-300-COAPSC-1/1.0.0.prod/scripts/enforce_ec2.yml"
+      Parameters:
+        S3Bucket: us-west-2-aws-training
+        S3CodePath: "awsu-spl/SPL-DD-300-COAPSC-1/1.0.0.prod/scripts"
+        TopicArn: "arn:aws:sns:us-east-1:360097715036:Lab_Fraud_Prevention-EC2-Instances"
+        AllowedRegions: "us-west-2"
+        MaxInstances: "10"
+        LabId: karamo-test
+

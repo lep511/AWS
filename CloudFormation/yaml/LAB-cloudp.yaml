@@ -1,0 +1,1153 @@
+Parameters:
+  SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amihvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter:
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+Resources:
+  AppUIElasticIP:
+    Type: AWS::EC2::EIP
+  AppUIElasticIPAssociation:
+    Properties:
+      EIP:
+        Ref: AppUIElasticIP
+      InstanceId:
+        Ref: ApplicationInstance5544C236
+    Type: AWS::EC2::EIPAssociation
+  ApplicationInstance5544C236:
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT5M
+    DependsOn:
+    - ServerlessClusterD09D5D78
+    - ServerlessClusterSecretAttachment79618777
+    - ServerlessClusterSecret9585927A
+    - ServerlessClusterSubnetsEB21A3DA
+    - WebUIInstanceRoleDefaultPolicy6D88FBCA
+    - WebUIInstanceRoleA00CF3A0
+    Metadata:
+      AWS::CloudFormation::Authentication:
+        S3AccessCreds:
+          buckets:
+          - pu-base-buckets-v1-provision-lab
+          roleName:
+            Ref: WebUIInstanceRoleA00CF3A0
+          type: S3
+      AWS::CloudFormation::Init:
+        configSets:
+          default:
+          - install
+          - files
+          - deploy
+        deploy:
+          commands:
+            '000':
+              command: pip3 install -r /home/ec2-user/requirements.txt
+            '001':
+              command: python3 /home/ec2-user/db.py
+            '002':
+              command: systemctl daemon-reload
+            '003':
+              command: systemctl start lab.service
+        files:
+          files:
+            /etc/systemd/system/lab.service:
+              group: root
+              mode: '000755'
+              owner: root
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/lab.service
+            /home/ec2-user/APP_README.md:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/APP_README.md
+            /home/ec2-user/app.py:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/app.py
+            /home/ec2-user/db.py:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/db.py
+            /home/ec2-user/requirements.txt:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/requirements.txt
+            /home/ec2-user/static/css/bootstrap.min.css:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/css/bootstrap.min.css
+            /home/ec2-user/static/css/bootstrap.min.css.map:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/css/bootstrap.min.css.map
+            /home/ec2-user/static/js/bootstrap.bundle.min.js:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/js/bootstrap.bundle.min.js
+            /home/ec2-user/static/js/bootstrap.bundle.min.js.map:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/js/bootstrap.bundle.min.js.map
+            /home/ec2-user/static/js/bootstrap.min.js:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/js/bootstrap.min.js
+            /home/ec2-user/static/pup.jpeg:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/pup.jpeg
+            /home/ec2-user/templates/404.html:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/404.html
+            /home/ec2-user/templates/addPup.html:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/addPup.html
+            /home/ec2-user/templates/base.html:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/base.html
+            /home/ec2-user/templates/home.html:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/home.html
+            /home/ec2-user/templates/success.html:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/success.html
+            /home/ec2-user/templates/validate.html:
+              group: ec2-user
+              mode: '000755'
+              owner: ec2-user
+              source:
+                Fn::Join:
+                - ''
+                - - https://s3.
+                  - Ref: AWS::Region
+                  - .
+                  - Ref: AWS::URLSuffix
+                  - /pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/validate.html
+        install:
+          commands:
+            '000':
+              command: yum update -y
+            '001':
+              command: curl -O https://bootstrap.pypa.io/get-pip.py
+            '002':
+              command: python3 get-pip.py
+            '003':
+              command: pip3 install boto3
+          packages:
+            yum:
+              python3: []
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      IamInstanceProfile:
+        Ref: ApplicationInstanceInstanceProfile5EE01DDF
+      ImageId:
+        Ref: SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amihvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter
+      InstanceType: t3.micro
+      SecurityGroupIds:
+      - Fn::GetAtt:
+        - WebUISecurityGroupEA27EBAB
+        - GroupId
+      SubnetId:
+        Ref: WebVPCwebsubnetSubnet1SubnetF9B692F9
+      Tags:
+      - Key: Backup
+        Value: 'True'
+      - Key: Name
+        Value: Web UI
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - ''
+          - - "#!/bin/bash\n# fingerprint: 4223339283f0e9c1\n(\n  set +e\n  /opt/aws/bin/cfn-init\
+              \ -v --region "
+            - Ref: AWS::Region
+            - ' --stack '
+            - Ref: AWS::StackName
+            - " --resource ApplicationInstance5544C236 -c default\n  /opt/aws/bin/cfn-signal\
+              \ -e $? --region "
+            - Ref: AWS::Region
+            - ' --stack '
+            - Ref: AWS::StackName
+            - " --resource ApplicationInstance5544C236\n  cat /var/log/cfn-init.log\
+              \ >&2\n)"
+    Type: AWS::EC2::Instance
+  ApplicationInstanceInstanceProfile5EE01DDF:
+    DependsOn:
+    - ServerlessClusterD09D5D78
+    - ServerlessClusterSecretAttachment79618777
+    - ServerlessClusterSecret9585927A
+    - ServerlessClusterSubnetsEB21A3DA
+    Properties:
+      Roles:
+      - Ref: WebUIInstanceRoleA00CF3A0
+    Type: AWS::IAM::InstanceProfile
+  BackUpRole579991BE:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service: backup.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+      - Fn::Join:
+        - ''
+        - - 'arn:'
+          - Ref: AWS::Partition
+          - :iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+      - Fn::Join:
+        - ''
+        - - 'arn:'
+          - Ref: AWS::Partition
+          - :iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+      - Fn::Join:
+        - ''
+        - - 'arn:'
+          - Ref: AWS::Partition
+          - :iam::aws:policy/AWSBackupFullAccess
+      RoleName: backup_role
+    Type: AWS::IAM::Role
+  BastionInstance3B3E1DA4:
+    DependsOn:
+    - WebUIInstanceRoleDefaultPolicy6D88FBCA
+    - WebUIInstanceRoleA00CF3A0
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      IamInstanceProfile:
+        Ref: BastionInstanceInstanceProfile9D596C64
+      ImageId:
+        Ref: SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amihvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter
+      InstanceType: t3.micro
+      SecurityGroupIds:
+      - Fn::GetAtt:
+        - bastionsg4EE455E1
+        - GroupId
+      SubnetId:
+        Ref: WebVPCwebsubnetSubnet1SubnetF9B692F9
+      Tags:
+      - Key: Backup
+        Value: 'True'
+      - Key: Name
+        Value: Bastion_host
+      UserData:
+        Fn::Base64: '#!/bin/bash
+
+          yum check-update -y
+
+          yum upgrade -y
+
+          yum install -y amazon-efs-utils'
+    Type: AWS::EC2::Instance
+  BastionInstanceInstanceProfile9D596C64:
+    Properties:
+      Roles:
+      - Ref: WebUIInstanceRoleA00CF3A0
+    Type: AWS::IAM::InstanceProfile
+  DataBucketE3889A50:
+    DeletionPolicy: Delete
+    Type: AWS::S3::Bucket
+    UpdateReplacePolicy: Delete
+  RDSSecurityGroup6BF2CF10:
+    Properties:
+      GroupDescription: Security group for RDS cluster
+      GroupName: RDSSecurityGroup
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0
+        Description: Allow all outbound traffic by default
+        IpProtocol: '-1'
+      SecurityGroupIngress:
+      - CidrIp: 10.10.0.0/16
+        Description: Allow rds connection to 3306
+        FromPort: 3306
+        IpProtocol: tcp
+        ToPort: 3306
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::SecurityGroup
+  ServerlessClusterD09D5D78:
+    DeletionPolicy: Delete
+    Properties:
+      DBClusterParameterGroupName: default.aurora-mysql5.7
+      DBSubnetGroupName:
+        Ref: ServerlessClusterSubnetsEB21A3DA
+      DatabaseName: myApp
+      Engine: aurora-mysql
+      EngineMode: serverless
+      MasterUserPassword:
+        Fn::Join:
+        - ''
+        - - '{{resolve:secretsmanager:'
+          - Ref: ServerlessClusterSecret9585927A
+          - :SecretString:password::}}
+      MasterUsername:
+        Fn::Join:
+        - ''
+        - - '{{resolve:secretsmanager:'
+          - Ref: ServerlessClusterSecret9585927A
+          - :SecretString:username::}}
+      StorageEncrypted: true
+      Tags:
+      - Key: Backup-DIY
+        Value: 'True'
+      VpcSecurityGroupIds:
+      - Fn::GetAtt:
+        - RDSSecurityGroup6BF2CF10
+        - GroupId
+    Type: AWS::RDS::DBCluster
+    UpdateReplacePolicy: Delete
+  ServerlessClusterSecret9585927A:
+    DeletionPolicy: Delete
+    Properties:
+      Description:
+        Fn::Join:
+        - ''
+        - - 'Generated by the CDK for stack: '
+          - Ref: AWS::StackName
+      GenerateSecretString:
+        ExcludeCharacters: ' %+~`#$&*()|[]{}:;<>?!''/@"\'
+        GenerateStringKey: password
+        PasswordLength: 30
+        SecretStringTemplate: '{"username":"dbadmin"}'
+      Tags:
+      - Key: Backup-DIY
+        Value: 'True'
+    Type: AWS::SecretsManager::Secret
+    UpdateReplacePolicy: Delete
+  ServerlessClusterSecretAttachment79618777:
+    Properties:
+      SecretId:
+        Ref: ServerlessClusterSecret9585927A
+      TargetId:
+        Ref: ServerlessClusterD09D5D78
+      TargetType: AWS::RDS::DBCluster
+    Type: AWS::SecretsManager::SecretTargetAttachment
+  ServerlessClusterSubnetsEB21A3DA:
+    Properties:
+      DBSubnetGroupDescription: Subnets for ServerlessCluster database
+      SubnetIds:
+      - Ref: WebVPCdbsubnetSubnet1Subnet820C2197
+      - Ref: WebVPCdbsubnetSubnet2Subnet30D7BB9B
+      Tags:
+      - Key: Backup-DIY
+        Value: 'True'
+    Type: AWS::RDS::DBSubnetGroup
+  WebUIInstanceRoleA00CF3A0:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+              Fn::Join:
+              - ''
+              - - ec2.
+                - Ref: AWS::URLSuffix
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+      - Fn::Join:
+        - ''
+        - - 'arn:'
+          - Ref: AWS::Partition
+          - :iam::aws:policy/AmazonS3FullAccess
+      - Fn::Join:
+        - ''
+        - - 'arn:'
+          - Ref: AWS::Partition
+          - :iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      - Fn::Join:
+        - ''
+        - - 'arn:'
+          - Ref: AWS::Partition
+          - :iam::aws:policy/AmazonElasticFileSystemReadOnlyAccess
+      - Fn::Join:
+        - ''
+        - - 'arn:'
+          - Ref: AWS::Partition
+          - :iam::aws:policy/AmazonEC2ReadOnlyAccess
+      - Fn::Join:
+        - ''
+        - - 'arn:'
+          - Ref: AWS::Partition
+          - :iam::aws:policy/SecretsManagerReadWrite
+      RoleName: web_ui_role
+    Type: AWS::IAM::Role
+  WebUIInstanceRoleDefaultPolicy6D88FBCA:
+    Properties:
+      PolicyDocument:
+        Statement:
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/css/bootstrap.min.css
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/css/bootstrap.min.css.map
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/js/bootstrap.bundle.min.js
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/js/bootstrap.min.js
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/js/bootstrap.bundle.min.js.map
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/static/pup.jpeg
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/404.html
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/addPup.html
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/base.html
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/home.html
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/success.html
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/templates/validate.html
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/app.py
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/db.py
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/APP_README.md
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/lab.service
+        - Action:
+          - s3:GetObject*
+          - s3:GetBucket*
+          - s3:List*
+          Effect: Allow
+          Resource:
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab
+          - Fn::Join:
+            - ''
+            - - 'arn:'
+              - Ref: AWS::Partition
+              - :s3:::pu-base-buckets-v1-provision-lab/ff4d0824-49ad-48da-bea6-2a93a800aa93/basic_puppy_app/requirements.txt
+        - Action:
+          - cloudformation:DescribeStackResource
+          - cloudformation:SignalResource
+          Effect: Allow
+          Resource:
+            Ref: AWS::StackId
+        Version: '2012-10-17'
+      PolicyName: WebUIInstanceRoleDefaultPolicy6D88FBCA
+      Roles:
+      - Ref: WebUIInstanceRoleA00CF3A0
+    Type: AWS::IAM::Policy
+  WebUISecurityGroupEA27EBAB:
+    Properties:
+      GroupDescription: Security group for web server
+      GroupName: WebUISecurityGroup
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0
+        Description: Allow all outbound traffic by default
+        IpProtocol: '-1'
+      SecurityGroupIngress:
+      - CidrIp: 0.0.0.0/0
+        Description: HTTP access from anywhere to port 8080
+        FromPort: 8080
+        IpProtocol: tcp
+        ToPort: 8080
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::SecurityGroup
+  WebVPC90B44A9A:
+    Properties:
+      CidrBlock: 10.10.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC
+    Type: AWS::EC2::VPC
+  WebVPCIGWC7DB9EBF:
+    Properties:
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC
+    Type: AWS::EC2::InternetGateway
+  WebVPCVPCGW552C41FD:
+    Properties:
+      InternetGatewayId:
+        Ref: WebVPCIGWC7DB9EBF
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::VPCGatewayAttachment
+  WebVPCdbsubnetSubnet1DefaultRoute7945829C:
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: WebVPCwebsubnetSubnet1NATGateway8D973725
+      RouteTableId:
+        Ref: WebVPCdbsubnetSubnet1RouteTableD27C9121
+    Type: AWS::EC2::Route
+  WebVPCdbsubnetSubnet1RouteTableAssociationC7A47FDF:
+    Properties:
+      RouteTableId:
+        Ref: WebVPCdbsubnetSubnet1RouteTableD27C9121
+      SubnetId:
+        Ref: WebVPCdbsubnetSubnet1Subnet820C2197
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  WebVPCdbsubnetSubnet1RouteTableD27C9121:
+    Properties:
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC/db-subnetSubnet1
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::RouteTable
+  WebVPCdbsubnetSubnet1Subnet820C2197:
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      CidrBlock: 10.10.2.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: aws-cdk:subnet-name
+        Value: db-subnet
+      - Key: aws-cdk:subnet-type
+        Value: Private
+      - Key: Name
+        Value: mylab/WebVPC/db-subnetSubnet1
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::Subnet
+  WebVPCdbsubnetSubnet2DefaultRouteF5608FC1:
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: WebVPCwebsubnetSubnet2NATGateway95A770C1
+      RouteTableId:
+        Ref: WebVPCdbsubnetSubnet2RouteTable7F9AAE5F
+    Type: AWS::EC2::Route
+  WebVPCdbsubnetSubnet2RouteTable7F9AAE5F:
+    Properties:
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC/db-subnetSubnet2
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::RouteTable
+  WebVPCdbsubnetSubnet2RouteTableAssociation3D7EBCFA:
+    Properties:
+      RouteTableId:
+        Ref: WebVPCdbsubnetSubnet2RouteTable7F9AAE5F
+      SubnetId:
+        Ref: WebVPCdbsubnetSubnet2Subnet30D7BB9B
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  WebVPCdbsubnetSubnet2Subnet30D7BB9B:
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 1
+        - Fn::GetAZs: ''
+      CidrBlock: 10.10.3.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: aws-cdk:subnet-name
+        Value: db-subnet
+      - Key: aws-cdk:subnet-type
+        Value: Private
+      - Key: Name
+        Value: mylab/WebVPC/db-subnetSubnet2
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::Subnet
+  WebVPCwebsubnetSubnet1DefaultRoute4EDDBFFF:
+    DependsOn:
+    - WebVPCVPCGW552C41FD
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: WebVPCIGWC7DB9EBF
+      RouteTableId:
+        Ref: WebVPCwebsubnetSubnet1RouteTableBCDB67B5
+    Type: AWS::EC2::Route
+  WebVPCwebsubnetSubnet1EIP0CD314B4:
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC/web-subnetSubnet1
+    Type: AWS::EC2::EIP
+  WebVPCwebsubnetSubnet1NATGateway8D973725:
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - WebVPCwebsubnetSubnet1EIP0CD314B4
+        - AllocationId
+      SubnetId:
+        Ref: WebVPCwebsubnetSubnet1SubnetF9B692F9
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC/web-subnetSubnet1
+    Type: AWS::EC2::NatGateway
+  WebVPCwebsubnetSubnet1RouteTableAssociation45006329:
+    Properties:
+      RouteTableId:
+        Ref: WebVPCwebsubnetSubnet1RouteTableBCDB67B5
+      SubnetId:
+        Ref: WebVPCwebsubnetSubnet1SubnetF9B692F9
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  WebVPCwebsubnetSubnet1RouteTableBCDB67B5:
+    Properties:
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC/web-subnetSubnet1
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::RouteTable
+  WebVPCwebsubnetSubnet1SubnetF9B692F9:
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 0
+        - Fn::GetAZs: ''
+      CidrBlock: 10.10.0.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: aws-cdk:subnet-name
+        Value: web-subnet
+      - Key: aws-cdk:subnet-type
+        Value: Public
+      - Key: Name
+        Value: mylab/WebVPC/web-subnetSubnet1
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::Subnet
+  WebVPCwebsubnetSubnet2DefaultRoute4C379328:
+    DependsOn:
+    - WebVPCVPCGW552C41FD
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: WebVPCIGWC7DB9EBF
+      RouteTableId:
+        Ref: WebVPCwebsubnetSubnet2RouteTableA03C7C03
+    Type: AWS::EC2::Route
+  WebVPCwebsubnetSubnet2EIPE69654A4:
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC/web-subnetSubnet2
+    Type: AWS::EC2::EIP
+  WebVPCwebsubnetSubnet2NATGateway95A770C1:
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - WebVPCwebsubnetSubnet2EIPE69654A4
+        - AllocationId
+      SubnetId:
+        Ref: WebVPCwebsubnetSubnet2Subnet580C1FBF
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC/web-subnetSubnet2
+    Type: AWS::EC2::NatGateway
+  WebVPCwebsubnetSubnet2RouteTableA03C7C03:
+    Properties:
+      Tags:
+      - Key: Name
+        Value: mylab/WebVPC/web-subnetSubnet2
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::RouteTable
+  WebVPCwebsubnetSubnet2RouteTableAssociationB53E5FFF:
+    Properties:
+      RouteTableId:
+        Ref: WebVPCwebsubnetSubnet2RouteTableA03C7C03
+      SubnetId:
+        Ref: WebVPCwebsubnetSubnet2Subnet580C1FBF
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  WebVPCwebsubnetSubnet2Subnet580C1FBF:
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - 1
+        - Fn::GetAZs: ''
+      CidrBlock: 10.10.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: aws-cdk:subnet-name
+        Value: web-subnet
+      - Key: aws-cdk:subnet-type
+        Value: Public
+      - Key: Name
+        Value: mylab/WebVPC/web-subnetSubnet2
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::Subnet
+  bastionsg4EE455E1:
+    Properties:
+      GroupDescription: Security group for bastion host
+      GroupName: bastion_sg
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0
+        Description: Allow all outbound traffic by default
+        IpProtocol: '-1'
+      SecurityGroupIngress:
+      - CidrIp: 0.0.0.0/0
+        Description: Allow SSH Access from anywhere
+        FromPort: 22
+        IpProtocol: tcp
+        ToPort: 22
+      VpcId:
+        Ref: WebVPC90B44A9A
+    Type: AWS::EC2::SecurityGroup
+  callFromEventMonitoring:
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: ec2monitoringfunctionC066F4C3
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - ec2resourcechangeevent
+        - Arn
+    Type: AWS::Lambda::Permission
+  ec2monitoringfunctionC066F4C3:
+    DependsOn:
+    - ec2resourcemonitoringDefaultPolicyB88A5132
+    - ec2resourcemonitoring45006DA7
+    Properties:
+      Code:
+        S3Bucket: pu-base-buckets-v1-provision-lab
+        S3Key: support/ec2_monitoring_lambda.zip
+      Environment:
+        Variables:
+          fraudTimeout: '60'
+          maxInstance: '3'
+      FunctionName: ec2_monitoring_function
+      Handler: index.lambda_handler
+      MemorySize: 512
+      Role:
+        Fn::GetAtt:
+        - ec2resourcemonitoring45006DA7
+        - Arn
+      Runtime: python3.8
+      Timeout: 300
+    Type: AWS::Lambda::Function
+  ec2resourcechangeevent:
+    Properties:
+      EventPattern:
+        detail:
+          state:
+          - pending
+          - running
+        detail-type:
+        - EC2 Instance State-change Notification
+        source:
+        - aws.ec2
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - ec2monitoringfunctionC066F4C3
+          - Arn
+        Id: ec2_monitoring_function
+    Type: AWS::Events::Rule
+  ec2resourcemonitoring45006DA7:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+      - Fn::Join:
+        - ''
+        - - 'arn:'
+          - Ref: AWS::Partition
+          - :iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      RoleName: ec2_monitoring-role
+      Tags:
+      - Key: abuse-prevention
+        Value: abuse-prevention
+    Type: AWS::IAM::Role
+  ec2resourcemonitoringDefaultPolicyB88A5132:
+    Properties:
+      PolicyDocument:
+        Statement:
+        - Action:
+          - iam:PassRole
+          - ec2:Delete*
+          - ec2:Disable*
+          - ec2:Stop*
+          - ec2:Terminate*
+          - ec2:Revoke*
+          - ec2:Describe*
+          - ec2:Get*
+          Effect: Allow
+          Resource: '*'
+        Version: '2012-10-17'
+      PolicyName: ec2resourcemonitoringDefaultPolicyB88A5132
+      Roles:
+      - Ref: ec2resourcemonitoring45006DA7
+    Type: AWS::IAM::Policy

@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS CloudFormation Sample Template: This template creates a highly 
+  available application running in EC2 instance. **WARNING** This 
+  template creates one or more Amazon EC2 instances and an Application 
+  Load Balancer. You will be billed for the AWS resources used if you create a
+  stack from this template.
+Parameters:
+  VpcId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: VpcId of your existing Virtual Private Cloud (VPC)
+    ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
+  # Subnets:
+  #   Type: 'List<AWS::EC2::Subnet::Id>'
+  #   Description: The list of SubnetIds in your Virtual Private Cloud (VPC)
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t2.small
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t3.micro
+      - t3.small
+    ConstraintDescription: must be a valid EC2 instance type.
+  AmazonLinuxAMIID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2
+
+Resources:
+  EC2AppServer:
+    Type: AWS::EC2::Instance
+    Metadata:
+      Comment1: Configure the bootstrap helpers to install the Apache Web Server
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              httpd: []
+          files:
+            /var/www/html/index.html:
+              content: |
+                <html>
+                <h1>Congratulations! You have successfully launched the CloudFormation.</h1>
+                <img src="https://s3.amazonaws.com/cloudformation-examples/cloudformation_graphic.png" alt="AWS CloudFormation Logo"/>
+                </html>
+              mode: '000600'
+              owner: apache
+              group: apache
+          services:
+            sysvinit:
+              httpd:
+                enabled: 'true'
+                ensureRunning: 'true'
+            
+    Properties:
+      ImageId: !Ref AmazonLinuxAMIID
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: 
+        Fn::ImportValue: ec2-sample-role-a
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref WebServerSecurityGroup
+          AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          DeleteOnTermination: true
+          SubnetId:
+            Fn::ImportValue: IAAS-public-subnetid-A
+      Tags:
+        - Key: "Name"
+          Value: "app-server"
+
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y aws-cfn-bootstrap
+          # Install the files and packages from the metadata
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --configsets All --region ${AWS::Region}
+          # Signal the status from cfn-init
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+
+  WebServerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable HTTP access via port 80 locked down to the ELB and SSH access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref VpcId
+
+Outputs:
+  WebsiteURL:
+      Description: URL for App running in the EC2 instance
+      Value: !Sub 'http://${EC2AppServer.PublicDnsName}'

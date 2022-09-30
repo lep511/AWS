@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Building a three tier network
+Parameters:
+  CWAgentServerPolicyArn:
+    Type: String
+    Default: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+  SSMManagedInstanceCoreArn:
+    Type: String
+    Default: arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+  myDefaultSecurityGroup:
+    Type: String
+    Default: sg-09809e225a146acec
+  clientVpc:
+    Type: String 
+    Default: ''
+  clientSubnetA:
+    Type: String
+    Default: ''
+  clientSubnetB:
+    Type: String
+    Default: ''
+  clientRouteTableA:
+    Type: String
+    Default: ''
+  clientRouteTableB:
+    Type: String
+    Default: ''
+
+Conditions:
+  clientVpcExists: !Not [ !Equals [!Ref clientVpc, '']]
+  clientSubnetAExists: !Not [ !Equals [!Ref clientSubnetA, '']]
+  clientSubnetBExists: !Not [ !Equals [!Ref clientSubnetB, '']]
+  clientRouteTableAExists: !Not [ !Equals [!Ref clientRouteTableA, '']]
+  clientRouteTableBExists: !Not [ !Equals [!Ref clientRouteTableB, '']]
+    
+Resources:
+  MySsmRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Role that allows SSM capability
+      ManagedPolicyArns:
+        - !Ref CWAgentServerPolicyArn
+        - !Ref SSMManagedInstanceCoreArn
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Tags:
+        - Key: Name
+          Value: mySsmRole
+
+  MyEc2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref MySsmRole
+      InstanceProfileName: MySsmRoleInstanceProfile
+
+  ec2InterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2'
+      VpcId: !If [clientVpcExists, !Ref clientVpc, !ImportValue MyVpc]
+      SubnetIds: 
+        - !If [clientSubnetAExists, !Ref clientSubnetA, !ImportValue AppSubnetA]
+        - !If [clientSubnetBExists, !Ref clientSubnetB, !ImportValue AppSubnetB]
+      SecurityGroupIds:
+        - !Ref myDefaultSecurityGroup
+      PrivateDnsEnabled: true
+
+  ec2MessagesInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      VpcId: !If [clientVpcExists, !Ref clientVpc, !ImportValue MyVpc]
+      SubnetIds: 
+        - !If [clientSubnetAExists, !Ref clientSubnetA, !ImportValue AppSubnetA]
+        - !If [clientSubnetBExists, !Ref clientSubnetB, !ImportValue AppSubnetB]
+      SecurityGroupIds:
+        - !Ref myDefaultSecurityGroup
+      PrivateDnsEnabled: true
+
+  ssmInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
+      VpcId: !If [clientVpcExists, !Ref clientVpc, !ImportValue MyVpc]
+      SubnetIds: 
+        - !If [clientSubnetAExists, !Ref clientSubnetA, !ImportValue AppSubnetA]
+        - !If [clientSubnetBExists, !Ref clientSubnetB, !ImportValue AppSubnetB]
+      SecurityGroupIds:
+        - !Ref myDefaultSecurityGroup
+      PrivateDnsEnabled: true
+
+  ssmMessagesInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      VpcId: !If [clientVpcExists, !Ref clientVpc, !ImportValue MyVpc]
+      SubnetIds: 
+        - !If [clientSubnetAExists, !Ref clientSubnetA, !ImportValue AppSubnetA]
+        - !If [clientSubnetBExists, !Ref clientSubnetB, !ImportValue AppSubnetB]
+      SecurityGroupIds:
+        - !Ref myDefaultSecurityGroup
+      PrivateDnsEnabled: true
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: Gateway
+      VpcId: !If [clientVpcExists, !Ref clientVpc, !ImportValue MyVpc]
+      RouteTableIds:
+        - !If [clientRouteTableAExists, !Ref clientRouteTableA, !ImportValue PrivateARouteTable]
+        - !If [clientRouteTableBExists, !Ref clientRouteTableB, !ImportValue PrivateBRouteTable]
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: '*'
+            Resource: '*'

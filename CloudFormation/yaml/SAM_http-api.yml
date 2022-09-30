@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  StageName:
+    Type: String
+    Default: Prod
+    
+Resources:
+  HttpApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      InlineCode: |
+          def handler(event, context):
+              import json
+              return {
+                  "statusCode": 200,
+                  "body": json.dumps(event),
+              }
+      Handler: index.handler
+      Runtime: python3.7
+      Events:
+        ExplicitApi: # warning: creates a public endpoint
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /path
+            TimeoutInMillis: 15000
+            PayloadFormatVersion: "2.0"
+            RouteSettings:
+              ThrottlingBurstLimit: 600
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref StageName
+      Tags:
+        Tag: Value
+      AccessLogSettings:
+        DestinationArn: !GetAtt AccessLogs.Arn
+        Format: $context.requestId
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 200
+      RouteSettings:
+        "GET /path":
+          ThrottlingBurstLimit: 500 # overridden in HttpApi Event
+      StageVariables:
+        StageVar: Value
+      FailOnWarnings: true
+
+  AccessLogs:
+    Type: AWS::Logs::LogGroup
+
+Outputs:
+  HttpApiUrl:
+    Description: URL of your API endpoint
+    Value:
+      Fn::Sub: 'https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${StageName}/'
+  HttpApiId:
+    Description: Api id of HttpApi
+    Value:
+      Ref: HttpApi

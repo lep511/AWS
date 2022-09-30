@@ -1,0 +1,179 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: "An example of using Aws-SDK service integrations to gather info on S3 buckets"  
+
+Resources:
+  ApplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - states.amazonaws.com
+            Action: 
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: AppPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+                - xray:GetSamplingRules
+                - xray:GetSamplingTargets
+                - s3:ListAllMyBuckets
+                - s3:ListBucket
+                - s3:GetBucketVersioning
+                - s3:GetBucketLocation
+                Resource: '*'
+  
+  StateMachineGetS3BucketInfoStandard:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Type: "STANDARD"
+      Name: "Gather-S3-Bucket-Info-Standard"
+      Role: !GetAtt ApplicationRole.Arn
+      Definition:
+        Comment: An example of using Aws-SDK service integrations to gather info on S3 buckets
+        StartAt: ListBuckets
+        States:
+          ListBuckets:
+            Type: Task
+            Parameters: {}
+            Resource: arn:aws:states:::aws-sdk:s3:listBuckets
+            Next: Map
+            Retry:
+            - ErrorEquals:
+              - States.ALL
+              BackoffRate: 1
+              IntervalSeconds: 1
+              MaxAttempts: 3
+          Map:
+            Type: Map
+            Iterator:
+              StartAt: GetBucketLocation
+              States:
+                GetBucketLocation:
+                  Type: Task
+                  Parameters:
+                    Bucket.$: "$.Name"
+                  Resource: arn:aws:states:::aws-sdk:s3:getBucketLocation
+                  ResultPath: "$.BucketLocationInfo"
+                  Next: Is In Current Region?
+                  Retry:
+                  - ErrorEquals:
+                    - States.ALL
+                    BackoffRate: 1
+                    IntervalSeconds: 1
+                    MaxAttempts: 3
+                Is In Current Region?:
+                  Type: Choice
+                  Choices:
+                  - And:
+                    - Variable: "$.BucketLocationInfo.LocationConstraint "
+                      IsPresent: true
+                    - Variable: "$.BucketLocationInfo.LocationConstraint "
+                      StringEquals: ca-central-1
+                    Next: GetBucketVersioning
+                  Default: Add Unknown Version Info
+                Add Unknown Version Info:
+                  Type: Pass
+                  End: true
+                  ResultPath: "$.BucketVersioningInfo"
+                  Result:
+                    Status: Unknown
+                GetBucketVersioning:
+                  Type: Task
+                  End: true
+                  Parameters:
+                    Bucket.$: "$.Name"
+                  Resource: arn:aws:states:::aws-sdk:s3:getBucketVersioning
+                  ResultPath: "$.BucketVersioningInfo"
+                  Retry:
+                  - ErrorEquals:
+                    - States.ALL
+                    BackoffRate: 1
+                    IntervalSeconds: 1
+                    MaxAttempts: 3
+            End: true
+            ItemsPath: "$.Buckets"
+
+  StateMachineGetS3BucketInfoExpress:
+      Type: AWS::Serverless::StateMachine
+      Properties:
+        Type: "EXPRESS"
+        Name: "Gather-S3-Bucket-Info-Express"
+        Role: !GetAtt ApplicationRole.Arn
+        Definition:
+          Comment: An example of using Aws-SDK service integrations to gather info on S3 buckets
+          StartAt: ListBuckets
+          States:
+            ListBuckets:
+              Type: Task
+              Parameters: {}
+              Resource: arn:aws:states:::aws-sdk:s3:listBuckets
+              Next: Map
+              Retry:
+              - ErrorEquals:
+                - States.ALL
+                BackoffRate: 1
+                IntervalSeconds: 1
+                MaxAttempts: 3
+            Map:
+              Type: Map
+              Iterator:
+                StartAt: GetBucketLocation
+                States:
+                  GetBucketLocation:
+                    Type: Task
+                    Parameters:
+                      Bucket.$: "$.Name"
+                    Resource: arn:aws:states:::aws-sdk:s3:getBucketLocation
+                    ResultPath: "$.BucketLocationInfo"
+                    Next: Is In Current Region?
+                    Retry:
+                    - ErrorEquals:
+                      - States.ALL
+                      BackoffRate: 1
+                      IntervalSeconds: 1
+                      MaxAttempts: 3
+                  Is In Current Region?:
+                    Type: Choice
+                    Choices:
+                    - And:
+                      - Variable: "$.BucketLocationInfo.LocationConstraint "
+                        IsPresent: true
+                      - Variable: "$.BucketLocationInfo.LocationConstraint "
+                        StringEquals: ca-central-1
+                      Next: GetBucketVersioning
+                    Default: Add Unknown Version Info
+                  Add Unknown Version Info:
+                    Type: Pass
+                    End: true
+                    ResultPath: "$.BucketVersioningInfo"
+                    Result:
+                      Status: Unknown
+                  GetBucketVersioning:
+                    Type: Task
+                    End: true
+                    Parameters:
+                      Bucket.$: "$.Name"
+                    Resource: arn:aws:states:::aws-sdk:s3:getBucketVersioning
+                    ResultPath: "$.BucketVersioningInfo"
+                    Retry:
+                    - ErrorEquals:
+                      - States.ALL
+                      BackoffRate: 1
+                      IntervalSeconds: 1
+                      MaxAttempts: 3
+              End: true
+              ItemsPath: "$.Buckets"

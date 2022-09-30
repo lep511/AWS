@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  EventBridgeStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !GetAtt [ EventBridgeWorkflowExecutionRole, Arn ]
+      DefinitionString:
+        !Sub
+        - |-
+          {
+            "Comment": "An example of the Amazon States Language for sending a custom event to Amazon EventBridge",
+            "StartAt": "Send a custom event",
+            "States": {
+              "Send a custom event": {
+                "Resource": "arn:${AWS::Partition}:states:::events:putEvents",
+                "Type": "Task",
+                "Parameters": {
+                  "Entries": [
+                    {
+                      "Detail": {
+                        "Message": "Hello from Step Functions!"
+                      },
+                      "DetailType": "MessageFromStepFunctions",
+                      "EventBusName": "${eventBusName}",
+                      "Source": "my.statemachine"
+                    }
+                  ]
+                },
+                "End": true
+              }
+            }
+          }
+        - { eventBusName: !GetAtt [ EventBridgeEventBus, Name ] }
+  EventBridgeWorkflowExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: EventBridgePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource:
+                  - !GetAtt [ EventBridgeEventBus, Arn ]
+  EventBridgeEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: stepfunctions-sampleproject-eventbus
+  EventBridgeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Step Functions Sample Project Event Bus Rule
+      Name: stepfunctions-sampleproject-rule
+      EventBusName: !GetAtt [ EventBridgeEventBus, Name ]
+      EventPattern:
+        source:
+          - my.statemachine
+        detail-type:
+          - MessageFromStepFunctions
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt [ LambdaFunction, Arn ]
+          Id: stepfunctions-sampleproject-lambda-target
+        - Arn: !Ref SNSTopic
+          Id: stepfunctions-sampleproject-sns-target
+        - Arn: !GetAtt [ SQSQueue, Arn ]
+          Id: stepfunctions-sampleproject-sqs-target
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Role: !GetAtt [ LambdaFunctionRole, Arn ]
+      Code:
+        ZipFile:
+          Fn::Sub: |
+            exports.handler = (event, context, callback) => {
+              console.log('event ' + JSON.stringify(event));
+              console.log('context ' + JSON.stringify(context));
+
+              callback(null);
+            };
+  LambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*"
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt [ EventBridgeRule, Arn ]
+  SQSQueue:
+    Type: AWS::SQS::Queue
+  SQSQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: events.amazonaws.com
+            Action:
+              - "sqs:SendMessage"
+            Resource: !GetAtt [SQSQueue, Arn]
+            Condition:
+              ArnEquals:
+                "aws:SourceArn": !GetAtt [EventBridgeRule, Arn]
+          - Effect: "Allow"
+            Principal:
+              Service: sns.amazonaws.com
+            Action:
+              - "sqs:SendMessage"
+            Resource: !GetAtt [SQSQueue, Arn]
+            Condition:
+              ArnEquals:
+                "aws:SourceArn": !Ref SNSTopic
+      Queues:
+        - !Ref SQSQueue
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint: !GetAtt [ SQSQueue, Arn ]
+          Protocol: sqs
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: !Ref SNSTopic
+      Topics:
+        - !Ref SNSTopic
+
+Outputs:
+  StateMachineArn:
+    Value: !Ref EventBridgeStateMachine
+  ExecutionInput:
+    Description: Sample input to StartExecution.
+    Value:
+      >
+      {}

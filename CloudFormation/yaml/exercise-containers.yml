@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Containers Exercise"
+Parameters: 
+   
+  VpcCIDR: 
+    Default: 10.16.0.0/16
+    Description: "The CIDR block for the VPC"
+    Type: String
+    AllowedValues:
+      - 10.16.0.0/16
+    
+  SubnetCIDR: 
+    Default: 10.16.10.0/24
+    Description: "CIDR for public subnet"
+    Type: String
+    AllowedValues:
+      - 10.16.10.0/24
+       
+Resources:
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true  
+      Tags: 
+       - Key: Name
+         Value: "Containers VPC"
+
+  subnet:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+     VpcId: !Ref VPC
+     AvailabilityZone: 
+      Fn::Select:
+      - 0
+      - Fn::GetAZs: ''
+     CidrBlock: !Ref SubnetCIDR
+     MapPublicIpOnLaunch: true
+     Tags:
+      - Key: Name
+        Value: "Containers subnet"
+        
+  IGW:
+    Type: "AWS::EC2::InternetGateway"
+    DependsOn: VPC
+  AttachGateway:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    DependsOn: 
+      - VPC
+      - IGW
+    Properties: 
+     VpcId: !Ref VPC
+     InternetGatewayId: !Ref IGW
+     
+  ec2Route:
+    Type: "AWS::EC2::RouteTable"
+    DependsOn:
+      - VPC
+      - AttachGateway
+    Properties:
+      VpcId: !Ref VPC
+
+  routeOut:
+    Type: "AWS::EC2::Route"
+    DependsOn: 
+      - ec2Route
+      - AttachGateway
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+      RouteTableId: !Ref ec2Route
+
+  SubnetRouteAssociate:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    DependsOn:
+      - ec2Route
+      - subnet 
+    Properties:
+      RouteTableId: !Ref ec2Route
+      SubnetId: !Ref subnet
+
+  EmployeesTable:
+    Type: AWS::DynamoDB::Table 
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TableName: Employees
+
+  Cloud9Role:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      RoleName: cloud9-containers-role
+
+  Cloud9Profile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: cloud9-containers-role
+      Path: "/"
+      Roles:
+        - !Ref Cloud9Role
+
+
+

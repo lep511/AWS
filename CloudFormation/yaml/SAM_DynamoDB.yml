@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: An app that includes a DynamoDB table, Lambda function that writes to DynamoDB, and CloudWatch Event trigger
+
+Resources:
+  LambdaWriteToDynamoDB:
+    # A function that writes to a DynamoDB table on a schedule
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: LambdaWriteToDynamoDB
+      Handler: LambdaWriteToDynamoDB.lambda_handler
+      Runtime: python3.7
+      CodeUri: ./LambdaWriteToDynamoDB
+      Description: A function that writes to a DynamoDB table on a schedule
+      MemorySize: 128
+      Timeout: 120
+      Policies:
+      # Read more about SAM policy templates here
+      # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+       - AWSLambdaExecute
+       - DynamoDBCrudPolicy:
+          TableName: !Ref MyDynamoDBTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref MyDynamoDBTable
+      Events:
+        MyCloudWatchEvent:
+          Type: Schedule
+          Properties:
+            # Read more about schedule expressions here: 
+            # https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html
+            # This event runs every Friday at 16 UTC/9AM PST
+            Schedule: cron(0 16 ? * FRI *)
+            
+  MyDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    Properties:
+      TableName: MyDynamoDBTable
+      AttributeDefinitions:
+        - AttributeName: ListId
+          AttributeType: S
+        - AttributeName: Date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ListId
+          KeyType: HASH
+        - AttributeName: Date
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      ProvisionedThroughput:
+        ReadCapacityUnits: 0
+        WriteCapacityUnits: 0
