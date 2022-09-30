@@ -1,0 +1,13 @@
+Resources:
+  Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 300
+      MemorySize: 128
+      Handler: lambda_function.lambda_handler
+      CodeUri: s3://data-bucket-304-12/23b58873aabbf1f48a0ce168e961caca
+      Runtime: python3.8
+      Architectures:
+      - x86_64
+    Metadata:
+      SamResourceId: Function

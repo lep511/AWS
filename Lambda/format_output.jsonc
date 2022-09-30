@@ -1,0 +1,11 @@
+// Formato de salida de una función de Lambda para la integración de proxy
+
+{
+    "isBase64Encoded": true|false,
+    "statusCode": httpStatusCode,
+    "headers": { "headerName": "headerValue", ... },
+    "multiValueHeaders": { "headerName": ["headerValue", "headerValue2", ...], ... },
+    "body": "..."
+}
+
+// https://docs.aws.amazon.com/es_es/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-output-format

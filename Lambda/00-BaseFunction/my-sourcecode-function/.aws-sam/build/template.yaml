@@ -1,0 +1,13 @@
+Resources:
+  Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 300
+      MemorySize: 128
+      Handler: lambda_function.lambda_handler
+      CodeUri: H:\MEGA\CLOUD\AMAZON-AWS\Lambda\00-BaseFunction\my-sourcecode-function\.aws-sam\build\Function
+      Runtime: python3.8
+      Architectures:
+      - x86_64
+    Metadata:
+      SamResourceId: Function

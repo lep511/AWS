@@ -1,0 +1,47 @@
+{
+    "version": "0",
+    "id": "228b9f36-1d8b-d51f-359a-f64c3bb2687b",
+    "detail-type": "Lambda Function Invocation Result - Success",
+    "source": "lambda",
+    "account": "433909495486",
+    "time": "2022-07-16T23:09:31Z",
+    "region": "us-east-1",
+    "resources": [
+        "arn:aws:events:us-east-1:433909495486:event-bus/Inventory",
+        "arn:aws:lambda:us-east-1:433909495486:function:InventoryFunction:$LATEST"
+    ],
+    "detail": {
+        "version": "1.0",
+        "timestamp": "2022-07-16T23:09:31.306Z",
+        "requestContext": {
+            "requestId": "1d854b02-e3c9-4245-9613-9fe3926634a0",
+            "functionArn": "arn:aws:lambda:us-east-1:433909495486:function:InventoryFunction:$LATEST",
+            "condition": "Success",
+            "approximateInvokeCount": 1
+        },
+        "requestPayload": {
+            "version": "0",
+            "id": "03f76b98-506f-d5d5-fd7f-33a0cd242b6e",
+            "detail-type": "Order Processed",
+            "source": "com.aws.orders",
+            "account": "433909495486",
+            "time": "2022-07-16T23:09:30Z",
+            "region": "us-east-1",
+            "resources": [],
+            "detail": {
+                "category": "office-supplies",
+                "value": 50,
+                "location": "eu-west"
+            }
+        },
+        "responseContext": {
+            "statusCode": 200,
+            "executedVersion": "$LATEST"
+        },
+        "responsePayload": {
+            "category": "office-supplies",
+            "value": 50,
+            "location": "eu-west"
+        }
+    }
+}
