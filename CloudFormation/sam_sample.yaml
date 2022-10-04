@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'API Gateway + Lambda + DynamoDB + Cognito + S3 + CloudFront + CloudWatch + CloudFormation + SAM'
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment name
+  CognitoUserPoolName:
+    Type: String
+    Default: 'MyUserPool'
+    Description: Cognito User Pool Name
+  CognitoUserPoolClientName:
+    Type: String
+    Default: 'MyUserPoolClient'
+    Description: Cognito User Pool Client Name
+  CognitoUserPoolDomain:
+    Type: String
+    Default: 'myuserpooldomain'
+    Description: Cognito User Pool Domain
+  CognitoUserPoolAdminEmail:
+    Type: String
+    Default: '
+Resources:
+  # Cognito User Pool
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Ref CognitoUserPoolName
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+  # Cognito User Pool Client
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Ref CognitoUserPoolClientName
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+  # Cognito User Pool Domain
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoUserPoolDomain
+      UserPoolId: !Ref CognitoUserPool
+  # Cognito User Pool Admin
+  CognitoUserPoolAdmin:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      Username: !Ref CognitoUserPoolAdminEmail
+      DesiredDeliveryMediums:
+        - EMAIL
+      ForceAliasCreation: false
+      UserAttributes:
+        - Name: email
+          Value: !Ref CognitoUserPoolAdminEmail
+        - Name: email_verified
+          Value: 'true'
+  # Cognito User Pool Admin Password
+  CognitoUserPoolAdminPassword:
+    Type: AWS::Cognito::UserPoolUserToGroupAttachment
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      Username: !Ref CognitoUserPoolAdminEmail
+      GroupName: 'Admin'
+  # Cognito Identity Pool
+  CognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref CognitoUserPoolClient
+          ProviderName: !Sub 'cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}'
+      IdentityPoolName: !Sub '${Environment}-MyIdentityPool'
+  # Cognito Identity Pool Role Attachment
