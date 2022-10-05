@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Networking template
+
+Parameters:
+  NetworkStackName:
+    Type: String
+    Default: 'Enter your stack name'
+
+  AmazonLinuxAMIID:
+    Description: ECS-Optimized AMI ID
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ecs/optimized-ami/amazon-linux/recommended/image_id
+
+  LatestAL2AmiId: # Locate latest Amazon Linux 2 AMI from public parameter store
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+  MasterUserName: 
+    Type: String
+    Default: Admin
+
+  MasterPassword:
+    Type: String
+    Default: password1234!
+
+  AppInstanceProfile:
+    Type: String
+    Default: app_instance_profile
+
+Resources:
+  RDSDBClusterParameterGroup:
+    Type: "AWS::RDS::DBClusterParameterGroup"
+    Properties: 
+      Description: "CloudFormation Sample Aurora Cluster Parameter Group"
+      Family: Aurora-MySQL5.7
+      Parameters: 
+        time_zone: US/Eastern
+    
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: !Ref MasterUserName
+      MasterUserPassword: !Ref MasterPassword
+      DBSubnetGroupName: 
+        Fn::ImportValue:
+          Fn::Sub: ${NetworkStackName}-DBSubnetGroup
+      DatabaseName: Population
+      Engine: aurora-mysql
+      EngineMode: serverless
+      EngineVersion: 5.7.mysql_aurora.2.10.2
+      DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
+      VpcSecurityGroupIds:
+        - Fn::ImportValue:
+            Fn::Sub: ${NetworkStackName}-DBSecurityGroup
+
+  AppServer:
+    Type: AWS::EC2::Instance
+    DependsOn: AuroraCluster
+    Properties:
+      ImageId: !Ref AmazonLinuxAMIID
+      InstanceType: t3.micro
+      IamInstanceProfile: !Ref AppInstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            DeleteOnTermination: true
+            VolumeType: gp2
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: false
+          DeviceIndex: '0'
+          GroupSet:
+            - Fn::ImportValue:
+                Fn::Sub: ${NetworkStackName}-EC2InstanceSecurityGroup 
+          SubnetId: 
+            Fn::ImportValue:
+              Fn::Sub: ${NetworkStackName}-PrivateSubnet1
+      Tags:
+        - Key: Name
+          Value: AppServer
+      UserData:
+        Fn::Base64:
+          !Sub |
+          #!/bin/bash 
+          sudo yum update -y
+          sudo yum -y install jq
+          sudo yum install -y python3
+          aws s3 cp s3://pu-base-buckets-v1-provision-lab/97736115-45a6-45f1-a87a-35150b256469/vpcapp.zip .
+          unzip vpcapp.zip
+          cd vpcapp
+          pip3 install -r requirements.txt
+          export REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document%7Cjq -r .region)
+          export DATABASE_HOST=$(aws rds describe-db-clusters \
+              --query 'DBClusters[*].[Endpoint]' \
+              --output text --region $REGION\
+              )
+          export DATABASE_USER=Admin
+          export DATABASE_PASSWORD=password1234!
+          export DATABASE_DB_NAME=Population
+          cd loaddatabase
+          python3 database_populate.py
+          cd ..
+          python3 application.py
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: ApplicationLoadBalancer
+      SecurityGroups:
+        - Fn::ImportValue:
+            Fn::Sub: ${NetworkStackName}-LoadBalancerSecurityGroup
+      Subnets:
+        - Fn::ImportValue:
+            Fn::Sub: ${NetworkStackName}-PublicSubnet1
+        - Fn::ImportValue:
+            Fn::Sub: ${NetworkStackName}-PublicSubnet2
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 8443
+      Protocol: HTTP
+      VpcId: 
+        Fn::ImportValue:
+          Fn::Sub: ${NetworkStackName}-VPC
+      TargetType: instance
+      Targets:
+        - Id: !Ref AppServer
+          Port: 8443
+
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: '80'
+      Protocol: HTTP
