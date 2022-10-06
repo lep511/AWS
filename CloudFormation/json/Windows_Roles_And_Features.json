@@ -1,0 +1,190 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "This template enables roles and features of Windows Server. **WARNING** This template creates Amazon EC2 Windows instance and related resources. You will be billed for the AWS resources used if you create a stack from this template.",
+
+  "Parameters" : {
+    "KeyName" : {
+      "Description" : "Name of an existing EC2 KeyPair",
+      "Type" : "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+    },
+
+    "InstanceType" : {
+      "Description" : "Amazon EC2 instance type",
+      "Type" : "String",
+      "Default" : "m4.large",
+      "AllowedValues" : [ "t1.micro", "t2.micro", "t2.small", "t2.medium", "m1.small", "m1.medium", "m1.large", "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "m4.large", "m4.xlarge", "m4.2xlarge", "m4.4xlarge", "m4.10xlarge", "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge", "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge", "g2.2xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge", "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge", "hi1.4xlarge", "hs1.8xlarge", "cr1.8xlarge", "cc2.8xlarge", "cg1.4xlarge"]
+,
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+    "Roles" : {
+      "Description" : "A SPACE seperated list of roles that you want to enable on this instance. Valid values are AD-Certificate, AD-Domain-Services, ADLDS, DHCP, DNS, Fax, File-Services, NPAS, Print-Services, Web-Server, and WDS.",
+      "Type" : "String",
+      "Default" : "None",
+      "AllowedPattern" : "(((AD\\-Certificate)|(AD\\-Domain\\-Services)|(ADLDS)|(DHCP)|(DNS)|(Fax)|(File\\-Services)|(NPAS)|(Print\\-Services)|(Web\\-Server)|(WDS))( ((AD\\-Certificate)|(AD\\-Domain\\-Services)|(ADLDS)|(DHCP)|(DNS)|(Fax)|(File\\-Services)|(NPAS)|(Print\\-Services)|(Web\\-Server)|(WDS)))*)|(None)"
+    },
+    "Features" : {
+      "Description" : "A SPACE seperated list of features that you want to enable on this instance. Valid values are NET-Framework, BITS, BitLocker, BranchCache, CMAK, Desktop-Experience, DAMC, Failover-Clustering, GPMC, Ink-Handwriting, Internet-Print-Client, ISNS, LPR-Port-Monitor, MSMQ, Multipath-IO, NLB, PNRP, qWave, Remote-Assistance, RDC, RPC-over-HTTP-Proxy, Simple-TCPIP, SMTP-Server, SNMP-Services, Storage-Mgr-SANS, Subsystem-UNIX-Apps, Telnet-Client, Telnet-Server, TFTP-Client, Biometric-Framework, Windows-Internal-DB, PowerShell-ISE, Backup-Features, Migration, WSRM, TIFF-IFilter, WinRM-IIS-Ext, WINS-Server, Wireless-Networking, and XPS-Viewer.",
+      "Type" : "String",
+      "Default" : "None",
+      "AllowedPattern" : "(((NET\\-Framework)|(BITS)|(BitLocker)|(BranchCache)|(CMAK)|(Desktop\\-Experience)|(DAMC)|(Failover\\-Clustering)|(GPMC)|(Ink\\-Handwriting)|(Internet\\-Print\\-Client)|(ISNS)|(LPR\\-Port\\-Monitor)|(MSMQ)|(Multipath\\-IO)|(NLB)|(PNRP)|(qWave)|(Remote\\-Assistance)|(RDC)|(RPC\\-over\\-HTTP\\-Proxy)|(Simple\\-TCPIP)|(SMTP\\-Server)|(SNMP\\-Services)|(Storage\\-Mgr\\-SANS)|(Subsystem\\-UNIX\\-Apps)|(Telnet\\-Client)|(Telnet\\-Server)|(TFTP\\-Client)|(Biometric\\-Framework)|(Windows\\-Internal\\-DB)|(PowerShell\\-ISE)|(Backup\\-Features)|(Migration)|(WSRM)|(TIFF\\-IFilter)|(WinRM\\-IIS\\-Ext)|(WINS\\-Server)|(Wireless\\-Networking)|(XPS\\-Viewer))( ((NET\\-Framework)|(BITS)|(BitLocker)|(BranchCache)|(CMAK)|(Desktop\\-Experience)|(DAMC)|(Failover\\-Clustering)|(GPMC)|(Ink\\-Handwriting)|(Internet\\-Print\\-Client)|(ISNS)|(LPR\\-Port\\-Monitor)|(MSMQ)|(Multipath\\-IO)|(NLB)|(PNRP)|(qWave)|(Remote\\-Assistance)|(RDC)|(RPC\\-over\\-HTTP\\-Proxy)|(Simple\\-TCPIP)|(SMTP\\-Server)|(SNMP\\-Services)|(Storage\\-Mgr\\-SANS)|(Subsystem\\-UNIX\\-Apps)|(Telnet\\-Client)|(Telnet\\-Server)|(TFTP\\-Client)|(Biometric\\-Framework)|(Windows\\-Internal\\-DB)|(PowerShell\\-ISE)|(Backup\\-Features)|(Migration)|(WSRM)|(TIFF\\-IFilter)|(WinRM\\-IIS\\-Ext)|(WINS\\-Server)|(Wireless\\-Networking)|(XPS\\-Viewer)))*( )*)|(None)"
+    },
+    "SourceCidrForRDP" : {
+      "Description" : "IP Cidr from which you are likely to RDP into the instances. You can add rules later by modifying the created security groups e.g. 54.32.98.160/32",
+      "Type" : "String",
+      "MinLength" : "9",
+      "MaxLength" : "18",
+      "AllowedPattern" : "^([0-9]+\\.){3}[0-9]+\\/[0-9]+$"
+    }
+  },
+
+  "Mappings" : {
+    "AWSRegion2AMI" : {
+      "af-south-1"       : {"Windows2008r2" : "NOT_SUPPORTED", "Windows2012r2" : "ami-06a594bb3971e4d1b"},
+      "ap-east-1"        : {"Windows2008r2" : "NOT_SUPPORTED", "Windows2012r2" : "ami-0007cdd6170a2175f"},
+      "ap-northeast-1"   : {"Windows2008r2" : "ami-085c81c14a7b381ca", "Windows2012r2" : "ami-0ddc626ddec721c46"},
+      "ap-northeast-2"   : {"Windows2008r2" : "ami-088344835427780e6", "Windows2012r2" : "ami-0529040055f54cedc"},
+      "ap-northeast-3"   : {"Windows2008r2" : "ami-0cee4466916e5a052", "Windows2012r2" : "ami-0c952cb0181ec7aea"},
+      "ap-south-1"       : {"Windows2008r2" : "ami-0fd8cc2e22ab2adda", "Windows2012r2" : "ami-015f0e5c464a8512a"},
+      "ap-southeast-1"   : {"Windows2008r2" : "ami-0495e047d2d1badaa", "Windows2012r2" : "ami-0a056a958e42c5eea"},
+      "ap-southeast-2"   : {"Windows2008r2" : "ami-015a1163c733ed7f2", "Windows2012r2" : "ami-0ff8c6c8a57b86baf"},
+      "ca-central-1"     : {"Windows2008r2" : "ami-0afa7c1dbb0b9d1d1", "Windows2012r2" : "ami-036eeef0b441e4372"},
+      "cn-north-1"       : {"Windows2008r2" : "NOT_SUPPORTED", "Windows2012r2" : "ami-0b917c20d0711b700"},
+      "cn-northwest-1"   : {"Windows2008r2" : "NOT_SUPPORTED", "Windows2012r2" : "ami-0bc015932aee44fa8"},
+      "eu-central-1"     : {"Windows2008r2" : "ami-056afe0639d091031", "Windows2012r2" : "ami-03df16a8a966441bb"},
+      "eu-north-1"       : {"Windows2008r2" : "ami-099397d9c5ef80746", "Windows2012r2" : "ami-0a1f0facb83b9dfa6"},
+      "eu-south-1"       : {"Windows2008r2" : "NOT_SUPPORTED", "Windows2012r2" : "ami-0aae7c4f3141a0f11"},
+      "eu-west-1"        : {"Windows2008r2" : "ami-09eefdfde3f696305", "Windows2012r2" : "ami-0affaaca0d400ed4c"},
+      "eu-west-2"        : {"Windows2008r2" : "ami-0eca562c3df3c8a6b", "Windows2012r2" : "ami-090b023339b2e8c50"},
+      "eu-west-3"        : {"Windows2008r2" : "ami-0b3d55b8cd5b7f54b", "Windows2012r2" : "ami-0c140e6c56a0df4f2"},
+      "me-south-1"       : {"Windows2008r2" : "NOT_SUPPORTED", "Windows2012r2" : "ami-0a8f97d5eedb179f4"},
+      "sa-east-1"        : {"Windows2008r2" : "ami-04c78ad2bd0a5dd3c", "Windows2012r2" : "ami-077b4b1ed505fa38b"},
+      "us-east-1"        : {"Windows2008r2" : "ami-02fa4836310cbeccd", "Windows2012r2" : "ami-003a480a3489b1c5c"},
+      "us-east-2"        : {"Windows2008r2" : "ami-038739908c6a12458", "Windows2012r2" : "ami-0920445e689437bbf"},
+      "us-west-1"        : {"Windows2008r2" : "ami-0eb6f805520147bde", "Windows2012r2" : "ami-0c739d683f3eb652e"},
+      "us-west-2"        : {"Windows2008r2" : "ami-0e56450bb7dc3d34b", "Windows2012r2" : "ami-0555de2823859bc40"}
+    }
+
+  },
+
+  "Resources" : {
+
+    "InstanceSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable RDP",
+        "SecurityGroupIngress" : [
+          {"IpProtocol" : "tcp", "FromPort" : "3389", "ToPort" : "3389", "CidrIp" : { "Ref" : "SourceCidrForRDP" }}
+        ]
+      }
+    },
+
+    "WindowsServer": {
+      "Type" : "AWS::EC2::Instance",
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "files" : {
+              "c:\\cfn\\cfn-hup.conf" : {
+                "content" : { "Fn::Join" : ["", [
+                  "[main]\n",
+                  "stack=", { "Ref" : "AWS::StackId" }, "\n",
+                  "region=", { "Ref" : "AWS::Region" }, "\n"
+                  ]]}
+              },
+              "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf" : {
+                "content": { "Fn::Join" : ["", [
+                  "[cfn-auto-reloader-hook]\n",
+                  "triggers=post.update\n",
+                  "path=Resources.WindowsServer.Metadata.AWS::CloudFormation::Init\n",
+                  "action=cfn-init.exe -v -s ", { "Ref" : "AWS::StackId" },
+                      " -r WindowsServer",
+                      " --region ", { "Ref" : "AWS::Region" }, "\n"
+                ]]}
+              }
+            },
+            
+            "commands" : {
+              "1-install-roles" : {
+                "command" : { "Fn::Join" : [ "", [
+                  "if not \"None\" EQU \"",
+                  { "Ref" : "Roles" },
+                  "\" (servermanagercmd -install ",
+                  { "Ref" : "Roles" },
+                  " -restart)"]]
+                }
+              },
+              "2-install-features" : {
+                "command" : { "Fn::Join" : [ "", [
+                  "if not \"None\" EQU \"",
+                  { "Ref" : "Features" },
+                  "\" (servermanagercmd -install ",
+                  { "Ref" : "Features" },
+                  " -restart)"]]
+                }
+              },
+              "3-signal-success" : {
+                "command" : { "Fn::Join" : [ "", [
+                  "cfn-signal.exe -e %ERRORLEVEL% \"",
+                  { "Fn::Base64" : { "Ref" : "WindowsServerWaitHandle" }},
+                  "\""]]
+                }
+              }
+            },
+            
+            "services" : {
+              "windows" : {
+                "cfn-hup" : {
+                  "enabled" : "true",
+                  "ensureRunning" : "true",
+                  "files" : ["c:\\cfn\\cfn-hup.conf", "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"]
+                }
+              }
+            }
+          }
+        }
+      },
+      
+      "Properties": {
+        "InstanceType" : { "Ref" : "InstanceType" },
+        "ImageId" : { "Fn::FindInMap" : [ "AWSRegion2AMI", { "Ref" : "AWS::Region" }, "Windows2012r2" ]},
+        "SecurityGroups" : [ {"Ref" : "InstanceSecurityGroup"} ],
+        "KeyName" : { "Ref" : "KeyName" },
+        "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+            "<script>\n",
+
+            "cfn-init.exe -v -s ", { "Ref" : "AWS::StackId" }, 
+            " -r WindowsServer",
+            " --region ", { "Ref" : "AWS::Region" }, "\n",
+          
+            "</script>"
+        ]]}}
+      }
+    },
+
+    "WindowsServerWaitHandle" : {
+      "Type" : "AWS::CloudFormation::WaitConditionHandle"
+    },
+
+    "WindowsServerWaitCondition" : {
+      "Type" : "AWS::CloudFormation::WaitCondition",
+      "DependsOn" : "WindowsServer",
+      "Properties" : {
+        "Handle" : {"Ref" : "WindowsServerWaitHandle"},
+        "Timeout" : "1800"
+      }
+    }
+  },
+  
+  "Outputs" : {
+    "RolesEnabled" : {
+      "Value" : { "Ref" : "Roles" },
+      "Description" : "Roles enabled on this instance."
+    },
+    "FeaturesEnabled" : {
+      "Value" : { "Ref" : "Features" },
+      "Description" : "Features enabled on this instance."
+    }
+  }  
+}
