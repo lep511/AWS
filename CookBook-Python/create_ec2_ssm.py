@@ -12,6 +12,7 @@ ssm = boto3.client('ssm', region_name=region_aws)
 
 def create_ec2_ssm(vpc_id, subnet_id=None):
 
+    actual_ssm_instance = len(ssm.describe_instance_information()['InstanceInformationList'])
     # Create a role
     role_name = 'SSM-Role-EC2'
     policy_document = {
@@ -50,6 +51,8 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
             InstanceProfileName=instance_profile_name,
             RoleName=role_name
         )
+        print("Creating role and instance profile...")
+        time.sleep(6)
 
     # Select a vpc
     vpc = ec2.Vpc(vpc_id)
@@ -126,11 +129,8 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
             },
         ]
     )
-
-    # Wait for the instance to enter the running state
-    print("Waiting for the instance to enter the running state...")
-    instances[0].wait_until_running()
-    print("Instance is running...\n")
+    
+    resource_id = instances[0].id
 
     # Enable Dns in VPC
     vpc.modify_attribute(EnableDnsSupport={'Value': True})
@@ -187,16 +187,15 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
 
     wait_instance_ssm = len(ssm.describe_instance_information()['InstanceInformationList'])
 
-    while wait_instance_ssm == 0:
+    while wait_instance_ssm == actual_ssm_instance:
         print('Waiting for EC2-SSM connection to be available...')
         time.sleep(10)
         print('Press Ctrl-C to stop waiting')
         wait_instance_ssm = len(ssm.describe_instance_information()['InstanceInformationList'])
 
-    instance_id = ssm.describe_instance_information()['InstanceInformationList'][0]['InstanceId']
     print("\nIn the terminal execute the following command to connect to the instance:")
-    print("   aws ssm start-session --target " + instance_id)
-    print("\n\n")
+    print("   aws ssm start-session --target " + resource_id)
+    print("\n\nEC2 instance created successfully")
 
     if key_pair_created:
         print("\nKey pair already created: " + key_name + ".pem")
