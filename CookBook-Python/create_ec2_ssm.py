@@ -3,16 +3,48 @@ import json
 import argparse
 import time
 
-region_aws = 'us-east-1'
+info_func = """
 
-ec2 = boto3.resource('ec2', region_name=region_aws)
-ec2_client = boto3.client('ec2', region_name=region_aws)
-iam = boto3.client('iam', region_name=region_aws)
-ssm = boto3.client('ssm', region_name=region_aws)
+    Create an EC2 instance with SSM permissions
+    -------------------------------------------
+        Usage: python3 create_ec2_ssm.py --vpc <vpc_id> --subnet <subnet_id> --region <region>
+        Example: python3 create_ec2_ssm.py --vpc vpc-1234567890abcdef0 --subnet subnet-1234567890abcdef0 --region us-east-1
+
+    Connect to the last instance created with SSM
+    ---------------------------------------------
+        Usage: python3 create_ec2_ssm.py --last
+        Example: python3 create_ec2_ssm.py --last
+
+    Arguments:
+    ----------
+        --vpc      VPC ID
+        --subnet   Subnet ID
+        --region   Region (default: us-east-1)
+        --last     Connect to the last instance created with SSM
+"""
 
 def create_ec2_ssm(vpc_id, subnet_id=None):
 
     actual_ssm_instance = len(ssm.describe_instance_information()['InstanceInformationList'])
+    print("(Info) Total SSM Instances: {}".format(actual_ssm_instance))
+    
+    # Check VPC exists:
+    try:
+        vpc = ec2_client.describe_vpcs(VpcIds=[vpc_id])
+    except:
+        print('ERROR: VPC {} not found in this region: {}\n'.format(vpc_id, region_aws))
+        return
+    else:
+        vpc = ec2.Vpc(vpc_id)
+
+    # Select a subnet
+    if not subnet_id:
+        try:
+            subnet = list(vpc.subnets.all())[0]
+        except:
+            print('ERROR: Subnet not found in this VPC {}\n'.format(vpc_id))
+            return
+
     # Create a role
     role_name = 'SSM-Role-EC2'
     policy_document = {
@@ -53,13 +85,6 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
         )
         print("Creating role and instance profile...")
         time.sleep(6)
-
-    # Select a vpc
-    vpc = ec2.Vpc(vpc_id)
-
-    # Select a subnet
-    if not subnet_id:
-        subnet = list(vpc.subnets.all())[0]
 
     role_name = 'Instance-SG-HTTPS'
     sg = [sg for sg in vpc.security_groups.all() if sg.group_name == role_name]
@@ -180,22 +205,22 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
         )
         # Wait for the VPC endpoints to be available:
         while vpc_endpoint_status(vpc_endpoint_ssm['VpcEndpoint']['VpcEndpointId']) != 'available':
-            print('Waiting for VPC endpoints to be available...')
+            print("Waiting for VPC endpoints to be available...")
             time.sleep(30)
-        print('VPC endpoints are available')
+        print("VPC endpoints are available")
 
 
     wait_instance_ssm = len(ssm.describe_instance_information()['InstanceInformationList'])
 
     while wait_instance_ssm == actual_ssm_instance:
-        print('Waiting for EC2-SSM connection to be available...')
-        time.sleep(10)
-        print('Press Ctrl-C to stop waiting')
+        print("Waiting for EC2-SSM connection to be available...")
+        time.sleep(30)
+        print("This can take 5 minutes sometimes. Press Ctrl-C to stop waiting...")
         wait_instance_ssm = len(ssm.describe_instance_information()['InstanceInformationList'])
 
     print("\nIn the terminal execute the following command to connect to the instance:")
     print("   aws ssm start-session --target " + resource_id)
-    print("\n\nEC2 instance created successfully")
+    print("\n\nEC2 instance created successfully!")
 
     if key_pair_created:
         print("\nKey pair already created: " + key_name + ".pem")
@@ -207,11 +232,44 @@ def vpc_endpoint_status(vpc_endpoint_id):
     )
     return vpc_endpoint['VpcEndpoints'][0]['State']
 
+def connect_last_instance():
+    # Connect to the last instance created with SSM
+    actual_ssm_instance = len(ssm.describe_instance_information()['InstanceInformationList'])
+    if actual_ssm_instance == 0:
+        print("ERROR: No instances with SSM agent\n")
+        return
+    else:
+        resource_id = ssm.describe_instance_information()['InstanceInformationList'][-1]['InstanceId']
+        print("Connecting to the last instance created with SSM...")
+        print("   aws ssm start-session --target " + resource_id)
+        print("\n")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Create an EC2 instance with SSM role')
-    parser.add_argument('--vpc-id', required=True, help='VPC ID')
-    parser.add_argument('--subnet-id', help='Subnet ID')
+    parser.add_argument('--vpc', type=str, help='Input the VPC ID')
+    parser.add_argument('--subnet', type=str, help='Input the subnet ID')
+    parser.add_argument('--region', type=str, default='us-east-1', help='Input the region')
+    parser.add_argument('--last', action='store_true', help='Connect to the last instance created')
 
     args = parser.parse_args()
-    create_ec2_ssm(args.vpc_id, args.subnet_id)
+    region_aws = args.region
+
+    # Load the EC2 client, SSM client and IAM client
+    ec2 = boto3.resource('ec2', region_name=region_aws)
+    ec2_client = boto3.client('ec2', region_name=region_aws)
+    iam = boto3.client('iam', region_name=region_aws)
+    ssm = boto3.client('ssm', region_name=region_aws)
+    
+    if args.vpc:
+        create_ec2_ssm(args.vpc, args.subnet)
+    elif args.last:
+        connect_last_instance()
+    else:
+        print(info_func)
+else:
+    region_aws = 'us-east-1'
+    ec2 = boto3.resource('ec2', region_name=region_aws)
+    ec2_client = boto3.client('ec2', region_name=region_aws)
+    iam = boto3.client('iam', region_name=region_aws)
+    ssm = boto3.client('ssm', region_name=region_aws)
