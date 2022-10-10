@@ -1,0 +1,13 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "doro-tor"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1r0c1ttj9s65j"
+s3_prefix = "doro-tor"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
+parameter_overrides = "VpcId=\"vpc-00c0b27063b091f89\" SubnetAId=\"subnet-01541bdb74c13a1a4\" SubnetBId=\"subnet-004e517115b1eda18\""
+disable_rollback = true

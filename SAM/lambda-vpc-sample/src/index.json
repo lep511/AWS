@@ -1,0 +1,15 @@
+exports.handler = async (eventObject, context, callback) => {
+
+    const name = JSON.parse(eventObject.body).callerName;
+  
+    var response = {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "isBase64Encoded": false,
+      "body": JSON.stringify({message: "Hello, " + name})
+    }
+  
+    return response
+  };

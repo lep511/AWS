@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: My serverless hello world API
+# The VPC must be created before the stack is deployed and have at least 2 subnets in different availability zones
+# The VPC must habilitate DNS hostnames and DNS resolution: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-dns.html
+Parameters:
+  VpcId:
+    Type: String
+  SubnetAId:
+    Type: String
+  SubnetBId:
+    Type: String
+# Resources are the AWS resources in your application
+Resources:
+  MyServelessLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: index.handler
+      Runtime: nodejs12.x
+      MemorySize: 1024
+      Timeout: 20
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSLambdaVPCAccessExecutionRole
+      Events:
+        APIRoot:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+            RestApiId: !Ref MyPrivateApi
+  
+  MyApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Allows access over 443
+      SecurityGroupIngress:
+        -
+          IpProtocol: "tcp"
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  MyApiAccessEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VpcId
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.execute-api"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref SubnetAId
+        - !Ref SubnetBId
+      SecurityGroupIds:
+        - !Ref MyApiSecurityGroup
+
+  MyPrivateApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      MethodSettings:
+        - HttpMethod: POST
+          ResourcePath: /
+      EndpointConfiguration: PRIVATE
+      DefinitionBody:
+        swagger: 2.0
+        info:
+          title: MyPrivateApi
+        basePath: /Prod
+        schemes:
+          - https
+        x-amazon-apigateway-policy:
+          Version: "2012-10-17"
+          Statement:
+            -
+              Effect: "Allow"
+              Principal: "*"
+              Action:
+                - "execute-api:Invoke"
+              Resource: "execute-api:/*"
+              Condition:
+                StringEquals:
+                  aws:sourceVpce: !Ref MyApiAccessEndpoint
+        paths:
+          /:
+            x-amazon-apigateway-any-method:
+              produces:
+              - application/json
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                uri: !Join [ "", [ !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:", !Ref MyServelessLambdaFunction, "/invocations"] ]
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                type: AWS_PROXY
+
+Outputs:
+  MyPrivateApi:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${MyPrivateApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  MyServelessLambdaFunction:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt MyServelessLambdaFunction.Arn
