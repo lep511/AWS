@@ -112,6 +112,8 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
                 }
             ]
         )
+        print("Creating security group enable HHTPS...")
+        time.sleep(10)
     else:
         security_group_https = sg[0]
 
@@ -119,6 +121,7 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
     ssm_response = ssm.get_parameter(
         Name='/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     )
+
 
     # Create a key pair
     key_name = 'KeyPair-Instance-SSM'
@@ -132,6 +135,7 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
         key_pair_created = True
     
     print("Creating EC2 instance with SSM agent...\n")
+    
     instances = ec2.create_instances(
         ImageId=ssm_response['Parameter']['Value'],
         MinCount=1,
