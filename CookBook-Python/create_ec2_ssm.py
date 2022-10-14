@@ -43,6 +43,12 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
             subnet = list(vpc.subnets.all())[0]
         except:
             print('ERROR: Subnet not found in this VPC {}\n'.format(vpc_id))
+            return  
+    else:
+        try:
+            subnet = ec2.Subnet(subnet_id)
+        except:
+            print('ERROR: Subnet {} not found in this region: {}\n'.format(subnet_id, region_aws))
             return
 
     # Create a role
@@ -218,8 +224,9 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
 
     while wait_instance_ssm == actual_ssm_instance:
         print("Waiting for EC2-SSM connection to be available...")
-        time.sleep(30)
         print("This can take 5 minutes sometimes. Press Ctrl-C to stop waiting...")
+        ec2_client.reboot_instances(InstanceIds=[resource_id])
+        time.sleep(30)
         wait_instance_ssm = len(ssm.describe_instance_information()['InstanceInformationList'])
 
     print("\nIn the terminal execute the following command to connect to the instance:")
