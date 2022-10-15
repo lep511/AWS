@@ -92,7 +92,7 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
         print("Creating role and instance profile...")
         time.sleep(6)
 
-    role_name = 'Instance-SG-HTTPS'
+    role_name = 'Instance-SG-HTTPS' + "-" + vpc_id
     sg = [sg for sg in vpc.security_groups.all() if sg.group_name == role_name]
 
     # Create security group enable HHTPS:
