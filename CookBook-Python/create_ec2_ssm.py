@@ -23,7 +23,7 @@ info_func = """
         --last     Connect to the last instance created with SSM
 """
 
-def create_ec2_ssm(vpc_id, subnet_id=None):
+def create_ec2_ssm(vpc_id, subnet_id=None, tag_instance='SSM-Instance'):
 
     actual_ssm_instance = len(ssm.describe_instance_information()['InstanceInformationList'])
     print("(Info) Total SSM Instances: {}".format(actual_ssm_instance))
@@ -158,8 +158,12 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
                 'Tags': [
                     {
                         'Key': 'Name',
-                        'Value': 'Cookbook-SSM-Instance'
+                        'Value': tag_instance
                     },
+                    {
+                        'Key': 'SSM',
+                        'Value': 'true'
+                    }
                 ]
             },
         ]
@@ -231,6 +235,7 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
 
     print("\nIn the terminal execute the following command to connect to the instance:")
     print("   aws ssm start-session --target " + resource_id)
+    print("\nInstnace profile name: " + instance_profile_name)
     print("\n\nEC2 instance created successfully!")
 
     if key_pair_created:
@@ -262,6 +267,7 @@ if __name__ == '__main__':
     parser.add_argument('--subnet', type=str, help='Input the subnet ID')
     parser.add_argument('--region', type=str, default='us-east-1', help='Input the region')
     parser.add_argument('--last', action='store_true', help='Connect to the last instance created')
+    parser.add_argument('--tag', type=str, default='SSM-Instance', help='Tag the instance')
 
     args = parser.parse_args()
     region_aws = args.region
@@ -273,7 +279,7 @@ if __name__ == '__main__':
     ssm = boto3.client('ssm', region_name=region_aws)
     
     if args.vpc:
-        create_ec2_ssm(args.vpc, args.subnet)
+        create_ec2_ssm(args.vpc, args.subnet, args.tag)
     elif args.last:
         connect_last_instance()
     else:
