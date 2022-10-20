@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: 'Create a DynamoDB table and two Lambda functions that can read and write to it.'
+Resources:
+  DynamoDBTable:
+    Type: 'AWS::Serverless::SimpleTable'
+    Properties:
+      TableName: 'SuperMissionTable'
+      PrimaryKey:
+        Name: 'SuperHero'
+        Type: 'String'
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+  GetMissionFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: mission_details.lambda_handler
+      Runtime: python3.9
+      CodeUri: .
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref DynamoDBTable
+  PostMissionFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: get_mission.lambda_handler
+      Runtime: python3.9
+      CodeUri: .
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref DynamoDBTable

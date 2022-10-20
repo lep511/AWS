@@ -23,7 +23,7 @@ info_func = """
         --last     Connect to the last instance created with SSM
 """
 
-def create_ec2_ssm(vpc_id, subnet_id=None):
+def create_ec2_ssm(vpc_id, subnet_id=None, tag_instance='SSM-Instance'):
 
     actual_ssm_instance = len(ssm.describe_instance_information()['InstanceInformationList'])
     print("(Info) Total SSM Instances: {}".format(actual_ssm_instance))
@@ -128,17 +128,6 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
         Name='/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
     )
 
-
-    # Create a key pair
-    key_name = 'KeyPair-Instance-SSM'
-    key_pair_created = False
-
-    if key_name not in [key_pair.key_name for key_pair in ec2.key_pairs.all()]:
-        key_pair = ec2.create_key_pair(KeyName=key_name)
-        key_pair_file = open(key_name + '.pem', 'w')
-        key_pair_file.write(key_pair.key_material)
-        key_pair_file.close()
-        key_pair_created = True
     
     print("Creating EC2 instance with SSM agent...\n")
     
@@ -147,7 +136,6 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
         MinCount=1,
         MaxCount=1,
         InstanceType='t2.micro',
-        KeyName=key_name,
         SubnetId=subnet.id,
         IamInstanceProfile={
             'Name': instance_profile_name
@@ -158,8 +146,12 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
                 'Tags': [
                     {
                         'Key': 'Name',
-                        'Value': 'Cookbook-SSM-Instance'
+                        'Value': tag_instance
                     },
+                    {
+                        'Key': 'SSM',
+                        'Value': 'true'
+                    }
                 ]
             },
         ]
@@ -231,11 +223,8 @@ def create_ec2_ssm(vpc_id, subnet_id=None):
 
     print("\nIn the terminal execute the following command to connect to the instance:")
     print("   aws ssm start-session --target " + resource_id)
+    print("\nInstnace profile name: " + instance_profile_name)
     print("\n\nEC2 instance created successfully!")
-
-    if key_pair_created:
-        print("\nKey pair already created: " + key_name + ".pem")
-
 
 def vpc_endpoint_status(vpc_endpoint_id):
     vpc_endpoint = ec2_client.describe_vpc_endpoints(
@@ -255,6 +244,20 @@ def connect_last_instance():
         print("   aws ssm start-session --target " + resource_id)
         print("\n")
 
+def status_ssm_instances():
+    # List all instances with SSM agent
+    actual_ssm_instance = len(ssm.describe_instance_information()['InstanceInformationList'])
+    if actual_ssm_instance == 0:
+        print("No instances with SSM agent\n")
+    else:
+        print("List of instances with SSM agent:")
+        print("=================================")
+        for instance in ssm.describe_instance_information()['InstanceInformationList']:
+            i_id = instance['InstanceId']
+            i_ip = instance['IPAddress']
+            print("   {}  -   IPAddress: {}   -   To connect exectute:   aws ssm start-session --target {}".format(i_id, i_ip, i_id))
+
+        print("\n\n")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Create an EC2 instance with SSM role')
@@ -262,6 +265,8 @@ if __name__ == '__main__':
     parser.add_argument('--subnet', type=str, help='Input the subnet ID')
     parser.add_argument('--region', type=str, default='us-east-1', help='Input the region')
     parser.add_argument('--last', action='store_true', help='Connect to the last instance created')
+    parser.add_argument('--status', action='store_true', help='Check the status of the SSM agent')
+    parser.add_argument('--tag', type=str, default='SSM-Instance', help='Tag the instance')
 
     args = parser.parse_args()
     region_aws = args.region
@@ -273,9 +278,11 @@ if __name__ == '__main__':
     ssm = boto3.client('ssm', region_name=region_aws)
     
     if args.vpc:
-        create_ec2_ssm(args.vpc, args.subnet)
+        create_ec2_ssm(args.vpc, args.subnet, args.tag)
     elif args.last:
         connect_last_instance()
+    elif args.status:
+        status_ssm_instances()
     else:
         print(info_func)
 else:
