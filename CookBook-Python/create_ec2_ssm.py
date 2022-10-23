@@ -47,6 +47,10 @@ def create_ec2_ssm(vpc_id, subnet_id=None, tag_instance='SSM-Instance'):
     else:
         try:
             subnet = ec2.Subnet(subnet_id)
+            # Check subnet exists in this VPC
+            if subnet.vpc_id != vpc_id:
+                print('ERROR: Subnet: {} not found in this VPC: {}\n'.format(subnet_id, vpc_id))
+                return
         except:
             print('ERROR: Subnet {} not found in this region: {}\n'.format(subnet_id, region_aws))
             return
@@ -224,7 +228,7 @@ def create_ec2_ssm(vpc_id, subnet_id=None, tag_instance='SSM-Instance'):
     print("\nIn the terminal execute the following command to connect to the instance:")
     print("   aws ssm start-session --target " + resource_id)
     print("\nInstnace profile name: " + instance_profile_name)
-    print("\n\nEC2 instance created successfully!")
+    print("EC2 instance created successfully!")
 
 def vpc_endpoint_status(vpc_endpoint_id):
     vpc_endpoint = ec2_client.describe_vpc_endpoints(
