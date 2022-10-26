@@ -1,0 +1,20 @@
+{
+    "RegionId": "us-east-1",
+    "TemplateUrl": "https://arcgisstore.s3.amazonaws.com/110/templates/arcgis-egdb-sqlserver.template.json",
+    "StackName": "SQLServerEGDB",
+    "IsManaged": "false",
+    "DBEngine": "sqlserver-se",
+    "DBVersion": "15.00.4043.16.v1",
+    "RDSAllocationStorage": "200",
+    "RDSInstanceClass": "db.m5.xlarge",
+    "RDSInstanceName": "dbname",
+    "RDSMasterUserName": "dbuser",
+    "RDSMasterUserPassword": "change.it",
+    "ArcGISServerInstanceId": "i-abc123",
+    "SiteadminUserName": "siteadmin",
+    "SiteadminUserPassword": "change.it",
+	"arcgisUserPassword": "",
+    "Subnet1": "subnet-abc123",
+    "Subnet2": "subnet-abc123",
+    "VPCId": "vpc-abc123"
+}

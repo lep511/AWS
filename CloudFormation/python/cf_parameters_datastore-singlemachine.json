@@ -1,0 +1,17 @@
+{
+    "RegionId": "us-east-1",
+    "TemplateUrl": "https://arcgisstore.s3.amazonaws.com/110/templates/arcgis-datastore-singlemachine.template.json",
+    "StackName": "StandaloneDatastore",
+    "BackupLocationStorageType": "FileSystem",
+    "EIPAllocationId": "eipalloc-abc123",
+    "InstanceDriveSize": "200",
+    "InstanceType": "m5.2xlarge",
+    "KeypairName": "your_key_name",
+    "PlatformType": "Linux",
+    "ArcGISServerInstanceId": "i-abc123",
+    "SiteadminUserName": "siteadmin",
+    "SiteadminUserPassword": "change.it",
+    "Subnet": "subnet-abc123",
+    "Type": "relational",
+    "VPCId": "vpc-abc123"
+}

@@ -1,0 +1,10 @@
+{
+    "RegionId": "us-east-1",
+    "TemplateUrl": "https://arcgisstore.s3.amazonaws.com/110/templates/arcgis-application-loadbalancer.template.json",
+    "StackName": "arcgisalb",
+    "ELBScheme": "internet-facing",
+    "Subnet1": "subnet-def245",
+    "Subnet2": "subnet-abc123",
+    "VPCId": "vpc-abc12356abc",
+    "SSLCertificateARN": "arn:aws:acm:region:accountid:certificate/id"
+}

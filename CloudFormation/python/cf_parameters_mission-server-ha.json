@@ -1,0 +1,22 @@
+{
+    "RegionId": "us-east-1",
+    "TemplateUrl": "https://arcgisstore.s3.amazonaws.com/110/templates/arcgis-mission-server-ha.template.json",
+    "StackName": "HAMissionServer",
+    "DeploymentBucket": "your_bucket",
+    "FileserverInstanceDriveSize": "200",
+    "FileserverInstanceType": "m5.2xlarge",
+    "InstanceDriveSize": "100",
+    "InstanceType": "m5.2xlarge",
+    "KeypairName": "your_key_name",
+    "PlatformType": "Windows",
+    "ServerInstances": "2",
+    "ServerLicenseFileKeyName": "path/to/mission.ecp",
+    "SiteDomain": "your.domain.com",
+    "ELBDNSName": "your.alb.amazonaws.com",
+    "SiteadminUserName": "siteadmin",
+    "SiteadminUserPassword": "change.it",
+    "Subnet1": "subnet-abc123",
+    "Subnet2": "subnet-abc123",
+    "VPCId": "vpc-abc123",
+    "arcgisUserPassword": "change.it"
+}

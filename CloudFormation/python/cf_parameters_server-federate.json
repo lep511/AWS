@@ -1,0 +1,13 @@
+{
+    "RegionId": "us-east-1",
+    "TemplateUrl": "https://arcgisstore.s3.amazonaws.com/110/templates/arcgis-server-federate.template.json",
+    "StackName": "FederateServer",
+    "PrimaryArcGISPortalInstanceId": "i-abc123",
+    "PortalSiteadminUserName": "siteadmin",
+    "PortalSiteadminUserPassword": "change.it",
+    "ArcGISServerInstanceId": "i-abc123",
+    "ServerRole": "GISServer",
+    "ServerServicesURL": "https://your.domain.com/webadaptor",
+    "SiteadminUserName": "siteadmin",
+    "SiteadminUserPassword": "change.it"
+}
