@@ -1,0 +1,464 @@
+Description: (SO0111M) AWS Security Hub Automated Response & Remediation Member Account Stack, v1.5.0
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: LogGroup Configuration
+        Parameters:
+          - LogGroupName
+      - Label:
+          default: Playbooks
+        Parameters:
+          - LoadAFSBPMemberStack
+          - LoadCIS120MemberStack
+          - LoadPCI321MemberStack
+    ParameterLabels:
+      LogGroupName:
+        default: Provide the name of the LogGroup to be used to create Metric Filters and Alarms
+Parameters:
+  SecHubAdminAccount:
+    Type: String
+    AllowedPattern: \d{12}
+    Description: Admin account number
+  CreateS3BucketForRedshiftAuditLogging:
+    Type: String
+    Default: "no"
+    AllowedValues:
+      - "yes"
+      - "no"
+    Description: Create S3 Bucket For Redshift Cluster Audit Logging.
+  LogGroupName:
+    Type: String
+    Description: Name of the log group to be used to create metric filters and cloudwatch alarms. You must use a Log Group that is the the logging destination of a multi-region CloudTrail
+  LoadAFSBPMemberStack:
+    Type: String
+    Default: "yes"
+    AllowedValues:
+      - "yes"
+      - "no"
+    Description: Load Playbook member stack for AFSBP?
+  LoadCIS120MemberStack:
+    Type: String
+    Default: "yes"
+    AllowedValues:
+      - "yes"
+      - "no"
+    Description: Load Playbook member stack for CIS120?
+  LoadPCI321MemberStack:
+    Type: String
+    Default: "yes"
+    AllowedValues:
+      - "yes"
+      - "no"
+    Description: Load Playbook member stack for PCI321?
+Conditions:
+  EnableS3BucketForRedShift4:
+    Fn::Equals:
+      - Ref: CreateS3BucketForRedshiftAuditLogging
+      - "yes"
+  loadAFSBPCond:
+    Fn::Equals:
+      - Ref: LoadAFSBPMemberStack
+      - "yes"
+  loadCIS120Cond:
+    Fn::Equals:
+      - Ref: LoadCIS120MemberStack
+      - "yes"
+  loadPCI321Cond:
+    Fn::Equals:
+      - Ref: LoadPCI321MemberStack
+      - "yes"
+Resources:
+  S3BucketForRedShiftAuditLogging652E7355:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W35
+            reason: Logs bucket does not require logging configuration
+      cdk_nag:
+        rules_to_suppress:
+          - id: AwsSolutions-S1
+            reason: Logs bucket does not require logging configuration
+          - id: AwsSolutions-S10
+            reason: Secure transport requirement is redundant for this use case
+    Condition: EnableS3BucketForRedShift4
+  S3BucketForRedShiftAuditLoggingBucketPolicyAB8BAA40:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: S3BucketForRedShiftAuditLogging652E7355
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:GetBucketAcl
+              - s3:PutObject
+            Effect: Allow
+            Principal:
+              Service: redshift.amazonaws.com
+            Resource:
+              - Fn::GetAtt:
+                  - S3BucketForRedShiftAuditLogging652E7355
+                  - Arn
+              - Fn::Sub:
+                  - arn:${AWS::Partition}:s3:::${BucketName}/*
+                  - BucketName:
+                      Ref: S3BucketForRedShiftAuditLogging652E7355
+            Sid: Put bucket policy needed for audit logging
+        Version: "2012-10-17"
+    DependsOn:
+      - S3BucketForRedShiftAuditLogging652E7355
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Metadata:
+      aws:cdk:path: MemberStack/S3BucketForRedShiftAuditLoggingBucketPolicy/Resource
+      cdk_nag:
+        rules_to_suppress:
+          - id: AwsSolutions-S10
+            reason: Secure transport requirement is redundant for this use case
+    Condition: EnableS3BucketForRedShift4
+  SHARRRemediationKeyE744743D:
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Statement:
+          - Action:
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyPair
+              - kms:GenerateDataKeyPairWithoutPlaintext
+              - kms:GenerateDataKeyWithoutPlaintext
+              - kms:Decrypt
+              - kms:Encrypt
+              - kms:ReEncryptFrom
+              - kms:ReEncryptTo
+              - kms:DescribeKey
+              - kms:DescribeCustomKeyStores
+            Effect: Allow
+            Principal:
+              Service:
+                - sns.amazonaws.com
+                - s3.amazonaws.com
+                - Fn::Join:
+                    - ""
+                    - - logs.
+                      - Ref: AWS::URLSuffix
+                - Fn::Join:
+                    - ""
+                    - - logs.
+                      - Ref: AWS::Region
+                      - "."
+                      - Ref: AWS::URLSuffix
+                - Fn::Join:
+                    - ""
+                    - - cloudtrail.
+                      - Ref: AWS::URLSuffix
+                - cloudwatch.amazonaws.com
+            Resource: "*"
+          - Action: kms:*
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::Join:
+                  - ""
+                  - - "arn:"
+                    - Ref: AWS::Partition
+                    - ":iam::"
+                    - Ref: AWS::AccountId
+                    - :root
+            Resource: "*"
+        Version: "2012-10-17"
+      EnableKeyRotation: true
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Metadata:
+      aws:cdk:path: MemberStack/SHARR Remediation Key/Resource
+  SHARRRemediationKeyAlias5531874D:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/SO0111-SHARR-Remediation-Key
+      TargetKeyId:
+        Fn::GetAtt:
+          - SHARRRemediationKeyE744743D
+          - Arn
+    Metadata:
+      aws:cdk:path: MemberStack/SHARR Remediation Key/Alias/Resource
+  SHARRKeyAliasEBF509D8:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value:
+        Fn::GetAtt:
+          - SHARRRemediationKeyE744743D
+          - Arn
+      Description: KMS Customer Managed Key that will encrypt data for remediations
+      Name: /Solutions/SO0111/CMK_REMEDIATION_ARN
+    Metadata:
+      aws:cdk:path: MemberStack/SHARR Key Alias/Resource
+  SHARRMemberVersionEDAB5C42:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: v1.5.0
+      Description: Version of the AWS Security Hub Automated Response and Remediation solution
+      Name: /Solutions/SO0111/member-version
+    Metadata:
+      aws:cdk:path: MemberStack/SHARR Member Version/Resource
+  SSMParameterLogGroupName47918519:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value:
+        Ref: LogGroupName
+      Description: Parameter to store log group name
+      Name: /Solutions/SO0111/Metrics_LogGroupName
+    Metadata:
+      aws:cdk:path: MemberStack/SSMParameterLogGroupName/Resource
+  SSMParameterForS34EncryptionKeyAlias73DD8A98:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: default-s3-encryption
+      Description: Parameter to store encryption key alias for the PCI.S3.4/AFSBP.S3.4, replace the default value with the KMS Key Alias, other wise the remediation will enable the default AES256 encryption for the bucket.
+      Name: /Solutions/SO0111/afsbp/1.0.0/S3.4/KmsKeyAlias
+    Metadata:
+      aws:cdk:path: MemberStack/SSMParameterForS3.4EncryptionKeyAlias/Resource
+  SSMParameterForS3BucketNameForREDSHIFT441DD36B1:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value:
+        Ref: S3BucketForRedShiftAuditLogging652E7355
+      Description: Parameter to store the S3 bucket name for the remediation AFSBP.REDSHIFT.4, the default value is bucket-name which has to be updated by the user before using the remediation.
+      Name: /Solutions/SO0111/afsbp/1.0.0/REDSHIFT.4/S3BucketNameForAuditLogging
+    DependsOn:
+      - S3BucketForRedShiftAuditLogging652E7355
+    Metadata:
+      aws:cdk:path: MemberStack/SSMParameterForS3BucketNameForREDSHIFT4/Resource
+    Condition: EnableS3BucketForRedShift4
+  RunbookProviderPolicy12B46DCD:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: cloudwatch:PutMetricData
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - ssm:CreateDocument
+              - ssm:UpdateDocument
+              - ssm:UpdateDocumentDefaultVersion
+              - ssm:ListDocumentVersions
+              - ssm:DeleteDocument
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: SO0111-SHARR_Runbook_Provider_Policy
+      Roles:
+        - Ref: RunbookProviderRoleBC4E91CA
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W12
+            reason: Resource * is required in order to manage arbitrary SSM documents
+      cdk_nag:
+        rules_to_suppress:
+          - id: AwsSolutions-IAM5
+            reason: Resource * is required in order to manage arbitrary SSM documents
+  RunbookProviderRoleBC4E91CA:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      Description: Lambda role to allow creation of updatable SSM documents
+    Metadata:
+      aws:cdk:path: MemberStack/RunbookProvider/Role/Resource
+  RunbookProviderMemberLambdaLayerF3BD824A:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      Content:
+        S3Bucket:
+          Fn::Join:
+            - ""
+            - - solutions-
+              - Ref: AWS::Region
+        S3Key: aws-security-hub-automated-response-and-remediation/v1.5.0/lambda/memberLayer.zip
+      CompatibleRuntimes:
+        - python3.8
+      Description: SO0111 SHARR Common functions used by the solution member stack
+      LicenseInfo: https://www.apache.org/licenses/LICENSE-2.0
+    Metadata:
+      aws:cdk:path: MemberStack/RunbookProvider/MemberLambdaLayer/Resource
+  RunbookProviderFunction82CD9D9B:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::Join:
+            - ""
+            - - solutions-
+              - Ref: AWS::Region
+        S3Key: aws-security-hub-automated-response-and-remediation/v1.5.0/lambda/updatableRunbookProvider.py.zip
+      Role:
+        Fn::GetAtt:
+          - RunbookProviderRoleBC4E91CA
+          - Arn
+      Description: Custom resource to manage versioned SSM documents
+      Environment:
+        Variables:
+          LOG_LEVEL: info
+          SOLUTION_ID: AwsSolution/SO0111/v1.5.0
+      FunctionName: SO0111-SHARR-updatableRunbookProvider
+      Handler: updatableRunbookProvider.lambda_handler
+      Layers:
+        - Ref: RunbookProviderMemberLambdaLayerF3BD824A
+      MemorySize: 256
+      ReservedConcurrentExecutions: 1
+      Runtime: python3.8
+      Timeout: 600
+    DependsOn:
+      - RunbookProviderRoleBC4E91CA
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W58
+            reason: False positive. Access is provided via a policy
+          - id: W89
+            reason: There is no need to run this lambda in a VPC
+  RunbookStackNoRoles:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        Fn::Join:
+          - ""
+          - - https://
+            - Fn::FindInMap:
+                - SourceCode
+                - General
+                - S3Bucket
+            - -reference.s3.amazonaws.com/
+            - Fn::FindInMap:
+                - SourceCode
+                - General
+                - KeyPrefix
+            - /aws-sharr-remediations.template
+    DependsOn:
+      - RunbookProviderFunction82CD9D9B
+      - RunbookProviderMemberLambdaLayerF3BD824A
+      - RunbookProviderPolicy12B46DCD
+      - RunbookProviderRoleBC4E91CA
+    Metadata:
+      aws:cdk:path: MemberStack/RunbookStackNoRoles
+  PlaybookMemberStackAFSBP:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        Fn::Join:
+          - ""
+          - - https://
+            - Fn::FindInMap:
+                - SourceCode
+                - General
+                - S3Bucket
+            - -reference.s3.amazonaws.com/
+            - Fn::FindInMap:
+                - SourceCode
+                - General
+                - KeyPrefix
+            - /playbooks/AFSBPMemberStack.template
+      Parameters:
+        SecHubAdminAccount:
+          Ref: SecHubAdminAccount
+    DependsOn:
+      - RunbookProviderFunction82CD9D9B
+      - RunbookProviderMemberLambdaLayerF3BD824A
+      - RunbookProviderPolicy12B46DCD
+      - RunbookProviderRoleBC4E91CA
+    Metadata:
+      aws:cdk:path: MemberStack/PlaybookMemberStackAFSBP
+    Condition: loadAFSBPCond
+  PlaybookMemberStackCIS120:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        Fn::Join:
+          - ""
+          - - https://
+            - Fn::FindInMap:
+                - SourceCode
+                - General
+                - S3Bucket
+            - -reference.s3.amazonaws.com/
+            - Fn::FindInMap:
+                - SourceCode
+                - General
+                - KeyPrefix
+            - /playbooks/CIS120MemberStack.template
+      Parameters:
+        SecHubAdminAccount:
+          Ref: SecHubAdminAccount
+    DependsOn:
+      - RunbookProviderFunction82CD9D9B
+      - RunbookProviderMemberLambdaLayerF3BD824A
+      - RunbookProviderPolicy12B46DCD
+      - RunbookProviderRoleBC4E91CA
+    Metadata:
+      aws:cdk:path: MemberStack/PlaybookMemberStackCIS120
+    Condition: loadCIS120Cond
+  PlaybookMemberStackPCI321:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        Fn::Join:
+          - ""
+          - - https://
+            - Fn::FindInMap:
+                - SourceCode
+                - General
+                - S3Bucket
+            - -reference.s3.amazonaws.com/
+            - Fn::FindInMap:
+                - SourceCode
+                - General
+                - KeyPrefix
+            - /playbooks/PCI321MemberStack.template
+      Parameters:
+        SecHubAdminAccount:
+          Ref: SecHubAdminAccount
+    DependsOn:
+      - RunbookProviderFunction82CD9D9B
+      - RunbookProviderMemberLambdaLayerF3BD824A
+      - RunbookProviderPolicy12B46DCD
+      - RunbookProviderRoleBC4E91CA
+    Metadata:
+      aws:cdk:path: MemberStack/PlaybookMemberStackPCI321
+    Condition: loadPCI321Cond
+Mappings:
+  SourceCode:
+    General:
+      S3Bucket: solutions
+      KeyPrefix: aws-security-hub-automated-response-and-remediation/v1.5.0
+
