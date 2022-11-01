@@ -122,23 +122,24 @@ Resources:
           import json
           import logging
           import os
-          
+
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
 
           TABLE_NAME = os.environ['TABLE_NAME']
+          logger.info("Table name: " + TABLE_NAME)
 
           client = boto3.resource('dynamodb')
           table = client.Table(TABLE_NAME)
 
           def lambda_handler(event, context):
-              logger.info('## EVENT')
-              logger.info(event)
-              
-              for record in event['Records']:
-                  payload = record["body"]
-                  logger.info("Payload: " + str(payload))
-                  table.put_item(Item= {'orderID': str(uuid.uuid4()),'order':  payload})
+            json_event = json.dumps(event)
+            print("--event: " + json_event)
+
+            for record in event['Records']:
+                payload = record["body"]
+                logger.info("Payload: " + str(payload))
+                table.put_item(Item= {'orderID': str(uuid.uuid4()),'order':  payload})
       Role: !GetAtt LambdaSQSDynamoDBRole.Arn
       Runtime: python3.9
       Timeout: 30
@@ -152,8 +153,7 @@ Resources:
     Properties:
       BatchSize: 10
       EventSourceArn: !GetAtt SQSQueue.Arn
-      FunctionName: !GetAtt SQSToLambdaFunction.Arn
-      StartingPosition: TRIM_HORIZON
+      FunctionName: !Ref SQSToLambdaFunction
   DynamoDBToLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -201,7 +201,7 @@ Resources:
     Properties:
       BatchSize: 10
       EventSourceArn: !GetAtt DynamoDBTable.StreamArn
-      FunctionName: !GetAtt DynamoDBToLambdaFunction.Arn
+      FunctionName: !Ref DynamoDBToLambdaFunction
       StartingPosition: TRIM_HORIZON
   # --------------------------------------------------------------------
   DynamoDBTable:
