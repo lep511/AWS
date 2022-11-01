@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  Create 4 IAM policies, 2 IAM roles
+Parameters:
+  TableName:
+    Type: String
+    Description: Name of the DynamoDB table
+    Default: orders
+
+Resources:
+  # Create DynamoDB table
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: orderID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: orderID
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName: !Ref TableName
+  # IAM policies
+  PolicyLambdaWriteDynamoDB:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Lambda-Write-DynamoDB
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:PutItem
+              - dynamodb:DescribeTable
+            Resource: !GetAtt DynamoDBTable.Arn
+      Roles:
+        - !Ref RoleLambdaSQSDynamoDB
+  PolicyLambdaSNSPublish:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Lambda-SNS-Publish
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sns:LisTopics
+            Resource: "*"
+      Roles:
+        - !Ref RoleLambdaDynamoDBStreamSNS
+  PolicyDynamoDBStreamRead:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Lambda-DynamoDBStreams-Read
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:DescribeStream
+              - dynamodb:GetRecords
+              - dynamodb:GetShardIterator
+              - dynamodb:ListStreams
+            Resource: !GetAtt DynamoDBTable.StreamArn
+      Roles:
+        - !Ref RoleLambdaDynamoDBStreamSNS
+  PolicyLambdaReadSQS:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Lambda-Read-SQS
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sqs:ReceiveMessage
+              - sqs:ChangeMessageVisibility
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource: "*"
+      Roles:
+        - !Ref RoleLambdaSQSDynamoDB
+  # IAM roles
+  RoleLambdaSQSDynamoDB:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: Lambda-SQS-DynamoDB
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+  RoleLambdaDynamoDBStreamSNS:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: Lambda-DynamoDBStream
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+  RoleAPIGatewayPushToCloudWatch:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: APIGateway-PushToCloudWatch
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+            
