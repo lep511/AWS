@@ -1,0 +1,23 @@
+version = 0.1
+[default]
+[default.pipeline_bootstrap]
+[default.pipeline_bootstrap.parameters]
+pipeline_user = "arn:aws:iam::694575695136:user/aws-sam-cli-managed-Stepone-pipeline-PipelineUser-1A9LNQOKWL1Z2"
+
+[Stepone]
+[Stepone.pipeline_bootstrap]
+[Stepone.pipeline_bootstrap.parameters]
+pipeline_execution_role = "arn:aws:iam::694575695136:role/aws-sam-cli-managed-Stepone-PipelineExecutionRole-ZNOYWQBLRHUU"
+cloudformation_execution_role = "arn:aws:iam::694575695136:role/aws-sam-cli-managed-Stepo-CloudFormationExecutionR-15M6GD4X7ZNFZ"
+artifacts_bucket = "aws-sam-cli-managed-stepone-pipel-artifactsbucket-hu12411bo8c6"
+image_repository = ""
+region = "us-east-1"
+
+[stagetwo]
+[stagetwo.pipeline_bootstrap]
+[stagetwo.pipeline_bootstrap.parameters]
+pipeline_execution_role = "arn:aws:iam::694575695136:role/aws-sam-cli-managed-stagetwo-PipelineExecutionRole-1CHA6LAW5O2GZ"
+cloudformation_execution_role = "arn:aws:iam::694575695136:role/aws-sam-cli-managed-stage-CloudFormationExecutionR-7MXR01M9F2XT"
+artifacts_bucket = "aws-sam-cli-managed-stagetwo-pipe-artifactsbucket-25yh1zv5d966"
+image_repository = ""
+region = "us-east-1"
