@@ -1,212 +1,99 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Architecting Solutions - Building a Proof of Concept for a Serverless Solution'
+Transform: AWS::Serverless-2016-10-31
+Description: A Lambda function triggered by an AWS API Gateway HTTP APIs call through an Amazon SQS Queue for buffering
 
 Parameters:
   SNSemail:
     Type: String
     Description: Email address to send SNS notifications to
     Default: 'sample@site.com'
-  
+
 Resources:
-  LambdaWriteDynamoDBPolicy:
-    Type: AWS::IAM::Policy
+### SQS Queue  ############################################
+  # Define the SQS queue
+  MySqsQueue:
+    Type: AWS::SQS::Queue
     Properties:
-      PolicyName: !Sub ${AWS::StackName}-LambdaWriteDynamoDBPolicy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - dynamodb:PutItem
-              - dynamodb:DescribeTable
-            Resource: !GetAtt DynamoDBTable.Arn
-      Roles:
-        - !Ref LambdaSQSDynamoDBRole
-  LambdaSNSPublishPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyName: !Sub ${AWS::StackName}-LambdaSNSPublishPolicy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - sns:Publish
-              - sns:ListTopics
-              - sns:GetTopicAttributes
-            Resource: !Ref SNSTopic
-      Roles:
-        - !Ref LambdaDynamoDBStreamsSNSRole
-  LambdaDynamoDBStreamsReadPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyName: !Sub ${AWS::StackName}-LambdaDynamoDBStreamsReadPolicy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - dynamodb:DescribeStream
-              - dynamodb:GetRecords
-              - dynamodb:GetShardIterator
-              - dynamodb:ListStreams
-            Resource: !GetAtt DynamoDBTable.StreamArn
-      Roles:
-        - !Ref LambdaDynamoDBStreamsSNSRole
-  LambdaReadSQSPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyName: !Sub ${AWS::StackName}-LambdaReadSQSPolicy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - sqs:ReceiveMessage
-              - sqs:DeleteMessage
-              - sqs:GetQueueAttributes
-              - sqs:ChangeMessageVisibility
-            Resource: !GetAtt SQSQueue.Arn
-      Roles:
-        - !Ref LambdaSQSDynamoDBRole
-  # --------------------------------------------------------------------
-  LambdaSQSDynamoDBRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${AWS::StackName}-LambdaSQSDynamoDBRole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-  LambdaDynamoDBStreamsSNSRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${AWS::StackName}-LambdaDynamoDBStreamsSNSRole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-  APIGatewayToSQSRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub ${AWS::StackName}-APIGatewayToSQSRole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - apigateway.amazonaws.com
-            Action:
-              - sts:AssumeRole
-  # --------------------------------------------------------------------
-  SQSToLambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub ${AWS::StackName}-SQSToLambdaFunction
-      Handler: index.lambda_handler
-      Code:
-        ZipFile: |
-          import boto3
-          import uuid
-          import json
-          import logging
-          import os
+      QueueName: !Sub ${AWS::StackName}-MySqsQueue
 
-          logger = logging.getLogger()
-          logger.setLevel(logging.INFO)
+### HTTP API  #############################################
+  MyHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      AccessLogSettings:
+        DestinationArn: !GetAtt MyHttpApiAccessLogs.Arn
+        Format: '{ "requestId":"$context.requestId", "ip": "$context.identity.sourceIp", "requestTime":"$context.requestTime", "httpMethod":"$context.httpMethod","routeKey":"$context.routeKey", "status":"$context.status","protocol":"$context.protocol", "responseLength":"$context.responseLength" }'
+      DefinitionBody:
+        'Fn::Transform':
+          Name: 'AWS::Include'
+          Parameters:
+            Location: 'api.yaml'
 
-          TABLE_NAME = os.environ['TABLE_NAME']
-          logger.info("Table name: " + TABLE_NAME)
-
-          client = boto3.resource('dynamodb')
-          table = client.Table(TABLE_NAME)
-
-          def lambda_handler(event, context):
-            json_event = json.dumps(event)
-            print("--event: " + json_event)
-
-            for record in event['Records']:
-                payload = record["body"]
-                logger.info("Payload: " + str(payload))
-                table.put_item(Item= {'orderID': str(uuid.uuid4()),'order':  payload})
-      Role: !GetAtt LambdaSQSDynamoDBRole.Arn
+#### Lambda Function Read from SQS  ########################
+  LambdaFunctionReadSQS:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-LambdaFunctionReadSQS
+      Description: Lambda to be invoked by the SQS Queue
+      CodeUri: functions/sqs-to-lambda/
+      Handler: app.lambda_handler
       Runtime: python3.9
-      Timeout: 30
-      Environment:
-        Variables:
-          TABLE_NAME: !Ref DynamoDBTable
-      Architectures:
-        - x86_64
-  EventSourceMappingSQS:
-    Type: AWS::Lambda::EventSourceMapping
-    Properties:
-      BatchSize: 10
-      EventSourceArn: !GetAtt SQSQueue.Arn
-      FunctionName: !Ref SQSToLambdaFunction
-  DynamoDBToLambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub ${AWS::StackName}-DynamoDBToLambdaFunction
-      Handler: index.lambda_handler
-      Code:
-        ZipFile: |
-          import boto3
-          import json
-          import os
-          import logging
-
-          logger = logging.getLogger()
-          logger.setLevel(logging.INFO)
-
-          SNS_ID = os.getenv('SNS_ID')
-
-          client = boto3.client('sns')
-
-          def lambda_handler(event, context):
-              logger.info('## EVENT')
-              logger.info(event)
-              
-              for record in event["Records"]:
-
-                  if record['eventName'] == 'INSERT':
-                      logger.info("New order received")
-                      new_record = record['dynamodb']['NewImage']
-                      logger.info("New order: " + str(new_record))
-                      response = client.publish(
-                          TargetArn = SNS_ID,
-                          Message = json.dumps({'default': json.dumps(new_record)}),
-                          MessageStructure = 'json'
-                      )
-      Role: !GetAtt LambdaDynamoDBStreamsSNSRole.Arn
-      Runtime: python3.9
-      Environment:
-        Variables:
-          SNS_ID: !Ref SNSTopic
-      Architectures:
-        - x86_64
       Timeout: 20
-  EventSourceMappingDynamoDB:
-    Type: AWS::Lambda::EventSourceMapping
+      MemorySize: 128
+      Events:
+        MySQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt MySqsQueue.Arn
+            BatchSize: 10
+
+### Roles  #################################################
+  MyHttpApiRole:
+    Type: 'AWS::IAM::Role'
     Properties:
-      BatchSize: 10
-      EventSourceArn: !GetAtt DynamoDBTable.StreamArn
-      FunctionName: !Ref DynamoDBToLambdaFunction
-      StartingPosition: TRIM_HORIZON
-  # --------------------------------------------------------------------
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - apigateway.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+      - PolicyName: !Sub ${AWS::StackName}-AllowSqsIntegration
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'sqs:SendMessage'
+                - 'sqs:GetQueueUrl'
+                - 'sqs:SendMessageBatch'
+              Resource: !GetAtt MySqsQueue.Arn
+            - Effect: Allow
+              Action:
+                - 'logs:CreateLogGroup'
+                - 'logs:CreateLogStream'
+                - 'logs:DescribeLogGroups'
+                - 'logs:DescribeLogStreams'
+                - 'logs:PutLogEvents'
+                - 'logs:GetLogEvents'
+                - 'logs:FilterLogEvents'
+              Resource: !GetAtt MyHttpApiAccessLogs.Arn
+
+### Cloudwatch Logs   ###########################################
+  MyHttpApiAccessLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: MyHttpApi-Access-Logs
+      RetentionInDays: 1
+
+### DynamoDB Table  ##############################################
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
+      TableName: !Sub ${AWS::StackName}-DynamoDBTable
       AttributeDefinitions:
       - AttributeName: orderID
         AttributeType: S
@@ -218,12 +105,27 @@ Resources:
         WriteCapacityUnits: 5
       StreamSpecification:
         StreamViewType: NEW_IMAGE
-  # --------------------------------------------------------------------
-  SQSQueue:
-    Type: AWS::SQS::Queue
+
+#### Lambda Function Read from DynamoDB  Streams  ###############
+  LambdaFunctionWriteDynamoDB:
+    Type: AWS::Serverless::Function
     Properties:
-      QueueName: !Sub ${AWS::StackName}-SQSQueue
-  # --------------------------------------------------------------------
+      FunctionName: !Sub ${AWS::StackName}-LambdaFunctionWriteDynamoDB
+      Description: Lambda to be invoked by the DynamoDB Streams
+      CodeUri: functions/dynamodb-to-lambda/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 20
+      MemorySize: 128
+      Events:
+        MyDynamoDBEvent:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt DynamoDBTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+
+### SNS Topic   ##################################################
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -231,55 +133,34 @@ Resources:
       Subscription:
         - Endpoint: !Ref SNSemail
           Protocol: email
-  # --------------------------------------------------------------------
-  APIGatewayToSQS:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: !Sub ${AWS::StackName}-APIGatewayToSQS
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-  # --------------------------------------------------------------------
-  APIGatewayToSQSResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      ParentId: !GetAtt APIGatewayToSQS.RootResourceId
-      PathPart: orders
-      RestApiId: !Ref APIGatewayToSQS
-  # --------------------------------------------------------------------
-  APIGatewayToSQSMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      AuthorizationType: NONE
-      HttpMethod: POST
-      ResourceId: !Ref APIGatewayToSQSResource
-      RestApiId: !Ref APIGatewayToSQS
-      Integration:
-        IntegrationHttpMethod: POST
-        Type: AWS
-        Uri: !Sub arn:aws:apigateway:${AWS::Region}:sqs:path//${SQSQueue}/queue
-        Credentials: !GetAtt APIGatewayToSQSRole.Arn
-  
 
+
+#### Outputs  ####################################################
 Outputs:
-  SQSQueueURL:
-    Description: SQS Queue URL
-    Value: !GetAtt SQSQueue.QueueUrl
-  SQSQueueARN:
-    Description: SQS Queue ARN
-    Value: !GetAtt SQSQueue.Arn
-  DynamoDBTableName:
-    Description: DynamoDB Table Name
+  MyHttpApiEndpoint:
+    Description: "HTTP API endpoint"
+    Value: !Sub "https://${MyHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+
+  LambdaFunctionReadSQS:
+    Description: LambdaFunction function name
+    Value: !Ref LambdaFunctionReadSQS
+  
+  LambdaFunctionWriteDynamoDB:
+    Description: LambdaFunctionWriteDynamoDB function name
+    Value: !Ref LambdaFunctionWriteDynamoDB
+  
+  SNSTopic:
+    Description: SNSTopic function name
+    Value: !Ref SNSTopic
+  
+  DynamoDBTable:
+    Description: DynamoDBTable table name
     Value: !Ref DynamoDBTable
-  DynamoDBTableARN:
-    Description: DynamoDB Table ARN
-    Value: !GetAtt DynamoDBTable.Arn
-  DynamoDBTableStreamARN:
-    Description: DynamoDB Table Stream ARN
-    Value: !GetAtt DynamoDBTable.StreamArn
-  SNSTopicARN:
-    Description: SNS Topic ARN
-    Value: !Ref SNSTopic
-  SNSTopicName:
-    Description: SNS Topic Name
-    Value: !Ref SNSTopic
+
+  MySqsQueueARN:
+    Description: SQS queue ARN
+    Value: !GetAtt MySqsQueue.Arn
+
+  MySqsQueueURL:
+    Description: SQS queue URL
+    Value: !Ref MySqsQueue
