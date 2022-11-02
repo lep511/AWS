@@ -3,6 +3,48 @@
         {
             "type": "aws-sam",
             "request": "direct-invoke",
+            "name": "Ejercicio01:LambdaFunctionReadSQS",
+            "invokeTarget": {
+                "target": "template",
+                "templatePath": "${workspaceFolder}/SAM/ArchSolution/Ejercicio01/template.yaml",
+                "logicalId": "LambdaFunctionReadSQS"
+            },
+            "lambda": {
+                "payload": {},
+                "environmentVariables": {}
+            }
+        },
+        {
+            "type": "aws-sam",
+            "request": "direct-invoke",
+            "name": "Ejercicio01:LambdaFunctionReadSQS",
+            "invokeTarget": {
+                "target": "template",
+                "templatePath": "${workspaceFolder}/SAM/ArchSolution/Ejercicio01/template.yaml",
+                "logicalId": "LambdaFunctionReadSQS"
+            },
+            "lambda": {
+                "payload": {},
+                "environmentVariables": {}
+            }
+        },
+        {
+            "type": "aws-sam",
+            "request": "direct-invoke",
+            "name": "Ejercicio01:LambdaFunctionReadDynamoDBStream",
+            "invokeTarget": {
+                "target": "template",
+                "templatePath": "${workspaceFolder}/SAM/ArchSolution/Ejercicio01/template.yaml",
+                "logicalId": "LambdaFunctionReadDynamoDBStream"
+            },
+            "lambda": {
+                "payload": {},
+                "environmentVariables": {}
+            }
+        },
+        {
+            "type": "aws-sam",
+            "request": "direct-invoke",
             "name": "Ejercicio01:SQSToFunction",
             "invokeTarget": {
                 "target": "template",

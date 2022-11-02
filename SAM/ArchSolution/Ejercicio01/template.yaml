@@ -2,6 +2,14 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: A Lambda function triggered by an AWS API Gateway HTTP APIs call through an Amazon SQS Queue for buffering
 
+Globals:
+  Function:
+    Environment:
+      Variables:
+        STAGE: Production
+        TABLE_NAME: !Ref DynamoDBTable
+        SNS_ID: !Ref SNSTopic
+
 Parameters:
   SNSemail:
     Type: String
@@ -40,6 +48,9 @@ Resources:
       Runtime: python3.9
       Timeout: 20
       MemorySize: 128
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoDBTable
       Events:
         MySQSEvent:
           Type: SQS
@@ -81,6 +92,7 @@ Resources:
                 - 'logs:GetLogEvents'
                 - 'logs:FilterLogEvents'
               Resource: !GetAtt MyHttpApiAccessLogs.Arn
+  
 
 ### Cloudwatch Logs   ###########################################
   MyHttpApiAccessLogs:
@@ -107,16 +119,19 @@ Resources:
         StreamViewType: NEW_IMAGE
 
 #### Lambda Function Read from DynamoDB  Streams  ###############
-  LambdaFunctionWriteDynamoDB:
+  LambdaFunctionReadDynamoDBStream:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub ${AWS::StackName}-LambdaFunctionWriteDynamoDB
+      FunctionName: !Sub ${AWS::StackName}-LambdaFunctionReadDynamoDBStream
       Description: Lambda to be invoked by the DynamoDB Streams
       CodeUri: functions/dynamodb-to-lambda/
       Handler: app.lambda_handler
       Runtime: python3.9
       Timeout: 20
       MemorySize: 128
+      Policies:
+        - SNSCrudPolicy:
+            TopicName: !GetAtt SNSTopic.TopicName
       Events:
         MyDynamoDBEvent:
           Type: DynamoDB
@@ -142,12 +157,12 @@ Outputs:
     Value: !Sub "https://${MyHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
 
   LambdaFunctionReadSQS:
-    Description: LambdaFunction function name
+    Description: LambdaFunctionReadSQS function name
     Value: !Ref LambdaFunctionReadSQS
   
-  LambdaFunctionWriteDynamoDB:
-    Description: LambdaFunctionWriteDynamoDB function name
-    Value: !Ref LambdaFunctionWriteDynamoDB
+  LambdaFunctionReadDynamoDBStream:
+    Description: LambdaFunctionReadDynamoDBStream function name
+    Value: !Ref LambdaFunctionReadDynamoDBStream
   
   SNSTopic:
     Description: SNSTopic function name

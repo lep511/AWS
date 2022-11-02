@@ -2,9 +2,9 @@ version = 0.1
 [default]
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "TestoApp"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1x7unbea80o8w"
-s3_prefix = "TestoApp"
+stack_name = "OtroQueVa"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-wtu23aeff6vk"
+s3_prefix = "OtroQueVa"
 region = "us-east-1"
 capabilities = "CAPABILITY_NAMED_IAM"
 image_repositories = []
