@@ -2,10 +2,11 @@ version = 0.1
 [default]
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "sam-app"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-ny4al6qqnyyj"
-s3_prefix = "sam-app"
+stack_name = "TestoApp"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1x7unbea80o8w"
+s3_prefix = "TestoApp"
 region = "us-east-1"
-capabilities = "CAPABILITY_IAM"
+capabilities = "CAPABILITY_NAMED_IAM"
 image_repositories = []
 disable_rollback = true
+parameter_overrides = "SNSemail=\"estebanpbuday@yahoo.es\""
