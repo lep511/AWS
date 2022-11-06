@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "sam-app"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1n1cp303t9jkt"
+s3_prefix = "sam-app"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+image_repositories = ["HelloWorldFunction=603549703927.dkr.ecr.us-east-1.amazonaws.com/samapp7427b055/helloworldfunction19d43fc4repo"]
+confirm_changeset = true
