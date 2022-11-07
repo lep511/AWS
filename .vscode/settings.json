@@ -1,0 +1,5 @@
+{
+    "yaml.schemas": {
+        "https://raw.githubusercontent.com/awslabs/goformation/master/schema/sam.schema.json": "file:///home/lep511/AWS/SAM/ArchSolution/Ejercicio02/api-rest/api-rest-template.yaml"
+    }
+}

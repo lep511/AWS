@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Architecting Solutions - Building a Proof of Concept for Data Analytics
+Parameters:
+  BucketName:
+    Type: String
+    Description: Name of the S3 bucket
+    Default: sample-kinesis-data-495304
+  Env:
+    Type: String
+    Description: Environment name
+    Default: dev
+Globals:
+  Function:
+    Environment:
+      Variables:
+        ENV_NAME:
+          Ref: Env
+Resources:
+  TransormDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-TransormData
+      Description: Transform data from Kinisis Firehose to S3
+      CodeUri: TransormDataFunction
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 20
+      MemorySize: 128
+      Events:
+        MyKinesisFirehoseEvent:
+          Type: Kinesis
+          Properties:
+            Stream:
+              Fn::GetAtt:
+              - streamConsumer
+              - ConsumerARN
+            BatchSize: 10
+            StartingPosition: LATEST
+    Metadata:
+      SamResourceId: TransormDataFunction
+  stream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 1
+  streamConsumer:
+    Type: AWS::Kinesis::StreamConsumer
+    Properties:
+      StreamARN:
+        Fn::GetAtt:
+        - stream
+        - Arn
+      ConsumerName: lambda
+  DataS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: BucketName
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+  DataS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: DataS3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: StmtID
+          Effect: Allow
+          Principal:
+            Service: firehose.amazonaws.com
+          Action:
+          - s3:AbortMultipartUpload
+          - s3:GetBucketLocation
+          - s3:GetObject
+          - s3:ListBucket
+          - s3:ListBucketMultipartUploads
+          - s3:PutObject
+          - s3:PutObjectAcl
+          Resource:
+          - Fn::Sub: arn:aws:s3:::${DataS3Bucket}
+          - Fn::Sub: arn:aws:s3:::${DataS3Bucket}/*
+  RestAPIclickstreamIngest:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: RestAPIclickstreamIngest/template.yaml
+      Parameters:
+        EventStream:
+          Ref: stream
+        EventStreamArn:
+          Fn::GetAtt:
+          - stream
+          - Arn
+        StageName:
+          Ref: Env
+        ApiGatewayEndpointName:
+          Fn::Sub: ${AWS::StackName}-ApiGatewayEndpoint
+    Metadata:
+      SamResourceId: RestAPIclickstreamIngest
