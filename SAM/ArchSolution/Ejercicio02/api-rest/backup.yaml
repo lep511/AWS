@@ -8,19 +8,19 @@ Description: Amazon ApiGateway and Kinesis integration
 Parameters:
     ApiGatewayEndpointName:
         Type: String
-        Description: API Gateway Endpoint name
+        Description: "API Gateway Endpoint name"
         AllowedPattern : ".+"
     StageName:
         Type: String
-        Description: API Gateway Endpoint Stage
+        Description: "API Gateway Endpoint Stage"
         AllowedPattern : ".+"
     EventStream:
         Type: String
-        Description: EventStream name
+        Description: "EventStream name"
         AllowedPattern : ".+"
     EventStreamArn:
         Type: String
-        Description: EventStream Arn
+        Description: "EventStream Arn"
         AllowedPattern : ".+"
       
 ################################################################################
@@ -63,40 +63,7 @@ Resources:
                   body:
                     validateRequestBody: true
                 paths:
-                    "/provider/{providerId}/gameEvent":
-                        options:
-                          consumes:
-                          - application/json
-                          produces:
-                          - application/json
-                          responses:
-                            '200':
-                              description: '200 response'
-                              headers:
-                                Access-Control-Allow-Origin:
-                                  type: string
-                                Access-Control-Allow-Methods:
-                                  type: string
-                                Access-Control-Allow-Headers:
-                                  type: string
-                          x-amazon-apigateway-integration:
-                            responses:
-                              default:
-                                statusCode: '200'
-                                responseParameters:
-                                  method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
-                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
-                                  method.response.header.Access-Control-Allow-Origin: "'*'"
-                              '200':
-                                statusCode: '200'
-                                responseParameters:
-                                  method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
-                                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
-                                  method.response.header.Access-Control-Allow-Origin: "'*'"
-                            requestTemplates:
-                              application/json: '{"statusCode": 200}'
-                            passthroughBehavior: when_no_match
-                            type: mock
+                    "/clickstreams":
                         post:
                             consumes:
                                 - "application/json"
@@ -225,19 +192,3 @@ Resources:
               - Effect: Allow
                 Action: 'kinesis:PutRecord'
                 Resource: !Ref EventStreamArn
-                
-
-  ################################################################################
-  # Outputs
-  ################################################################################
-                
-Outputs:
-    ApiGatewayURI:
-        Value: !Sub 'https://${IngestionRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}'
-    ApiName:
-        Description: API Friendly name
-        Value: IngestionRestApi
-    ApiId:
-        Description: API ID (prefix of API URL)
-        Value:
-          Ref: IngestionRestApi

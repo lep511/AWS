@@ -2,11 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Amazon ApiGateway and Kinesis integration
 Parameters:
-  ApiGatewayEndpointName:
-    Type: String
-    Description: API Gateway Endpoint name
-    AllowedPattern: .+
-  StageName:
+  ApiStageName:
     Type: String
     Description: API Gateway Endpoint Stage
     AllowedPattern: .+
@@ -19,46 +15,78 @@ Parameters:
     Description: EventStream Arn
     AllowedPattern: .+
 Resources:
-  IngestionRestApiLogAccessRole:
+  APIRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
-        - Effect: Allow
+        - Sid: ''
+          Effect: Allow
           Principal:
             Service: apigateway.amazonaws.com
           Action: sts:AssumeRole
-      Path: /
-      ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-  IngestionApiAccount:
-    Type: AWS::ApiGateway::Account
+  APIPolicy:
+    Type: AWS::IAM::Policy
     Properties:
-      CloudWatchRoleArn:
-        Fn::GetAtt:
-        - IngestionRestApiLogAccessRole
-        - Arn
-  IngestionRestApi:
-    Type: AWS::ApiGateway::RestApi
+      Roles:
+      - Ref: APIRole
+      PolicyName:
+        Fn::Sub: ${AWS::StackName}-APIdeliveryPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+          - firehose:PutRecord*
+          - firehose:List*
+          - firehose:Describe*
+          Resource:
+          - Ref: EventStreamArn
+  DeliveryApi:
+    Type: AWS::Serverless::Api
     Properties:
-      Description: API endpoints to ingest game data via REST API POST
-      ApiKeySourceType: HEADER
-      Body:
+      StageName:
+        Ref: ApiStageName
+      Description: API endpoints to ingest data to Kinesis via REST API POST
+      DefinitionBody:
         swagger: '2.0'
         info:
-          version: '2018-08-03T20:13:00Z'
-          title:
-            Fn::Sub: ${ApiGatewayEndpointName}
-        basePath:
-          Fn::Sub: /${StageName}
+          title: Serverless Data Pipeline API
         schemes:
         - https
-        x-amazon-apigateway-request-validators:
-          body:
-            validateRequestBody: true
         paths:
-          /provider/{providerId}/gameEvent:
+          /track:
+            post:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+              x-amazon-apigateway-integration:
+                credentials:
+                  Fn::GetAtt:
+                  - APIRole
+                  - Arn
+                responses:
+                  default:
+                    statusCode: '200'
+                requestParameters:
+                  integration.request.header.Content-Type: '''x-amz-json-1.1'''
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:firehose:action/PutRecord
+                passthroughBehavior: when_no_templates
+                httpMethod: POST
+                requestTemplates:
+                  application/json:
+                    Fn::Sub: "{\n  \"DeliveryStreamName\": \"${EventStream}\",\n \
+                      \ \"Record\": {\n    \"Data\": \"$util.base64Encode($input.json('$'))\"\
+                      \n  }\n}\n"
+                type: aws
             options:
               consumes:
               - application/json
@@ -67,6 +95,8 @@ Resources:
               responses:
                 '200':
                   description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
                   headers:
                     Access-Control-Allow-Origin:
                       type: string
@@ -80,145 +110,18 @@ Resources:
                     statusCode: '200'
                     responseParameters:
                       method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
-                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
                       method.response.header.Access-Control-Allow-Origin: '''*'''
-                  '200':
-                    statusCode: '200'
-                    responseParameters:
-                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
-                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'''
-                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
                 requestTemplates:
                   application/json: '{"statusCode": 200}'
-                passthroughBehavior: when_no_match
                 type: mock
-            post:
-              consumes:
-              - application/json
-              produces:
-              - application/json
-              x-amazon-apigateway-request-validator: body
-              parameters:
-              - name: providerId
-                in: path
-                required: true
-                type: string
-              - in: body
-                name: RequestBodyModel
-                required: true
-                schema:
-                  $ref: '#/definitions/RequestBodyModel'
-              responses:
-                '200':
-                  description: 200 response
-                  statusCode: '200'
-                  schema:
-                    $ref: '#/definitions/Empty'
-              security:
-              - sigv4: []
-              x-amazon-apigateway-integration:
-                responses:
-                  default:
-                    statusCode: '200'
-                    schema:
-                      $ref: '#/definitions/Empty'
-                  '200':
-                    description: 200 response
-                    statusCode: '200'
-                    schema:
-                      $ref: '#/definitions/Empty'
-                requestTemplates:
-                  application/json:
-                    Fn::Sub: "#set($payload = $input.json('$'))\n#set($inputRoot =\
-                      \ $input.path('$'))\n#set($providerId = $input.params('providerId'))\n\
-                      #set($feedId = $inputRoot.feedId)\n#set($partitionkey = \"$providerId.$feedId\"\
-                      \ )\n#set($data = \"$payload\")\n{\n    \"Data\": \"$util.base64Encode($data)\"\
-                      ,\n    \"PartitionKey\": \"$partitionkey\",\n    \"StreamName\"\
-                      : \"${EventStream}\"\n}\n"
-                uri:
-                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:kinesis:action/PutRecord
-                passthroughBehavior: when_no_match
-                httpMethod: POST
-                requestParameters:
-                  integration.request.header.Content-Type: '''application/x-amz-json-1.1'''
-                type: aws
-                credentials:
-                  Fn::GetAtt:
-                  - IngestionIntegrationRole
-                  - Arn
-        securityDefinitions:
-          sigv4:
-            type: apiKey
-            name: Authorization
-            in: header
-            x-amazon-apigateway-authtype: awsSigv4
         definitions:
           Empty:
             type: object
             title: Empty Schema
-          RequestBodyModel:
-            type: object
-            properties:
-              feedId:
-                type: string
-              providerId:
-                type: string
-              gameId:
-                type: string
-            required:
-            - feedId
-            - providerId
-            - gameId
-  DeploymentIngestionRestApi:
-    Type: AWS::ApiGateway::Deployment
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-        - id: W68
-          reason: suppress UsagePlan requirement
-    Properties:
-      RestApiId:
-        Ref: IngestionRestApi
-      StageName:
-        Ref: StageName
-      StageDescription:
-        LoggingLevel: ERROR
-        AccessLogSetting:
-          DestinationArn:
-            Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/RealTime_Live_Sports_Update_Using_AWS_AppSync/api/${IngestionRestApi}/${StageName}
-          Format: $context.identity.sourceIp $context.identity.caller $context.identity.user
-            [$context.requestTime] "$context.httpMethod $context.resourcePath $context.protocol"
-            $context.status $context.responseLength $context.requestId
-  IngestionIntegrationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - apigateway.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      Policies:
-      - PolicyName:
-          Fn::Sub: ${AWS::StackName}-IngestionIntegrationRole
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action: kinesis:PutRecord
-            Resource:
-              Ref: EventStreamArn
 Outputs:
   ApiGatewayURI:
     Value:
-      Fn::Sub: https://${IngestionRestApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
-  ApiName:
-    Description: API Friendly name
-    Value: IngestionRestApi
-  ApiId:
-    Description: API ID (prefix of API URL)
-    Value:
-      Ref: IngestionRestApi
+      Fn::Sub: https://${DeliveryApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}/track
+    Description: The URI of the API Gateway endpoint

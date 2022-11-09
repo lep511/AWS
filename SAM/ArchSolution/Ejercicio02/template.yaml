@@ -3,17 +3,13 @@ Transform: AWS::Serverless-2016-10-31
 Description: Architecting Solutions - Building a Proof of Concept for Data Analytics
 
 Parameters:
-  BucketName:
+  ApiStageName:
     Type: String
-    Description: Name of the S3 bucket
-    Default: sample-kinesis-data-495304
-  Env:
-    Type: String
-    Description: Environment name
+    Description: "The API Gateway Stage name (e.g. dev, prod, etc.)"
     Default: dev
   DeployIngestAPI:
     Type: String
-    Description: Deploy optional ingest REST API stack
+    Description: "Deploy optional ingest REST API stack"
     Default: "yes"
     AllowedValues:
       - "yes"
@@ -23,7 +19,7 @@ Globals:
   Function:
     Environment:
       Variables:
-        ENV_NAME: !Ref Env
+        ENV_NAME: !Ref ApiStageName
 
 Conditions:
   UseIngestAPIResources: !Equals [ !Ref DeployIngestAPI, "yes" ]
@@ -37,30 +33,99 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub ${AWS::StackName}-TransormData
-      Description: Transform data from Kinisis Firehose to S3
+      Description: "Transform data from Kinisis Firehose to S3"
       CodeUri: functions/transform-data/
       Handler: app.lambda_handler
       Runtime: python3.9
-      Timeout: 20
+      Timeout: 120
       MemorySize: 128
-      Events:
-        MyKinesisFirehoseEvent:
-          Type: Kinesis
-          Properties:
-            Stream: !GetAtt streamConsumer.ConsumerARN
-            BatchSize: 10
-            StartingPosition: LATEST
-  stream:
-    Type: AWS::Kinesis::Stream
-    Properties:
-      ShardCount: 1
-  
-  streamConsumer:
-    Type: AWS::Kinesis::StreamConsumer
-    Properties:
-      StreamARN: !GetAtt stream.Arn
-      ConsumerName: lambda
+      Role: !GetAtt LambdaExecutionRole.Arn
 
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-LambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-LambdaExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-*
+              - Effect: Allow
+                Action:
+                  - firehose:PutRecord
+                Resource: !Sub arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${AWS::StackName}-deliverystream
+  ####################################################################################################
+  # Kinesis Firehose
+  ####################################################################################################
+
+  deliverystream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties: 
+      DeliveryStreamType: DirectPut
+      DeliveryStreamName: !Sub ${AWS::StackName}-deliverystream
+      ExtendedS3DestinationConfiguration:
+        RoleARN: !GetAtt deliveryRole.Arn
+        BucketARN: !GetAtt DataS3Bucket.Arn
+        Prefix: 'clickstream/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/'
+        ErrorOutputPrefix: 'error/!{firehose:error-output-type}/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/'
+        BufferingHints:
+          SizeInMBs: 128
+          IntervalInSeconds: 300
+        CompressionFormat: UNCOMPRESSED
+        EncryptionConfiguration:
+          NoEncryptionConfig: NoEncryption
+        CloudWatchLoggingOptions:
+          Enabled: false
+        S3BackupMode: Disabled
+        ProcessingConfiguration:
+          Enabled: true
+          Processors:
+            - Type: Lambda
+              Parameters:
+                - ParameterName: LambdaArn
+                  ParameterValue: !GetAtt TransormDataFunction.Arn
+                - ParameterName: NumberOfRetries
+                  ParameterValue: "3"
+                - ParameterName: RoleArn
+                  ParameterValue: !GetAtt deliveryLambdaRole.Arn
+
+  deliveryLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-deliveryLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-deliveryLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt TransormDataFunction.Arn
   ####################################################################################################
   # S3 Bucket
   ####################################################################################################
@@ -68,41 +133,49 @@ Resources:
   DataS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref BucketName
       AccessControl: Private
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
       
   ####################################################################################################
-  # Bucket Policy
+  # IAM Role
   ####################################################################################################
 
-  DataS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
+  deliveryRole:
+    Type: AWS::IAM::Role
     Properties:
-      Bucket: !Ref DataS3Bucket
-      PolicyDocument:
+      AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
-          - Sid: "StmtID"
+          - Sid: ''
             Effect: Allow
             Principal:
               Service: firehose.amazonaws.com
-            Action:
-              - s3:AbortMultipartUpload
-              - s3:GetBucketLocation
-              - s3:GetObject
-              - s3:ListBucket
-              - s3:ListBucketMultipartUploads
-              - s3:PutObject
-              - s3:PutObjectAcl
-            Resource:
-              - !Sub arn:aws:s3:::${DataS3Bucket}
-              - !Sub arn:aws:s3:::${DataS3Bucket}/*
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref 'AWS::AccountId'
+      Path: "/"
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-firehose-delivery-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:AbortMultipartUpload'
+                  - 's3:GetBucketLocation'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:ListBucketMultipartUploads'
+                  - 's3:PutObject'
+                  - 's3:PutObjectAcl'
+                Resource:
+                  - !Sub arn:aws:s3:::${DataS3Bucket}
+                  - !Sub arn:aws:s3:::${DataS3Bucket}/*
+
   
   ####################################################################################################
   # API Gateway
@@ -114,8 +187,21 @@ Resources:
     Properties:
       Location: ./api-rest/api-rest-template.yaml
       Parameters:
-        EventStream: !Ref stream
-        EventStreamArn: !GetAtt stream.Arn
-        StageName: !Ref Env
-        ApiGatewayEndpointName: !Sub ${AWS::StackName}-ApiGatewayEndpoint
+        EventStream: !Ref deliverystream
+        EventStreamArn: !GetAtt deliverystream.Arn
+        ApiStageName: !Ref ApiStageName
+
+  ################################################################################
+  # Outputs
+  ################################################################################
                 
+Outputs:
+    BucketName:
+      Description: "Name of the S3 bucket"
+      Value: !Ref DataS3Bucket
+    LambdaFunctionArn:
+      Description: "The ARN of the Lambda function"
+      Value: !GetAtt TransormDataFunction.Arn
+    StreamName:
+      Description: "Name of the Kinesis Firehose stream"
+      Value: !Ref deliverystream

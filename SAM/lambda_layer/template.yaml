@@ -1,0 +1,16 @@
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS X-Ray SDK - jasonpickle - httpx - Layer
+
+Resources:
+  SDKlayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: AWS-X-RAY-SDK-v3_2_0
+      Description: AWS-X-RAY-SDK-v3_2_0
+      ContentUri: 's3://layer-temp-93932-23/lambda_layer.zip'
+      CompatibleRuntimes:
+        - python3.9
+      LicenseInfo: 'Available under the MIT-0 license.'
+      RetentionPolicy: Retain

@@ -2,12 +2,10 @@ version = 0.1
 [default]
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "me-otra-app"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-zkdg62d0uikj"
-s3_prefix = "me-otra-app"
+stack_name = "amto-stack"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-m5sybaxjx7nb"
+s3_prefix = "amto-stack"
 region = "us-east-1"
-confirm_changeset = true
 capabilities = "CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
-parameter_overrides = "BucketName=\"data-45-323-55\" Env=\"dev\""
+parameter_overrides = "ApiStageName=\"dev\" DeployIngestAPI=\"yes\""
 image_repositories = []
-disable_rollback = true
