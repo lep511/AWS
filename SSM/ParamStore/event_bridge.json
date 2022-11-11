@@ -1,0 +1,8 @@
+{
+  "source": ["aws.ssm"],
+  "detail-type": ["Parameter Store Change"],
+  "detail": {
+    "name": ["s3-bucket-for-app"],
+    "operation": ["Update"]
+  }
+}
