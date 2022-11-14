@@ -13,10 +13,10 @@ Parameters:
     Default: "yes"
     AllowedValues:
       - "yes"
-      - "no"  
-  CreateAthenaTable:
+      - "no"
+  UseAthenaResources:
     Type: String
-    Description: "Create Athena table"
+    Description: "Create Athena database and table"
     Default: "yes"
     AllowedValues:
       - "yes"
@@ -30,7 +30,7 @@ Globals:
 
 Conditions:
   UseIngestAPIResources: !Equals [ !Ref DeployIngestAPI, "yes" ]
-  UseAthenaResources: !Equals [ !Ref CreateAthenaTable, "yes" ]
+  UseAthenaResources: !Equals [ !Ref AthenaTableDataAnalytics, "yes" ]
 
 Resources:
   ####################################################################################################
@@ -202,15 +202,17 @@ Resources:
   ####################################################################################################
   # Athena
   ####################################################################################################
-  
+
   AthenaTableDataAnalytics:
     Type: AWS::Serverless::Application
     Condition: UseAthenaResources
     Properties:
       Location: ./athena/athena-res.yaml
       Parameters:
-        StreamBucketName: !Ref DataS3Bucket
+        BucketName: !Ref DataS3Bucket
+        S3Prefix: 'clickstream/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/'
 
+  
   ################################################################################
   # Outputs
   ################################################################################

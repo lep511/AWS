@@ -3,9 +3,9 @@ version = 0.1
 [default.deploy]
 [default.deploy.parameters]
 stack_name = "amto-stack"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-m5sybaxjx7nb"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1broe6ufjvfz7"
 s3_prefix = "amto-stack"
 region = "us-east-1"
 capabilities = "CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
-parameter_overrides = "ApiStageName=\"dev\" DeployIngestAPI=\"yes\""
+parameter_overrides = "ApiStageName=\"dev\" DeployIngestAPI=\"yes\" CreateAthenaTable=\"yes\""
 image_repositories = []

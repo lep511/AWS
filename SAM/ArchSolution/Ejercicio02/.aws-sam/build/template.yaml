@@ -13,6 +13,13 @@ Parameters:
     AllowedValues:
     - 'yes'
     - 'no'
+  CreateAthenaTable:
+    Type: String
+    Description: Create Athena table
+    Default: 'yes'
+    AllowedValues:
+    - 'yes'
+    - 'no'
 Globals:
   Function:
     Environment:
@@ -23,6 +30,10 @@ Conditions:
   UseIngestAPIResources:
     Fn::Equals:
     - Ref: DeployIngestAPI
+    - 'yes'
+  UseAthenaResources:
+    Fn::Equals:
+    - Ref: CreateAthenaTable
     - 'yes'
 Resources:
   TransormDataFunction:
@@ -73,7 +84,7 @@ Resources:
             Action:
             - firehose:PutRecord
             Resource:
-              Fn::Sub: arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${AWS::StackName}-*
+              Fn::Sub: arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${AWS::StackName}-deliverystream
   deliverystream:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
@@ -202,6 +213,16 @@ Resources:
           Ref: ApiStageName
     Metadata:
       SamResourceId: RestAPIclickstreamIngest
+  AthenaTableDataAnalytics:
+    Type: AWS::Serverless::Application
+    Condition: UseAthenaResources
+    Properties:
+      Location: AthenaTableDataAnalytics/template.yaml
+      Parameters:
+        StreamBucketName:
+          Ref: DataS3Bucket
+    Metadata:
+      SamResourceId: AthenaTableDataAnalytics
 Outputs:
   BucketName:
     Description: Name of the S3 bucket
@@ -213,3 +234,7 @@ Outputs:
       Fn::GetAtt:
       - TransormDataFunction
       - Arn
+  StreamName:
+    Description: Name of the Kinesis Firehose stream
+    Value:
+      Ref: deliverystream

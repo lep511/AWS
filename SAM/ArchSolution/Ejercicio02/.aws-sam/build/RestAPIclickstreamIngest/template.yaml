@@ -52,7 +52,8 @@ Resources:
       DefinitionBody:
         swagger: '2.0'
         info:
-          title: Serverless Data Pipeline API
+          title:
+            Fn::Sub: ${AWS::StackName}-ServerlessDataPipelineAPI
         schemes:
         - https
         paths:
