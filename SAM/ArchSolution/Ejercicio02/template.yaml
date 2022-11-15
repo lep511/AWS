@@ -7,30 +7,12 @@ Parameters:
     Type: String
     Description: "The API Gateway Stage name (e.g. dev, prod, etc.)"
     Default: dev
-  DeployIngestAPI:
-    Type: String
-    Description: "Deploy optional ingest REST API stack"
-    Default: "yes"
-    AllowedValues:
-      - "yes"
-      - "no"  
-  CreateAthenaTable:
-    Type: String
-    Description: "Create Athena table"
-    Default: "yes"
-    AllowedValues:
-      - "yes"
-      - "no"
 
 Globals:
   Function:
     Environment:
       Variables:
         ENV_NAME: !Ref ApiStageName
-
-Conditions:
-  UseIngestAPIResources: !Equals [ !Ref DeployIngestAPI, "yes" ]
-  UseAthenaResources: !Equals [ !Ref CreateAthenaTable, "yes" ]
 
 Resources:
   ####################################################################################################
@@ -70,6 +52,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+              - Effect: Allow
+                Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-*
@@ -77,6 +62,31 @@ Resources:
                 Action:
                   - firehose:PutRecord
                 Resource: !Sub arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${AWS::StackName}-deliverystream
+  
+  ####################################################################################################
+  # Lambda
+  ####################################################################################################
+  CreateTableFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-CreateAthenaTable
+      Description: "Create Athena table for data analytics"
+      CodeUri: functions/athena/
+      Handler: create_table.lambda_handler
+      Runtime: python3.9
+      Timeout: 120
+      MemorySize: 128
+      Environment:
+        Variables:
+          STREAM_BUCKET_NAME: !Ref DataS3Bucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataS3Bucket
+        - S3CrudPolicy:
+            BucketName: !Ref DataS3Bucket
+        - AthenaQueryPolicy:
+            WorkGroupName: clickstream
+  
   ####################################################################################################
   # Kinesis Firehose
   ####################################################################################################
@@ -183,7 +193,10 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${DataS3Bucket}
                   - !Sub arn:aws:s3:::${DataS3Bucket}/*
-
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource: !GetAtt TransormDataFunction.Arn
   
   ####################################################################################################
   # API Gateway
@@ -191,7 +204,6 @@ Resources:
 
   RestAPIclickstreamIngest:
     Type: AWS::Serverless::Application
-    Condition: UseIngestAPIResources
     Properties:
       Location: ./api-rest/api-rest-template.yaml
       Parameters:
@@ -205,9 +217,8 @@ Resources:
   
   AthenaTableDataAnalytics:
     Type: AWS::Serverless::Application
-    Condition: UseAthenaResources
     Properties:
-      Location: ./athena/athena-res.yaml
+      Location: ./athena/template.yaml
       Parameters:
         StreamBucketName: !Ref DataS3Bucket
 

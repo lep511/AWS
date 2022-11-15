@@ -1,0 +1,7 @@
+      Policies: 
+        - S3ReadPolicy:
+            BucketName: !Ref StreamBucketName
+        - S3CrudPolicy:
+            BucketName: !Ref StreamBucketName
+        - AthenaQueryPolicy:
+            WorkGroupName: clickstream

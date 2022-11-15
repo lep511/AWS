@@ -6,35 +6,12 @@ Parameters:
     Type: String
     Description: The API Gateway Stage name (e.g. dev, prod, etc.)
     Default: dev
-  DeployIngestAPI:
-    Type: String
-    Description: Deploy optional ingest REST API stack
-    Default: 'yes'
-    AllowedValues:
-    - 'yes'
-    - 'no'
-  CreateAthenaTable:
-    Type: String
-    Description: Create Athena table
-    Default: 'yes'
-    AllowedValues:
-    - 'yes'
-    - 'no'
 Globals:
   Function:
     Environment:
       Variables:
         ENV_NAME:
           Ref: ApiStageName
-Conditions:
-  UseIngestAPIResources:
-    Fn::Equals:
-    - Ref: DeployIngestAPI
-    - 'yes'
-  UseAthenaResources:
-    Fn::Equals:
-    - Ref: CreateAthenaTable
-    - 'yes'
 Resources:
   TransormDataFunction:
     Type: AWS::Serverless::Function
@@ -76,6 +53,10 @@ Resources:
           - Effect: Allow
             Action:
             - logs:CreateLogGroup
+            Resource:
+              Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+          - Effect: Allow
+            Action:
             - logs:CreateLogStream
             - logs:PutLogEvents
             Resource:
@@ -85,6 +66,32 @@ Resources:
             - firehose:PutRecord
             Resource:
               Fn::Sub: arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${AWS::StackName}-deliverystream
+  CreateTableFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-CreateAthenaTable
+      Description: Create Athena table for data analytics
+      CodeUri: CreateTableFunction
+      Handler: create_table.lambda_handler
+      Runtime: python3.9
+      Timeout: 120
+      MemorySize: 128
+      Environment:
+        Variables:
+          STREAM_BUCKET_NAME:
+            Ref: DataS3Bucket
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: DataS3Bucket
+      - S3CrudPolicy:
+          BucketName:
+            Ref: DataS3Bucket
+      - AthenaQueryPolicy:
+          WorkGroupName: clickstream
+    Metadata:
+      SamResourceId: CreateTableFunction
   deliverystream:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
@@ -197,9 +204,15 @@ Resources:
             Resource:
             - Fn::Sub: arn:aws:s3:::${DataS3Bucket}
             - Fn::Sub: arn:aws:s3:::${DataS3Bucket}/*
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource:
+              Fn::GetAtt:
+              - TransormDataFunction
+              - Arn
   RestAPIclickstreamIngest:
     Type: AWS::Serverless::Application
-    Condition: UseIngestAPIResources
     Properties:
       Location: RestAPIclickstreamIngest/template.yaml
       Parameters:
@@ -215,7 +228,6 @@ Resources:
       SamResourceId: RestAPIclickstreamIngest
   AthenaTableDataAnalytics:
     Type: AWS::Serverless::Application
-    Condition: UseAthenaResources
     Properties:
       Location: AthenaTableDataAnalytics/template.yaml
       Parameters:

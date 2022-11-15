@@ -6,6 +6,32 @@ Parameters:
     Type: String
     Description: S3 bucket name
 Resources:
+  CreateTableFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-CreateAthenaTable
+      Description: Create Athena table for data analytics
+      CodeUri: CreateTableFunction
+      Handler: create_table.lambda_handler
+      Runtime: python3.9
+      Timeout: 120
+      MemorySize: 128
+      Environment:
+        Variables:
+          STREAM_BUCKET_NAME:
+            Ref: StreamBucketName
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: StreamBucketName
+      - S3CrudPolicy:
+          BucketName:
+            Ref: StreamBucketName
+      - AthenaQueryPolicy:
+          WorkGroupName: clickstream
+    Metadata:
+      SamResourceId: CreateTableFunction
   WorkGroupClickstream:
     Type: AWS::Athena::WorkGroup
     Properties:
