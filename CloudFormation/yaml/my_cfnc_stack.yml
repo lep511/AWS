@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: "2010-09-09"
+# Define the AWS resources to be created by the template
+Resources: 
+  # Create a lambda function
+  myLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+            if 'queryStringParameters' in event:
+              if 'name' in event['queryStringParameters']:
+                name = event['queryStringParameters']['name']
+                return {
+                  'statusCode': 200,
+                  'body': json.dumps('Hello ' + name + ' from Lambda!')
+                }
+            return {
+              'statusCode': 400,
+              'body': json.dumps('Bad Request')
+            }
+      Handler: index.lambda_handler
+      Role: !GetAtt myLambdaExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 3
+  # Create a role
+  myLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: myLambdaExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+
+  # Create an SQS queue for the input data
+  InputQueue: 
+    Type: "AWS::SQS::Queue"
+    Properties: 
+      QueueName: "DriftLab-InputQueue"
+      VisibilityTimeout: 30
+      RedrivePolicy: 
+        deadLetterTargetArn: 
+          Fn::GetAtt: 
+            - "DeadLetterQueue"
+            - "Arn"
+        maxReceiveCount: 5
+  # Create an SQS queue for the error messages
+  DeadLetterQueue: 
+    Type: "AWS::SQS::Queue"
+    Properties: 
+      QueueName: "DriftLab-ErrorQueue"
+# Define the output values to return when the stack is created
+Outputs:
+  InputQueueUrl: 
+    Value: 
+      Fn::GetAtt: 
+        - "InputQueue"
+        - "QueueUrl"
+  DeadLetterQueueUrl: 
+    Value: 
+      Fn::GetAtt: 
+        - "DeadLetterQueue"
+        - "QueueUrl"
+  FunctionName: 
+    Value: !Ref myLambdaFunction
