@@ -1,0 +1,17 @@
+{
+  "source": ["aws.securityhub"],
+  "detail": {
+    "findings": {
+      "ProductName": ["GuardDuty"],
+      "Severity": {
+        "Label": ["MEDIUM", "HIGH"]
+      },
+      "Resources": {
+        "Type": ["AwsEc2Instance"],
+        "Tags": {
+          "ENV": ["PROD"]
+        }
+      }
+    }
+  }
+}

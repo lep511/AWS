@@ -1,0 +1,140 @@
+Description: >
+  This template deploys a sample nodejs app on EC2 instances within an
+  Autoscaling Group, behind a load balancer, with an Aurora MySQL database.
+  Original Author: Rob Kiolbasa kiolbr@amazon.com
+
+Parameters:
+
+  InstanceType:
+    Description: AppInstance EC2 instance type
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+    ConstraintDescription: must be a valid EC2 instance type.
+
+  LaunchTemplateImageId:
+      Description: AMI used to host sample app
+      Type: AWS::EC2::Image::Id
+      Default: ami-0d85dfff7a04009f8
+
+  DBUser:
+    Description: Database User
+    Type: String
+    Default: sampledbuser
+
+  DBPassword:
+    Description: Database User Password
+    Type: String
+    Default: sampledbpwd
+
+  DBInstanceType:
+    Description: AppDatabase DB instance type
+    Type: String
+    Default: db.t3.small
+    AllowedValues:
+      - db.t3.small
+      - db.t3.medium
+    ConstraintDescription: must be a valid DB instance type.
+
+Resources:
+  VPC:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://ee-assets-prod-us-east-1.s3.amazonaws.com/modules/c547cb58e1974df2a21a9fdf7207f413/v7/vpc.yaml
+      Parameters:
+        EnvironmentName: !Ref 'AWS::StackName'
+        VpcCIDR: 10.180.0.0/16
+        AppSubnet1CIDR: 10.180.8.0/21
+        AppSubnet2CIDR: 10.180.16.0/21
+        DatabaseSubnet1CIDR: 10.180.24.0/21
+        DatabaseSubnet2CIDR: 10.180.32.0/21
+
+  SecurityGroups:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://ee-assets-prod-us-east-1.s3.amazonaws.com/modules/c547cb58e1974df2a21a9fdf7207f413/v7/sec.yaml
+      Parameters:
+        EnvironmentName: !Ref 'AWS::StackName'
+        VPC: !GetAtt 
+          - VPC
+          - Outputs.VPC
+
+  ALB:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://ee-assets-prod-us-east-1.s3.amazonaws.com/modules/c547cb58e1974df2a21a9fdf7207f413/v7/alb.yaml
+      Parameters:
+        EnvironmentName: !Ref 'AWS::StackName'
+        VPC: !GetAtt 
+          - VPC
+          - Outputs.VPC
+        Subnets: !GetAtt 
+          - VPC
+          - Outputs.AppSubnets
+        SecurityGroup: !GetAtt 
+          - SecurityGroups
+          - Outputs.LoadBalancerSecurityGroup
+
+  ASG:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://ee-assets-prod-us-east-1.s3.amazonaws.com/modules/c547cb58e1974df2a21a9fdf7207f413/v7/asg.yaml
+      Parameters:
+        InstanceType: !Ref InstanceType
+        LaunchTemplateImageId: !Ref LaunchTemplateImageId
+        ClusterSize: 2
+        SecurityGroup: !GetAtt 
+          - SecurityGroups
+          - Outputs.AppHostSecurityGroup
+        Subnets: !GetAtt 
+          - VPC
+          - Outputs.AppSubnets
+        AppTargetGroup: !GetAtt 
+          - ALB
+          - Outputs.TargetGroup
+        PrimaryInstanceName: !GetAtt 
+          - Database
+          - Outputs.PrimaryInstanceName
+        PrimaryInstancePort: !GetAtt 
+          - Database
+          - Outputs.PrimaryInstancePort
+
+  Database:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://ee-assets-prod-us-east-1.s3.amazonaws.com/modules/c547cb58e1974df2a21a9fdf7207f413/v7/rds.yaml
+      Parameters:
+        DBInstanceType: !Ref DBInstanceType
+        Subnets: !GetAtt 
+          - VPC
+          - Outputs.DatabaseSubnets
+        SecurityGroup: !GetAtt 
+          - SecurityGroups
+          - Outputs.RDSInstanceSecurityGroup
+        DBUser: !Ref DBUser
+        DBPassword: !Ref DBPassword
+          
+  SSMAutomation:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: >-
+        https://ee-assets-prod-us-east-1.s3.amazonaws.com/modules/c547cb58e1974df2a21a9fdf7207f413/v7/ssmautomation.yaml
+
+Outputs:
+  SampleAppURL:
+    Description: The URL endpoint for the sample application
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - ALB
+          - Outputs.LoadBalancerUrl
