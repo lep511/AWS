@@ -25,3 +25,7 @@ In this exercise, you will learn how to do the following:
 `sam build`
 
 `sam deploy --guided --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM`
+
+#### To generate data:
+
+bash stream_generator.sh

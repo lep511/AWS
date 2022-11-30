@@ -3,7 +3,7 @@ version = 0.1
 [default.deploy]
 [default.deploy.parameters]
 stack_name = "anto-st-rot"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1bzlslo6xtzqs"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-e9azzg2q616p"
 s3_prefix = "anto-st-rot"
 region = "us-east-1"
 capabilities = "CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
