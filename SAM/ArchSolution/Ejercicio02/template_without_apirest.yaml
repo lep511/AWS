@@ -1,0 +1,484 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Architecting Solutions - Building a Proof of Concept for Data Analytics
+
+Parameters:
+  ApiStageName:
+    Type: String
+    Description: "The API Gateway Stage name (e.g. dev, prod, etc.)"
+    Default: dev
+
+Globals:
+  Function:
+    Environment:
+      Variables:
+        ENV_NAME: !Ref ApiStageName
+
+Resources:
+  ####################################################################################################
+  # Lambda Function
+  ####################################################################################################
+  
+  TransormDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-TransormData
+      Description: "Transform data from Kinisis Firehose to S3"
+      CodeUri: functions/transform-data/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 120
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-LambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-LambdaExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-*
+              - Effect: Allow
+                Action:
+                  - firehose:PutRecord
+                Resource: !Sub arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${AWS::StackName}-deliverystream
+  
+  ####################################################################################################
+  # Lambda
+  ####################################################################################################
+  CreateTableFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-CreateAthenaTable
+      Description: "Create Athena table for data analytics"
+      CodeUri: functions/athena/
+      Handler: create_table.lambda_handler
+      Runtime: python3.9
+      Timeout: 120
+      MemorySize: 128
+      Environment:
+        Variables:
+          STREAM_BUCKET_NAME: !Ref DataS3Bucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataS3Bucket
+        - S3CrudPolicy:
+            BucketName: !Ref DataS3Bucket
+        - AthenaQueryPolicy:
+            WorkGroupName: clickstream
+  
+  ####################################################################################################
+  # Kinesis Firehose
+  ####################################################################################################
+
+  deliverystream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties: 
+      DeliveryStreamType: DirectPut
+      DeliveryStreamName: !Sub ${AWS::StackName}-deliverystream
+      ExtendedS3DestinationConfiguration:
+        RoleARN: !GetAtt deliveryRole.Arn
+        BucketARN: !GetAtt DataS3Bucket.Arn
+        Prefix: 'clickstream/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/'
+        ErrorOutputPrefix: 'error/!{firehose:error-output-type}/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/'
+        BufferingHints:
+          SizeInMBs: 128
+          IntervalInSeconds: 300
+        CompressionFormat: UNCOMPRESSED
+        EncryptionConfiguration:
+          NoEncryptionConfig: NoEncryption
+        CloudWatchLoggingOptions:
+          Enabled: false
+        S3BackupMode: Disabled
+        ProcessingConfiguration:
+          Enabled: true
+          Processors:
+            - Type: Lambda
+              Parameters:
+                - ParameterName: LambdaArn
+                  ParameterValue: !GetAtt TransormDataFunction.Arn
+                - ParameterName: NumberOfRetries
+                  ParameterValue: "3"
+                - ParameterName: RoleArn
+                  ParameterValue: !GetAtt deliveryLambdaRole.Arn
+
+  deliveryLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-deliveryLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-deliveryLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt TransormDataFunction.Arn
+  ####################################################################################################
+  # S3 Bucket
+  ####################################################################################################
+
+  DataS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      
+  ####################################################################################################
+  # IAM Role
+  ####################################################################################################
+
+  deliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref 'AWS::AccountId'
+      Path: "/"
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-firehose-delivery-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:AbortMultipartUpload'
+                  - 's3:GetBucketLocation'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:ListBucketMultipartUploads'
+                  - 's3:PutObject'
+                  - 's3:PutObjectAcl'
+                Resource:
+                  - !Sub arn:aws:s3:::${DataS3Bucket}
+                  - !Sub arn:aws:s3:::${DataS3Bucket}/*
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource: !GetAtt TransormDataFunction.Arn
+  
+  ####################################################################################################
+  # Athena Workgroup
+  ####################################################################################################
+  
+  AthenaWorkGroup:
+    DependsOn: DataS3Bucket
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Sub ${AWS::StackName}-athena-workgroup
+      State: ENABLED
+      WorkGroupConfiguration:
+        EnforceWorkGroupConfiguration: false
+        PublishCloudWatchMetricsEnabled: false
+        RequesterPaysEnabled: true
+        ResultConfiguration:
+          OutputLocation: !Join [ "", ["s3://", !Ref DataS3Bucket, "/result" ] ]
+
+  ####################################################################################################
+  # Glue Database
+  ####################################################################################################
+
+  GlueDatabase:
+    DependsOn: DataS3Bucket
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Sub ${AWS::StackName}-glue-database
+
+  ####################################################################################################
+  # SNS Topic
+  ####################################################################################################
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId: !Ref SNSKeyAlias
+
+  SNSKey:
+    DeletionPolicy : Retain
+    Type: AWS::KMS::Key
+    Properties: 
+      Enabled: true
+      KeyPolicy: {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "Allow access through SNS for all principals in the account that are authorized to use SNS",
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": "*"
+                },
+                "Action": [
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:CreateGrant",
+                    "kms:DescribeKey"
+                ],
+                "Resource": "*",
+                "Condition": {
+                    "StringEquals": {
+                        "kms:ViaService":  { "Fn::Join": [".",["sns","Ref" : "AWS::Region","amazonaws.com"]]},
+                        "kms:CallerAccount": { "Ref" : "AWS::AccountId" }
+                    }
+                }
+            },
+            {
+                "Sid": "Allow direct access to key metadata to the account",
+                "Effect": "Allow",
+                "Principal": {
+                    "AWS": {"Fn::Join": [":",["arn:aws:iam:","Ref" : "AWS::AccountId","root"]]}
+                },
+                "Action": [
+                    "kms:*"                  
+                ],
+                "Resource": "*"
+            }
+        ]
+    }
+
+  SNSKeyAlias:
+    DependsOn: 
+      - SNSKey
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Join ["", ['alias/Stack-',!Ref AWS::StackName,'/sns-key']]
+      TargetKeyId: 
+        Ref: SNSKey
+          
+  ####################################################################################################
+  # Step Functions
+  ####################################################################################################
+  AthenaMultipleQueriesStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !GetAtt [ AthenaWorkflowExecutionRole, Arn ]
+      DefinitionString:
+        !Sub
+        - |-
+          {
+            "Comment": "An example of using Athena to execute queries in sequence and parallel, with error handling and notifications.",
+            "StartAt": "Pass",
+            "States": {
+              "Pass": {
+                "Type": "Pass",
+                "Next": "Load Data to Database"
+              },
+              "Load Data to Database": {
+                "Type": "Task",
+                "Resource": "arn:${AWS::Partition}:states:::athena:startQueryExecution.sync",
+                "Parameters": {
+                  "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS `${database}`.`data` (`event_time` STRING, `ticker_symbol` STRING, `sector` STRING, `change` DOUBLE, `price` DOUBLE) ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe' WITH SERDEPROPERTIES ('ignore.malformed.json' = 'true') LOCATION 's3://${bucket}/clickstream' TBLPROPERTIES ('has_encrypted_data' = 'false', 'skip.header.line.count'='1');",
+                  "WorkGroup": "${workgroup}"
+                },
+                "Catch": [
+                    {
+                      "ErrorEquals": [ "States.ALL" ],
+                      "Next": "Send query results"
+                    }
+                ],
+                "Next": "Map"
+              },
+              "Map": {
+                "Type": "Parallel",
+                "ResultSelector": {
+                  "Query1Result.$": "$[0].ResultSet.Rows",
+                  "Query2Result.$": "$[1].ResultSet.Rows"
+                },
+                "Branches": [
+                  {
+                    "StartAt": "Start Athena query 1",
+                    "States": {
+                      "Start Athena query 1": {
+                        "Type": "Task",
+                        "Resource": "arn:${AWS::Partition}:states:::athena:startQueryExecution.sync",
+                        "Parameters": {
+                          "QueryString": "SELECT * FROM \"${database}\".\"data\" limit 3",
+                          "WorkGroup": "${workgroup}"
+                        },
+                        "Next": "Get Athena query 1 results"
+                      },
+                      "Get Athena query 1 results": {
+                        "Type": "Task",
+                        "Resource": "arn:${AWS::Partition}:states:::athena:getQueryResults",
+                        "Parameters": {
+                          "QueryExecutionId.$": "$.QueryExecution.QueryExecutionId"
+                        },
+                        "End": true
+                      }
+                    }
+                  },
+                  {
+                    "StartAt": "Start Athena query 2",
+                    "States": {
+                      "Start Athena query 2": {
+                        "Type": "Task",
+                        "Resource": "arn:${AWS::Partition}:states:::athena:startQueryExecution.sync",
+                        "Parameters": {
+                          "QueryString": "SELECT sector, count(*) AS total FROM \"${database}\".\"data\" GROUP BY sector",
+                          "WorkGroup": "${workgroup}"
+                        },
+                        "Next": "Get Athena query 2 results"
+                      },
+                      "Get Athena query 2 results": {
+                        "Type": "Task",
+                        "Resource": "arn:${AWS::Partition}:states:::athena:getQueryResults",
+                        "Parameters": {
+                          "QueryExecutionId.$": "$.QueryExecution.QueryExecutionId"
+                        },
+                        "End": true
+                      }
+                    }
+                  }
+                ],
+                "Catch": [
+                    {
+                      "ErrorEquals": [ "States.ALL" ],
+                      "Next": "Send query results"
+                    }
+                ],
+                "Next": "Send query results"
+              },
+              "Send query results": {
+                "Type": "Task",
+                "Resource": "arn:${AWS::Partition}:states:::sns:publish",
+                "Parameters": {
+                  "Message.$": "$",
+                  "TopicArn": "${snsTopicArn}"
+                },
+                "End": true
+              }
+            }
+          }
+        - {snsTopicArn: !Ref SNSTopic, database: !Ref GlueDatabase, bucket: !Ref DataS3Bucket, workgroup: !Ref AthenaWorkGroup}
+  
+  AthenaWorkflowExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: AthenaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - !Ref SNSTopic
+              - Effect: Allow
+                Action:
+                  - athena:getQueryResults
+                  - athena:startQueryExecution
+                  - athena:stopQueryExecution
+                  - athena:getQueryExecution
+                  - athena:getDataCatalog
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:athena:${AWS::Region}:${AWS::AccountId}:workgroup/${AthenaWorkGroup}"
+                  - !Sub "arn:${AWS::Partition}:athena:${AWS::Region}:${AWS::AccountId}:datacatalog/*"
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:ListMultipartUploadParts
+                  - s3:AbortMultipartUpload
+                  - s3:CreateBucket
+                  - s3:PutObject
+                Resource: !Sub "arn:${AWS::Partition}:s3:::*"
+              - Effect: Allow
+                Action:
+                  - glue:CreateDatabase
+                  - glue:GetDatabase
+                  - glue:GetDatabases
+                  - glue:UpdateDatabase
+                  - glue:DeleteDatabase
+                  - glue:CreateTable
+                  - glue:UpdateTable
+                  - glue:GetTable
+                  - glue:GetTables
+                  - glue:DeleteTable
+                  - glue:BatchDeleteTable
+                  - glue:BatchCreatePartition
+                  - glue:CreatePartition
+                  - glue:UpdatePartition
+                  - glue:GetPartition
+                  - glue:GetPartitions
+                  - glue:BatchGetPartition
+                  - glue:DeletePartition
+                  - glue:BatchDeletePartition
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/*"
+                  - !Sub "arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/*"
+                  - !Sub "arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog"
+
+  ####################################################################################################
+  # Outputs
+  ####################################################################################################
+                
+Outputs:
+    BucketName:
+      Description: "Name of the S3 bucket"
+      Value: !Ref DataS3Bucket
+    LambdaFunctionArn:
+      Description: "The ARN of the Lambda function"
+      Value: !GetAtt TransormDataFunction.Arn
+    StreamName:
+      Description: "Name of the Kinesis Firehose stream"
+      Value: !Ref deliverystream
+    GlueDatabase:
+      Description: "Name of the Glue database"
+      Value: !Ref GlueDatabase
+    SNSTopic:
+      Description: "Name of the SNS topic"
+      Value: !Ref SNSTopic
