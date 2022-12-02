@@ -2,11 +2,11 @@ version = 0.1
 [default]
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "kill-stack"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-o5qc1log3pwp"
-s3_prefix = "kill-stack"
+stack_name = "my-stack"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-o8a2svhd15wt"
+s3_prefix = "my-stack"
 region = "us-east-1"
-capabilities = "CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+capabilities = "CAPABILITY_NAMED_IAM"
 parameter_overrides = "ApiStageName=\"dev\""
 image_repositories = []
 confirm_changeset = true

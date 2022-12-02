@@ -63,30 +63,7 @@ Resources:
                   - firehose:PutRecord
                 Resource: !Sub arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${AWS::StackName}-deliverystream
   
-  ####################################################################################################
-  # Lambda
-  ####################################################################################################
-  CreateTableFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub ${AWS::StackName}-CreateAthenaTable
-      Description: "Create Athena table for data analytics"
-      CodeUri: functions/athena/
-      Handler: create_table.lambda_handler
-      Runtime: python3.9
-      Timeout: 120
-      MemorySize: 128
-      Environment:
-        Variables:
-          STREAM_BUCKET_NAME: !Ref DataS3Bucket
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref DataS3Bucket
-        - S3CrudPolicy:
-            BucketName: !Ref DataS3Bucket
-        - AthenaQueryPolicy:
-            WorkGroupName: clickstream
-  
+    
   ####################################################################################################
   # Kinesis Firehose
   ####################################################################################################
