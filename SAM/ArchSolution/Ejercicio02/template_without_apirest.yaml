@@ -63,7 +63,7 @@ Resources:
                   - firehose:PutRecord
                 Resource: !Sub arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${AWS::StackName}-deliverystream
   
-    
+
   ####################################################################################################
   # Kinesis Firehose
   ####################################################################################################
@@ -175,19 +175,6 @@ Resources:
                   - 'lambda:InvokeFunction'
                 Resource: !GetAtt TransormDataFunction.Arn
   
-  ####################################################################################################
-  # API Gateway
-  ####################################################################################################
-
-  RestAPIclickstreamIngest:
-    Type: AWS::Serverless::Application
-    Properties:
-      Location: ./api-rest/api-rest-template.yaml
-      Parameters:
-        EventStream: !Ref deliverystream
-        EventStreamArn: !GetAtt deliverystream.Arn
-        ApiStageName: !Ref ApiStageName
-
   ####################################################################################################
   # Athena Workgroup
   ####################################################################################################

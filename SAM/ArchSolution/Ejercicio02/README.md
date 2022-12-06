@@ -22,6 +22,4 @@ In this exercise, you will learn how to do the following:
 
 ## Execution
 
-`sam build`
-
-`sam deploy --guided --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM`
+`bash deploy-app.sh`

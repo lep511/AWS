@@ -1,18 +1,9 @@
 # Welcome to your CDK TypeScript project
 
-This is a blank project for CDK development with TypeScript.
+You should explore the contents of this project. It demonstrates a CDK app with an instance of a stack (`HelloCdkStack`)
+which contains an Amazon SQS queue that is subscribed to an Amazon SNS topic.
 
-The `cdk.json` file 
-
-## To use nvm
-
-export NVM_DIR="$HOME/.nvm"
-
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
-
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-nvm use 18
+The `cdk.json` file tells the CDK Toolkit how to execute your app.
 
 ## Useful commands
 
