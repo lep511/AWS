@@ -2,9 +2,9 @@ version = 0.1
 [default]
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "my-stack"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-bzj8pwt0r6fq"
-s3_prefix = "my-stack"
+stack_name = "data-stack"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-nb8r1kt0js53"
+s3_prefix = "data-stack"
 region = "us-east-1"
 capabilities = "CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
 parameter_overrides = "ApiStageName=\"dev\""

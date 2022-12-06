@@ -331,18 +331,18 @@ Resources:
           ,\n      \"Parameters\": {\n        \"QueryString\": \"CREATE EXTERNAL TABLE\
           \ IF NOT EXISTS `${database}`.`data` (`event_time` STRING, `ticker_symbol`\
           \ STRING, `sector` STRING, `change` DOUBLE, `price` DOUBLE) ROW FORMAT SERDE\
-          \ 'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe' WITH SERDEPROPERTIES\
-          \ ('serialization.format' = ',','field.delim' = ',') LOCATION 's3://${bucket}/clickstream'\
-          \ TBLPROPERTIES ('has_encrypted_data' = 'false', 'skip.header.line.count'='1');\"\
-          ,\n        \"WorkGroup\": \"${workgroup}\"\n      },\n      \"Catch\": [\n\
-          \          {\n            \"ErrorEquals\": [ \"States.ALL\" ],\n       \
-          \     \"Next\": \"Send query results\"\n          }\n      ],\n      \"\
-          Next\": \"Map\"\n    },\n    \"Map\": {\n      \"Type\": \"Parallel\",\n\
-          \      \"ResultSelector\": {\n        \"Query1Result.$\": \"$[0].ResultSet.Rows\"\
-          ,\n        \"Query2Result.$\": \"$[1].ResultSet.Rows\"\n      },\n     \
-          \ \"Branches\": [\n        {\n          \"StartAt\": \"Start Athena query\
-          \ 1\",\n          \"States\": {\n            \"Start Athena query 1\": {\n\
-          \              \"Type\": \"Task\",\n              \"Resource\": \"arn:${AWS::Partition}:states:::athena:startQueryExecution.sync\"\
+          \ 'org.openx.data.jsonserde.JsonSerDe' WITH SERDEPROPERTIES ('ignore.malformed.json'\
+          \ = 'true') LOCATION 's3://${bucket}/clickstream' TBLPROPERTIES ('has_encrypted_data'\
+          \ = 'false', 'skip.header.line.count'='1');\",\n        \"WorkGroup\": \"\
+          ${workgroup}\"\n      },\n      \"Catch\": [\n          {\n            \"\
+          ErrorEquals\": [ \"States.ALL\" ],\n            \"Next\": \"Send query results\"\
+          \n          }\n      ],\n      \"Next\": \"Map\"\n    },\n    \"Map\": {\n\
+          \      \"Type\": \"Parallel\",\n      \"ResultSelector\": {\n        \"\
+          Query1Result.$\": \"$[0].ResultSet.Rows\",\n        \"Query2Result.$\":\
+          \ \"$[1].ResultSet.Rows\"\n      },\n      \"Branches\": [\n        {\n\
+          \          \"StartAt\": \"Start Athena query 1\",\n          \"States\"\
+          : {\n            \"Start Athena query 1\": {\n              \"Type\": \"\
+          Task\",\n              \"Resource\": \"arn:${AWS::Partition}:states:::athena:startQueryExecution.sync\"\
           ,\n              \"Parameters\": {\n                \"QueryString\": \"\
           SELECT * FROM \\\"${database}\\\".\\\"data\\\" limit 3\",\n            \
           \    \"WorkGroup\": \"${workgroup}\"\n              },\n              \"\

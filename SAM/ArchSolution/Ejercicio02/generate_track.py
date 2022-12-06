@@ -41,7 +41,7 @@ def generate(stream_name, kinesis_client, repeat=10):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Kinesis Data Generator')
-    parser.add_argument('--repeat', type=int, default=10, help='Number of records to generate')
+    parser.add_argument('--repeat', type=int, default=50, help='Number of records to generate')
     args = parser.parse_args()
 
     list_strams = kinesis.list_delivery_streams()['DeliveryStreamNames']
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     
     if count_stream == 1:
         print('Generating {} records to stream {}...'.format(args.repeat, list_strams[0]))
-        generate(list_strams[0], kinesis, args.repeat)
+        index_stream = list_strams[0]
 
     elif count_stream > 1:
         print('Found more than one stream...')
@@ -57,11 +57,21 @@ if __name__ == '__main__':
         for i in range(count_stream):
             print('  {}. {}'.format(i, list_strams[i]))
         while True:
-            stream_index = int(input('\nEnter the number of the stream you want to use: '))
+            try:
+                stream_index = int(input('\nEnter the number of the stream you want to use: '))
+            except ValueError:
+                print('Please enter a number')
+                continue
             if stream_index in range(count_stream):
                 break
             else:
                 print('Invalid index')
-        generate(list_strams[stream_index], kinesis, args.repeat)
+            print('\n')
+            for i in range(count_stream):
+                print('  {}. {}'.format(i, list_strams[i]))
+        index_stream = list_strams[stream_index]
     else:
-        print('Not found stream')
+        raise Exception('No streams found')
+    
+    print('Generating {} records to stream {}...'.format(args.repeat, index_stream))
+    generate(index_stream, kinesis, args.repeat)
