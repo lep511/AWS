@@ -4,7 +4,7 @@
 git clone https://github.com/lep511/AWS.git
 
 ### Change directory
-cd aws-lambda-sample/
+cd AWS/Lambda/LambdaLayersCreator/
 
 ### Write req.txt file
 cat > req.txt << EOF
@@ -13,4 +13,4 @@ aws-encryption-sdk
 EOF
 
 ### Run the script
-bash create_lambdafunc_p9.sh
+bash p9_create_lambda_layer.sh

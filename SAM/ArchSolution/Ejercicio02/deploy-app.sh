@@ -6,6 +6,7 @@ echo "  2. Deploy App without API Gateway"
 echo "  3. Deploy App without Athena"
 echo "  4. Deploy App without API Gateway and Athena"
 echo "  5. Generate sample data to Kinesis Firehose"
+echo "  6. Deploy template Kinesis Data Generator with Cognito"
 echo " "
 read -p "Enter an option: " option
 success=0
@@ -19,25 +20,31 @@ case $option in
     ;;
   2)
     echo " " && echo "Deploying App without API Gateway"
-    sam build
+    sam build -t template_without_apirest.yaml
     sam deploy --template-file template_without_apirest.yaml --capabilities CAPABILITY_NAMED_IAM --guided
     success=1
     ;;
   3)
     echo " " && echo "Deploying App without Athena"
-    sam build
+    sam build -t template_without_athena.yaml
     sam deploy --template-file template_without_athena.yaml --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM --guided
     success=1
     ;;
   4)
     echo " " && echo "Deploying App without API Gateway and Athena"
-    sam build
+    sam build -t template_without_all.yaml
     sam deploy --template-file template_without_all.yaml --capabilities CAPABILITY_NAMED_IAM --guided
     success=1
     ;;
   5)
     echo " "
     success=1
+    ;;
+  6)
+    echo " " && echo "Deploy template Kinesis Data Generator with Cognito"
+    sam build -t template_kinesis_data_generator.yaml
+    sam deploy --template-file template_kinesis_data_generator.yaml --capabilities CAPABILITY_NAMED_IAM --guided
+    success=0
     ;;
   *)
     echo " " && echo "Invalid option"

@@ -1,42 +1,55 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Architecting Solutions - Building a Proof of Concept for Data Analytics
+Description: This template creates an Amazon Cognito User Pool and Identity Pool,
+  with a single user.  It assigns a role to authenticated users in the identity pool
+  to enable the users to use the Kinesis Data Generator tool.
 Parameters:
-  ApiStageName:
+  Username:
+    Description: The username of the user you want to create in Amazon Cognito.
     Type: String
-    Description: The API Gateway Stage name (e.g. dev, prod, etc.)
-    Default: dev
-Globals:
-  Function:
-    Environment:
-      Variables:
-        ENV_NAME:
-          Ref: ApiStageName
+    AllowedPattern: ^(?=\s*\S).*$
+    ConstraintDescription: ' cannot be empty'
+  Password:
+    Description: The password of the user you want to create in Amazon Cognito.
+    Type: String
+    NoEcho: true
+    AllowedPattern: ^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$
+    ConstraintDescription: ' must be at least 6 alpha-numeric characters, and contain
+      at least one number'
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Cognito User for Kinesis Data Generator
+      Parameters:
+      - Username
+      - Password
 Resources:
-  TransormDataFunction:
-    Type: AWS::Serverless::Function
+  DataGenCognitoSetupLambdaFunc:
+    Type: AWS::Lambda::Function
     Properties:
-      FunctionName:
-        Fn::Sub: ${AWS::StackName}-TransormData
-      Description: Transform data from Kinisis Firehose to S3
-      CodeUri: TransormDataFunction
-      Handler: app.lambda_handler
-      Runtime: python3.9
-      Timeout: 120
-      MemorySize: 128
+      Code:
+        S3Bucket:
+          Fn::Join:
+          - ''
+          - - aws-kdg-tools-
+            - Ref: AWS::Region
+        S3Key: datagen-cognito-setup.zip
+      Description: Creates a Cognito User Pool, Identity Pool, and a User.  Returns
+        IDs to be used in the Kinesis Data Generator.
+      FunctionName: KinesisDataGeneratorCognitoSetup
+      Handler: createCognitoPool.createPoolAndUser
       Role:
         Fn::GetAtt:
         - LambdaExecutionRole
         - Arn
-    Metadata:
-      SamResourceId: TransormDataFunction
+      Runtime: nodejs12.x
+      Timeout: 60
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName:
-        Fn::Sub: ${AWS::StackName}-LambdaExecutionRole
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
         - Effect: Allow
           Principal:
@@ -44,402 +57,146 @@ Resources:
             - lambda.amazonaws.com
           Action:
           - sts:AssumeRole
-      Policies:
-      - PolicyName:
-          Fn::Sub: ${AWS::StackName}-LambdaExecutionPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - logs:CreateLogGroup
-            Resource:
-              Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
-          - Effect: Allow
-            Action:
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-            Resource:
-              Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-*
-          - Effect: Allow
-            Action:
-            - firehose:PutRecord
-            Resource:
-              Fn::Sub: arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${AWS::StackName}-deliverystream
-  deliverystream:
-    Type: AWS::KinesisFirehose::DeliveryStream
-    Properties:
-      DeliveryStreamType: DirectPut
-      DeliveryStreamName:
-        Fn::Sub: ${AWS::StackName}-deliverystream
-      ExtendedS3DestinationConfiguration:
-        RoleARN:
-          Fn::GetAtt:
-          - deliveryRole
-          - Arn
-        BucketARN:
-          Fn::GetAtt:
-          - DataS3Bucket
-          - Arn
-        Prefix: clickstream/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/
-        ErrorOutputPrefix: error/!{firehose:error-output-type}/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/
-        BufferingHints:
-          SizeInMBs: 128
-          IntervalInSeconds: 300
-        CompressionFormat: UNCOMPRESSED
-        EncryptionConfiguration:
-          NoEncryptionConfig: NoEncryption
-        CloudWatchLoggingOptions:
-          Enabled: false
-        S3BackupMode: Disabled
-        ProcessingConfiguration:
-          Enabled: true
-          Processors:
-          - Type: Lambda
-            Parameters:
-            - ParameterName: LambdaArn
-              ParameterValue:
-                Fn::GetAtt:
-                - TransormDataFunction
-                - Arn
-            - ParameterName: NumberOfRetries
-              ParameterValue: '3'
-            - ParameterName: RoleArn
-              ParameterValue:
-                Fn::GetAtt:
-                - deliveryLambdaRole
-                - Arn
-  deliveryLambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName:
-        Fn::Sub: ${AWS::StackName}-deliveryLambdaRole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - firehose.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      Policies:
-      - PolicyName:
-          Fn::Sub: ${AWS::StackName}-deliveryLambdaPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - lambda:InvokeFunction
-            Resource:
-              Fn::GetAtt:
-              - TransormDataFunction
-              - Arn
-  DataS3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      AccessControl: Private
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-        - ServerSideEncryptionByDefault:
-            SSEAlgorithm: AES256
-  deliveryRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-        - Sid: ''
-          Effect: Allow
-          Principal:
-            Service: firehose.amazonaws.com
-          Action: sts:AssumeRole
-          Condition:
-            StringEquals:
-              sts:ExternalId:
-                Ref: AWS::AccountId
       Path: /
       Policies:
-      - PolicyName:
-          Fn::Sub: ${AWS::StackName}-firehose-delivery-policy
+      - PolicyName: root
         PolicyDocument:
           Version: 2012-10-17
           Statement:
           - Effect: Allow
             Action:
-            - s3:AbortMultipartUpload
-            - s3:GetBucketLocation
-            - s3:GetObject
-            - s3:ListBucket
-            - s3:ListBucketMultipartUploads
-            - s3:PutObject
-            - s3:PutObjectAcl
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
             Resource:
-            - Fn::Sub: arn:aws:s3:::${DataS3Bucket}
-            - Fn::Sub: arn:aws:s3:::${DataS3Bucket}/*
+            - arn:aws:logs:*:*:log-group:/aws/lambda/KinesisDataGeneratorCognitoSetup*
           - Effect: Allow
             Action:
-            - lambda:InvokeFunction
+            - cognito-idp:AdminConfirmSignUp
+            - cognito-idp:CreateUserPoolClient
+            - cognito-idp:AdminCreateUser
             Resource:
-              Fn::GetAtt:
-              - TransormDataFunction
+            - arn:aws:cognito-idp:*:*:userpool/*
+          - Effect: Allow
+            Action:
+            - cognito-idp:CreateUserPool
+            - cognito-identity:CreateIdentityPool
+            - cognito-identity:SetIdentityPoolRoles
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - iam:UpdateAssumeRolePolicy
+            Resource:
+            - Fn::GetAtt:
+              - AuthenticatedUserRole
               - Arn
-  RestAPIclickstreamIngest:
-    Type: AWS::Serverless::Application
+            - Fn::GetAtt:
+              - UnauthenticatedUserRole
+              - Arn
+          - Effect: Allow
+            Action:
+            - iam:PassRole
+            Resource:
+            - Fn::GetAtt:
+              - AuthenticatedUserRole
+              - Arn
+            - Fn::GetAtt:
+              - UnauthenticatedUserRole
+              - Arn
+  SetupCognitoCustom:
+    Type: Custom::DataGenCognitoSetupLambdaFunc
     Properties:
-      Location: RestAPIclickstreamIngest/template.yaml
-      Parameters:
-        EventStream:
-          Ref: deliverystream
-        EventStreamArn:
-          Fn::GetAtt:
-          - deliverystream
-          - Arn
-        ApiStageName:
-          Ref: ApiStageName
-    Metadata:
-      SamResourceId: RestAPIclickstreamIngest
-  AthenaWorkGroup:
-    DependsOn: DataS3Bucket
-    Type: AWS::Athena::WorkGroup
-    Properties:
-      Name:
-        Fn::Sub: ${AWS::StackName}-athena-workgroup
-      State: ENABLED
-      WorkGroupConfiguration:
-        EnforceWorkGroupConfiguration: false
-        PublishCloudWatchMetricsEnabled: false
-        RequesterPaysEnabled: true
-        ResultConfiguration:
-          OutputLocation:
-            Fn::Join:
-            - ''
-            - - s3://
-              - Ref: DataS3Bucket
-              - /result
-  GlueDatabase:
-    DependsOn: DataS3Bucket
-    Type: AWS::Glue::Database
-    Properties:
-      CatalogId:
-        Ref: AWS::AccountId
-      DatabaseInput:
-        Name:
-          Fn::Sub: ${AWS::StackName}-glue-database
-  SNSTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      KmsMasterKeyId:
-        Ref: SNSKeyAlias
-  SNSKey:
-    DeletionPolicy: Retain
-    Type: AWS::KMS::Key
-    Properties:
-      Enabled: true
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-        - Sid: Allow access through SNS for all principals in the account that are
-            authorized to use SNS
-          Effect: Allow
-          Principal:
-            AWS: '*'
-          Action:
-          - kms:Encrypt
-          - kms:Decrypt
-          - kms:ReEncrypt*
-          - kms:GenerateDataKey*
-          - kms:CreateGrant
-          - kms:DescribeKey
-          Resource: '*'
-          Condition:
-            StringEquals:
-              kms:ViaService:
-                Fn::Join:
-                - .
-                - - sns
-                  - Ref: AWS::Region
-                  - amazonaws.com
-              kms:CallerAccount:
-                Ref: AWS::AccountId
-        - Sid: Allow direct access to key metadata to the account
-          Effect: Allow
-          Principal:
-            AWS:
-              Fn::Join:
-              - ':'
-              - - 'arn:aws:iam:'
-                - Ref: AWS::AccountId
-                - root
-          Action:
-          - kms:*
-          Resource: '*'
-  SNSKeyAlias:
-    DependsOn:
-    - SNSKey
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName:
-        Fn::Join:
-        - ''
-        - - alias/Stack-
-          - Ref: AWS::StackName
-          - /sns-key
-      TargetKeyId:
-        Ref: SNSKey
-  AthenaMultipleQueriesStateMachine:
-    Type: AWS::StepFunctions::StateMachine
-    Properties:
-      RoleArn:
+      ServiceToken:
         Fn::GetAtt:
-        - AthenaWorkflowExecutionRole
+        - DataGenCognitoSetupLambdaFunc
         - Arn
-      DefinitionString:
-        Fn::Sub:
-        - "{\n  \"Comment\": \"An example of using Athena to execute queries in sequence\
-          \ and parallel, with error handling and notifications.\",\n  \"StartAt\"\
-          : \"Pass\",\n  \"States\": {\n    \"Pass\": {\n      \"Type\": \"Pass\"\
-          ,\n      \"Next\": \"Load Data to Database\"\n    },\n    \"Load Data to\
-          \ Database\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:${AWS::Partition}:states:::athena:startQueryExecution.sync\"\
-          ,\n      \"Parameters\": {\n        \"QueryString\": \"CREATE EXTERNAL TABLE\
-          \ IF NOT EXISTS `${database}`.`data` (`event_time` STRING, `ticker_symbol`\
-          \ STRING, `sector` STRING, `change` DOUBLE, `price` DOUBLE) ROW FORMAT SERDE\
-          \ 'org.openx.data.jsonserde.JsonSerDe' WITH SERDEPROPERTIES ('ignore.malformed.json'\
-          \ = 'true') LOCATION 's3://${bucket}/clickstream' TBLPROPERTIES ('has_encrypted_data'\
-          \ = 'false', 'skip.header.line.count'='1');\",\n        \"WorkGroup\": \"\
-          ${workgroup}\"\n      },\n      \"Catch\": [\n          {\n            \"\
-          ErrorEquals\": [ \"States.ALL\" ],\n            \"Next\": \"Send query results\"\
-          \n          }\n      ],\n      \"Next\": \"Map\"\n    },\n    \"Map\": {\n\
-          \      \"Type\": \"Parallel\",\n      \"ResultSelector\": {\n        \"\
-          Query1Result.$\": \"$[0].ResultSet.Rows\",\n        \"Query2Result.$\":\
-          \ \"$[1].ResultSet.Rows\"\n      },\n      \"Branches\": [\n        {\n\
-          \          \"StartAt\": \"Start Athena query 1\",\n          \"States\"\
-          : {\n            \"Start Athena query 1\": {\n              \"Type\": \"\
-          Task\",\n              \"Resource\": \"arn:${AWS::Partition}:states:::athena:startQueryExecution.sync\"\
-          ,\n              \"Parameters\": {\n                \"QueryString\": \"\
-          SELECT * FROM \\\"${database}\\\".\\\"data\\\" limit 3\",\n            \
-          \    \"WorkGroup\": \"${workgroup}\"\n              },\n              \"\
-          Next\": \"Get Athena query 1 results\"\n            },\n            \"Get\
-          \ Athena query 1 results\": {\n              \"Type\": \"Task\",\n     \
-          \         \"Resource\": \"arn:${AWS::Partition}:states:::athena:getQueryResults\"\
-          ,\n              \"Parameters\": {\n                \"QueryExecutionId.$\"\
-          : \"$.QueryExecution.QueryExecutionId\"\n              },\n            \
-          \  \"End\": true\n            }\n          }\n        },\n        {\n  \
-          \        \"StartAt\": \"Start Athena query 2\",\n          \"States\": {\n\
-          \            \"Start Athena query 2\": {\n              \"Type\": \"Task\"\
-          ,\n              \"Resource\": \"arn:${AWS::Partition}:states:::athena:startQueryExecution.sync\"\
-          ,\n              \"Parameters\": {\n                \"QueryString\": \"\
-          SELECT sector, count(*) AS total FROM \\\"${database}\\\".\\\"data\\\" GROUP\
-          \ BY sector\",\n                \"WorkGroup\": \"${workgroup}\"\n      \
-          \        },\n              \"Next\": \"Get Athena query 2 results\"\n  \
-          \          },\n            \"Get Athena query 2 results\": {\n         \
-          \     \"Type\": \"Task\",\n              \"Resource\": \"arn:${AWS::Partition}:states:::athena:getQueryResults\"\
-          ,\n              \"Parameters\": {\n                \"QueryExecutionId.$\"\
-          : \"$.QueryExecution.QueryExecutionId\"\n              },\n            \
-          \  \"End\": true\n            }\n          }\n        }\n      ],\n    \
-          \  \"Catch\": [\n          {\n            \"ErrorEquals\": [ \"States.ALL\"\
-          \ ],\n            \"Next\": \"Send query results\"\n          }\n      ],\n\
-          \      \"Next\": \"Send query results\"\n    },\n    \"Send query results\"\
-          : {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:${AWS::Partition}:states:::sns:publish\"\
-          ,\n      \"Parameters\": {\n        \"Message.$\": \"$\",\n        \"TopicArn\"\
-          : \"${snsTopicArn}\"\n      },\n      \"End\": true\n    }\n  }\n}"
-        - snsTopicArn:
-            Ref: SNSTopic
-          database:
-            Ref: GlueDatabase
-          bucket:
-            Ref: DataS3Bucket
-          workgroup:
-            Ref: AthenaWorkGroup
-  AthenaWorkflowExecutionRole:
+      Region:
+        Ref: AWS::Region
+      Username:
+        Ref: Username
+      Password:
+        Ref: Password
+      AuthRoleName:
+        Ref: AuthenticatedUserRole
+      AuthRoleArn:
+        Fn::GetAtt:
+        - AuthenticatedUserRole
+        - Arn
+      UnauthRoleName:
+        Ref: UnauthenticatedUserRole
+      UnauthRoleArn:
+        Fn::GetAtt:
+        - UnauthenticatedUserRole
+        - Arn
+  AuthenticatedUserRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
         - Effect: Allow
           Principal:
-            Service: states.amazonaws.com
-          Action: sts:AssumeRole
+            Federated:
+            - cognito-identity.amazonaws.com
+          Action:
+          - sts:AssumeRoleWithWebIdentity
       Path: /
       Policies:
-      - PolicyName: AthenaPolicy
+      - PolicyName: root
         PolicyDocument:
-          Version: '2012-10-17'
+          Version: 2012-10-17
           Statement:
-          - Effect: Allow
-            Action:
-            - sns:Publish
+          - Action:
+            - kinesis:DescribeStream
+            - kinesis:PutRecord
+            - kinesis:PutRecords
             Resource:
-            - Ref: SNSTopic
-          - Effect: Allow
-            Action:
-            - athena:getQueryResults
-            - athena:startQueryExecution
-            - athena:stopQueryExecution
-            - athena:getQueryExecution
-            - athena:getDataCatalog
+            - arn:aws:kinesis:*:*:stream/*
+            Effect: Allow
+          - Action:
+            - firehose:DescribeDeliveryStream
+            - firehose:PutRecord
+            - firehose:PutRecordBatch
             Resource:
-            - Fn::Sub: arn:${AWS::Partition}:athena:${AWS::Region}:${AWS::AccountId}:workgroup/${AthenaWorkGroup}
-            - Fn::Sub: arn:${AWS::Partition}:athena:${AWS::Region}:${AWS::AccountId}:datacatalog/*
-          - Effect: Allow
-            Action:
-            - s3:GetBucketLocation
-            - s3:GetObject
-            - s3:ListBucket
-            - s3:ListBucketMultipartUploads
-            - s3:ListMultipartUploadParts
-            - s3:AbortMultipartUpload
-            - s3:CreateBucket
-            - s3:PutObject
+            - arn:aws:firehose:*:*:deliverystream/*
+            Effect: Allow
+          - Action:
+            - ec2:DescribeRegions
+            - firehose:ListDeliveryStreams
+            - kinesis:ListStreams
             Resource:
-              Fn::Sub: arn:${AWS::Partition}:s3:::*
-          - Effect: Allow
+            - '*'
+            Effect: Allow
+  UnauthenticatedUserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Federated:
+            - cognito-identity.amazonaws.com
+          Action:
+          - sts:AssumeRoleWithWebIdentity
+      Path: /
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Deny
             Action:
-            - glue:CreateDatabase
-            - glue:GetDatabase
-            - glue:GetDatabases
-            - glue:UpdateDatabase
-            - glue:DeleteDatabase
-            - glue:CreateTable
-            - glue:UpdateTable
-            - glue:GetTable
-            - glue:GetTables
-            - glue:DeleteTable
-            - glue:BatchDeleteTable
-            - glue:BatchCreatePartition
-            - glue:CreatePartition
-            - glue:UpdatePartition
-            - glue:GetPartition
-            - glue:GetPartitions
-            - glue:BatchGetPartition
-            - glue:DeletePartition
-            - glue:BatchDeletePartition
+            - '*'
             Resource:
-            - Fn::Sub: arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/*
-            - Fn::Sub: arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/*
-            - Fn::Sub: arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog
+            - '*'
 Outputs:
-  BucketName:
-    Description: Name of the S3 bucket
+  KinesisDataGeneratorUrl:
+    Description: The URL for your Kinesis Data Generator.
     Value:
-      Ref: DataS3Bucket
-  LambdaFunctionArn:
-    Description: The ARN of the Lambda function
-    Value:
-      Fn::GetAtt:
-      - TransormDataFunction
-      - Arn
-  StreamName:
-    Description: Name of the Kinesis Firehose stream
-    Value:
-      Ref: deliverystream
-  GlueDatabase:
-    Description: Name of the Glue database
-    Value:
-      Ref: GlueDatabase
-  SNSTopic:
-    Description: Name of the SNS topic
-    Value:
-      Ref: SNSTopic
+      Fn::Join:
+      - ''
+      - - https://awslabs.github.io/amazon-kinesis-data-generator/web/producer.html?
+        - Fn::GetAtt:
+          - SetupCognitoCustom
+          - Querystring
