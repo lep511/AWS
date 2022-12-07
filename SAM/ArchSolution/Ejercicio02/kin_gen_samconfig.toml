@@ -1,0 +1,15 @@
+ version=0.1
+ [default.global.parameters]
+ stack_name = "KinesisDataGenerator"
+ 
+ [default.deploy.parameters]
+  stack_name = "kinesis-data-generator"
+ s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-17j1iwpye540l"
+  s3_prefix = "kinesis-data-generator"
+ region = "us-east-1"
+ confirm_changeset = true
+ capabilities = "CAPABILITY_NAMED_IAM"
+ parameter_overrides = "Username=\"estebanpbuday@yahoo.es\""
+ image_repositories = []
+
+ [default.build.parameters]

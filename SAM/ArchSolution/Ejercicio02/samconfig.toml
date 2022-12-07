@@ -2,11 +2,10 @@ version = 0.1
 [default]
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "kinesis-data-generator"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-dl9soy3h8h0d"
-s3_prefix = "kinesis-data-generator"
+stack_name = "sam-app"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-17j1iwpye540l"
+s3_prefix = "sam-app"
 region = "us-east-1"
-capabilities = "CAPABILITY_NAMED_IAM"
-parameter_overrides = "Username=\"estebanpbuday@yahoo.es\""
+capabilities = "CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM"
+parameter_overrides = "ApiStageName=\"dev\""
 image_repositories = []
-confirm_changeset = true

@@ -1,0 +1,19 @@
+{
+    "EVENT_TIME" : "{{date.now}}",
+    "TICKER_SYMBOL" : "{{random.arrayElement(
+    ["AAPL","AMZN","MSFT", "INTC", "TBV"]
+    )}}",
+    "SECTOR" : "{{random.arrayElement(
+    ["TECH","FINANCE","HEALTHCARE", "REAL_ESTATE", "UTILITIES"]
+    )}}",
+    "CHANGE" : {{random.number(
+    {   "min":-5,
+        "max":5
+    }
+    )}},
+    "PRICE": {{random.number(
+    {   "min":2,
+        "max":450
+    }
+    )}}
+}

@@ -5,8 +5,7 @@ echo "  1. Deploy App with API Gateway and Athena"
 echo "  2. Deploy App without API Gateway"
 echo "  3. Deploy App without Athena"
 echo "  4. Deploy App without API Gateway and Athena"
-echo "  5. Generate sample data to Kinesis Firehose"
-echo "  6. Deploy template Kinesis Data Generator with Cognito"
+echo "  5. Deploy template Kinesis Data Generator with Cognito"
 echo " "
 read -p "Enter an option: " option
 success=0
@@ -37,13 +36,9 @@ case $option in
     success=1
     ;;
   5)
-    echo " "
-    success=1
-    ;;
-  6)
-    echo " " && echo "Deploy template Kinesis Data Generator with Cognito"
-    sam build -t template_kinesis_data_generator.yaml
-    sam deploy --template-file template_kinesis_data_generator.yaml --capabilities CAPABILITY_NAMED_IAM --guided
+    echo " " && echo "Deploy the template Kinesis Data Generator with Cognito"
+    sam build --template-file template_kinesis_data_generator.yaml --config-file kin_gen_samconfig.toml
+    sam deploy --template-file template_kinesis_data_generator.yaml --capabilities CAPABILITY_NAMED_IAM --config-file kin_gen_samconfig.toml --guided
     success=0
     ;;
   *)
@@ -52,6 +47,10 @@ case $option in
 esac
 
 if [ $success -eq 1 ]; then
-    read -p "Enter the number of events: " events
-    python generate_track.py --repeat $events
+    read -p "Deploy the template Kinesis Data Generator (y/N)? " deploy_kdg
+    if [[ "$deploy_kdg" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        echo " " && echo "Deploy the template Kinesis Data Generator with Cognito"
+    sam build --template-file template_kinesis_data_generator.yaml --config-file kin_gen_samconfig.toml
+    sam deploy --template-file template_kinesis_data_generator.yaml --capabilities CAPABILITY_NAMED_IAM --config-file kin_gen_samconfig.toml --guided
+    fi
 fi

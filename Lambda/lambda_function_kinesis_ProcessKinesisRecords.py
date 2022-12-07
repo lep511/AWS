@@ -12,3 +12,9 @@ def lambda_handler(event, context):
        #Kinesis data is base64 encoded so decode here
        payload=base64.b64decode(record["kinesis"]["data"])
        print("Decoded payload: " + str(payload))
+       
+# The status of the data transformation of the record. The possible values are: Ok (the record was transformed successfully), 
+# Dropped (the record was dropped intentionally by your processing logic), 
+# and ProcessingFailed (the record could not be transformed). 
+# If a record has a status of Ok or Dropped, Kinesis Data Firehose considers it 
+# successfully processed. Otherwise, Kinesis Data Firehose considers it unsuccessfully processed.
