@@ -81,7 +81,7 @@ Resources:
         BufferingHints:
           SizeInMBs: 128
           IntervalInSeconds: 300
-        CompressionFormat: UNCOMPRESSED
+        CompressionFormat: GZIP
         EncryptionConfiguration:
           NoEncryptionConfig: NoEncryption
         CloudWatchLoggingOptions:

@@ -1,0 +1,17 @@
+{
+    "productName" : "{{commerce.productName}}",
+    "color" : "{{commerce.color}}",
+    "department" : "{{commerce.department}}",
+    "product" : "{{commerce.product}}",
+    "imageUrl": "{{image.imageUrl}}",
+    "dateSoldSince": "{{date.past}}",
+    "dateSoldUntil": "{{date.future}}",
+    "price": {{random.number(
+        {   "min":10,
+            "max":150
+        }
+    )}},
+    "campaign": "{{random.arrayElement(
+        ["BlackFriday","10Percent","NONE"]
+    )}}"
+}

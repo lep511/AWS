@@ -87,6 +87,10 @@ Resources:
         CloudWatchLoggingOptions:
           Enabled: false
         S3BackupMode: Disabled
+        DynamicPartitioningConfiguration:
+          Enabled: true
+          RetryOptions:
+            DurationInSeconds: 300
         ProcessingConfiguration:
           Enabled: true
           Processors:
