@@ -23,7 +23,7 @@ def lambda_handler(event, context):
             try:
                 total_price += data_json["PRICE"]
             except:
-                logger.error("Error decoding payload: {}".format(e))
+                logger.error("Error in this record: {}".format(record))
                 status = "ProcessingFailed"
         # row_w_newline = base64.b64encode(row_w_newline.encode('utf-8'))
         output_record = {

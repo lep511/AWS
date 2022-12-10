@@ -13,26 +13,50 @@ success=0
 case $option in
   1)
     echo " " && echo "Deploying App with API Gateway and Athena"
-    sam build
-    sam deploy --template-file template.yaml --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM --guided
+    read -p "Deploy guided (y/N)? " guided
+    if [[ "$guided" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        sam build
+        sam deploy --template-file template.yaml --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM --guided
+    else
+        sam build
+        sam deploy --template-file template.yaml --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM
+    fi
     success=1
     ;;
   2)
     echo " " && echo "Deploying App without API Gateway"
-    sam build -t template_without_apirest.yaml
-    sam deploy --template-file template_without_apirest.yaml --capabilities CAPABILITY_NAMED_IAM --guided
+    read -p "Deploy guided (y/N)? " guided
+    if [[ "$guided" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        sam build -t template_without_apirest.yaml
+        sam deploy --template-file template_without_apirest.yaml --capabilities CAPABILITY_NAMED_IAM --guided
+    else
+        sam build -t template_without_apirest.yaml
+        sam deploy --template-file template_without_apirest.yaml --capabilities CAPABILITY_NAMED_IAM
+    fi
     success=1
     ;;
   3)
     echo " " && echo "Deploying App without Athena"
-    sam build -t template_without_athena.yaml
-    sam deploy --template-file template_without_athena.yaml --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM --guided
+    read -p "Deploy guided (y/N)? " guided
+    if [[ "$guided" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        sam build -t template_without_athena.yaml
+        sam deploy --template-file template_without_athena.yaml --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM --guided
+    else
+        sam build -t template_without_athena.yaml
+        sam deploy --template-file template_without_athena.yaml --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM
+    fi
     success=1
     ;;
   4)
     echo " " && echo "Deploying App without API Gateway and Athena"
-    sam build -t template_without_all.yaml
-    sam deploy --template-file template_without_all.yaml --capabilities CAPABILITY_NAMED_IAM --guided
+    read -p "Deploy guided (y/N)? " guided
+    if [[ "$guided" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        sam build -t template_without_all.yaml
+        sam deploy --template-file template_without_all.yaml --capabilities CAPABILITY_NAMED_IAM --guided
+    else
+        sam build -t template_without_all.yaml
+        sam deploy --template-file template_without_all.yaml --capabilities CAPABILITY_NAMED_IAM
+    fi
     success=1
     ;;
   5)
