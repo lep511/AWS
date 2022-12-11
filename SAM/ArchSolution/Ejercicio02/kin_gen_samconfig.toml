@@ -4,7 +4,7 @@
  
  [default.deploy.parameters]
   stack_name = "kinesis-data-generator"
- s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-3411t2w30zel"
+ s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-8f7rriube80v"
   s3_prefix = "kinesis-data-generator"
  region = "us-east-1"
  confirm_changeset = true
