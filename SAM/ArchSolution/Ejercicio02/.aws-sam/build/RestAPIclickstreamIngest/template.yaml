@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Amazon ApiGateway and Kinesis integration
+Parameters:
+  ApiStageName:
+    Type: String
+    Description: API Gateway Endpoint Stage
+    AllowedPattern: .+
+  EventStream:
+    Type: String
+    Description: EventStream name
+    AllowedPattern: .+
+  EventStreamArn:
+    Type: String
+    Description: EventStream Arn
+    AllowedPattern: .+
+Resources:
+  APIRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: ''
+          Effect: Allow
+          Principal:
+            Service: apigateway.amazonaws.com
+          Action: sts:AssumeRole
+  APIPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      Roles:
+      - Ref: APIRole
+      PolicyName:
+        Fn::Sub: ${AWS::StackName}-APIdeliveryPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+          - firehose:PutRecord*
+          - firehose:List*
+          - firehose:Describe*
+          Resource:
+          - Ref: EventStreamArn
+  DeliveryApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName:
+        Ref: ApiStageName
+      Description: API endpoints to ingest data to Kinesis via REST API POST
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title:
+            Fn::Sub: ${AWS::StackName}-ServerlessDataPipelineAPI
+        schemes:
+        - https
+        paths:
+          /track:
+            post:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+              x-amazon-apigateway-integration:
+                credentials:
+                  Fn::GetAtt:
+                  - APIRole
+                  - Arn
+                responses:
+                  default:
+                    statusCode: '200'
+                requestParameters:
+                  integration.request.header.Content-Type: '''x-amz-json-1.1'''
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:firehose:action/PutRecord
+                passthroughBehavior: when_no_templates
+                httpMethod: POST
+                requestTemplates:
+                  application/json:
+                    Fn::Sub: "{\n  \"DeliveryStreamName\": \"${EventStream}\",\n \
+                      \ \"Record\": {\n    \"Data\": \"$util.base64Encode($input.json('$'))\"\
+                      \n  }\n}\n"
+                type: aws
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: '200'
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+        definitions:
+          Empty:
+            type: object
+            title: Empty Schema
+Outputs:
+  ApiGatewayURI:
+    Value:
+      Fn::Sub: https://${DeliveryApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}/track
+    Description: The URI of the API Gateway endpoint
