@@ -49,6 +49,7 @@ class DynamoTable:
             rep = f"- Table name: {self.table_name}\
             \n- Table arn: {self.table.table_arn}\
             \n- Table creation: {self.table.creation_date_time}\
+            \n- Billing mode: {self.table.billing_mode_summary['BillingMode']}\
             \n- {self.table.key_schema}\
             \n- {self.table.attribute_definitions}"
         else:
@@ -144,6 +145,7 @@ class DynamoTable:
                     BillingMode="PAY_PER_REQUEST")
             self.table.wait_until_exists()
             self.table_name = table_name
+            print("Table created successfully!")
 
         except ClientError as err:
             logger.error(
@@ -290,7 +292,7 @@ class DynamoTable:
         else:
             return response_final
         
-    def update_movie(self, title, year, rating, plot):
+    def update_item(self, title, year, rating, plot):
         """
         Updates rating and plot data for a movie in the table.
         :param title: The title of the movie to update.
@@ -459,6 +461,7 @@ class DynamoTable:
         try:
             self.table.delete()
             self.table = None
+            print("Table deleted successfully!")
         except ClientError as err:
             logger.error(
                 "Couldn't delete table. Here's why: %s: %s",
