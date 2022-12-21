@@ -31,7 +31,7 @@ def upload_image_to_s3(bucket, key, data):
 
 # <<Amazon CodeWhisperer generated code goes here>>
 
-def handler(event, context):
+def lambda_handler(event, context):
     url = event["queryStringParameters"]["url"]
     name = event["queryStringParameters"]["name"]
 

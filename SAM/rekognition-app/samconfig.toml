@@ -1,0 +1,10 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "dm-app"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-ln9e7v3tetrs"
+s3_prefix = "dm-app"
+region = "us-east-1"
+capabilities = "CAPABILITY_NAMED_IAM"
+image_repositories = []

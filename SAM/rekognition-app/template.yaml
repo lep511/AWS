@@ -32,6 +32,8 @@ Resources:
           Properties:
             Path: /hello
             Method: get
+      Layers:
+        - !Ref Libs
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref MyBucket
@@ -39,10 +41,16 @@ Resources:
             BucketName: !Ref MyBucket
         - S3WritePolicy:
             BucketName: !Ref MyBucket
+  Libs:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: requests-layer
+      Description: Lambda layer with requests library
+      ContentUri: ./libs
+  
   MyBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: my-bucket
       Tags:
         - Key: Project
           Value: sam-app
