@@ -50,8 +50,14 @@ def upload_image_to_s3(bucket, key, data):
             "msg_code": "Can't write to S3."
         }
 
+<<<<<<< HEAD
 def lambda_handler(event, context):
     print(event)
+=======
+# <<Amazon CodeWhisperer generated code goes here>>
+
+def lambda_handler(event, context):
+>>>>>>> 0dab085f6bb996718c23cb91eb8de768bfdc959c
     url = event["queryStringParameters"]["url"]
     name = event["queryStringParameters"]["name"]
 

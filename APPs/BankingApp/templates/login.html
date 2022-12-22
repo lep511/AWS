@@ -1,0 +1,80 @@
+
+{% extends "layout.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/login1.css') }}">
+<div class="container">
+    <!-- {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{category}}">
+                        <p>{{ message }}</p>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %} -->
+<div class="d-flex justify-content-center h-100">
+   
+ <div class="card">
+    <!-- <h1 style="color: aliceblue;text-align: center;padding-bottom:50px;padding-top: 25px;">RETAIL BANKING</h1> -->
+     <div class="card-header">
+         <h3 style="color:rgb(48, 46, 52)">Sign In</h3>
+        
+     </div>
+     <div class="card-body">
+          <form action="{{ url_for('login') }}" method="post">
+             <div class="input-group form-group">
+                 <div class="input-group-prepend">
+                     <span class="input-group-text"><i class="fas fa-user"></i></span>
+                 </div>
+                <input class="form-control" name="username" type="text" placeholder="UserName" required maxlength="30" style="height: 37px;">
+                 
+             </div>
+             <div class="input-group form-group">
+                 <div class="input-group-prepend">
+                     <span class="input-group-text"><i class="fas fa-key"></i></span>
+                 </div>
+                  <input class="form-control" name="password" type="password" pattern="^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{10,}$" placeholder="Password" required maxlength="30" id="passwordInput" style="height: 37px;">
+
+             </div>
+             <div style="padding-left: 15px;color: white;">
+               <input type="checkbox" id="showPass">&nbsp;<font size="3" color=rgb(48, 46, 52)>Show Password</font>
+             </div>
+            
+             <div class="form-group">
+                 <input type="submit" value="Login" class="btn float-right login_btn">
+             </div>
+             <br>
+
+         </form>
+    
+     {% with messages = get_flashed_messages(category_filter=["greet"]) %}
+               {% if messages %}
+         
+               <div class="alert">
+                 {% for message in messages %}
+                 <p style="color: red;">{{message}}</p>
+                 {% endfor %}
+                
+               </div>
+               
+                 {% endif %}
+             {% endwith %}
+     </div>
+
+ </div>
+</div>
+</div>
+{% endblock %}
+<!-- <script>
+function myFunction() {
+var x = document.getElementById("myInput");
+if (x.type === "password") {
+x.type = "text";
+} else {
+x.type = "password";
+}
+}
+</script> -->

@@ -1,0 +1,17 @@
+<div class="navbar">
+  <a href="{{ url_for('dashboard') }}" class="nav-link {% if home %}active{% endif %}">Home</a>
+  {% if not session['user'] %}
+  <a href="{{ url_for('login') }}" class="nav-link {% if login %}active{% endif %}">Log In</a>
+  {% else %}
+    {% if session['usert']=="customer" %}
+      <div class="subnav">
+        <button class="subnavbtn">Account Management <i class="fa fa-caret-down"></i></button>
+        <div class="subnav-content">
+          <a href="{{ url_for('viewaccount') }}" class="nav-link {% if viewaccount %}active{% endif %}">View Account</a>
+          <a href="{{ url_for('statement') }}" class="nav-link {% if statement %}active{% endif %}">Account Statement</a>
+        </div>
+      </div>
+    {% endif %}
+    <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
+  {% endif %}
+</div>
