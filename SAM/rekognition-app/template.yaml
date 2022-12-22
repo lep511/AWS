@@ -42,7 +42,6 @@ Resources:
   MyBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: my-bucket
       Tags:
         - Key: Project
           Value: sam-app
