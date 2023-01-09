@@ -25,13 +25,13 @@ class DecimalEncoder(json.JSONEncoder):
 class DynamoTable:
     min_compress = 250
     
-    def __init__(self, table_name=None, dyn_resource=None):
+    def __init__(self, table_name=None, dyn_resource=None, region='us-east-1'):
         """
         :param table_name: A DynamoDB table.
         """
         self.table_name = table_name
         if dyn_resource is None:
-            self.dyn_resource = boto3.resource('dynamodb')
+            self.dyn_resource = boto3.resource('dynamodb', region_name=region)
         self.__keyType = {"S": "s", "N": 0, "B": b"b"}
         if not table_name:
             self.table_name = None
@@ -49,7 +49,6 @@ class DynamoTable:
             rep = f"- Table name: {self.table_name}\
             \n- Table arn: {self.table.table_arn}\
             \n- Table creation: {self.table.creation_date_time}\
-            \n- Billing mode: {self.table.billing_mode_summary['BillingMode']}\
             \n- {self.table.key_schema}\
             \n- {self.table.attribute_definitions}"
         else:
@@ -321,6 +320,8 @@ class DynamoTable:
         """
         Query a table items.
         :param query: The key value to query.
+        :param to_pandas: If True, returns a pandas DataFrame.
+        :param consumed_capacity: If True, returns the consumed capacity.
         :return: Items matching the search.
         """
         try:
