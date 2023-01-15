@@ -12,9 +12,44 @@ Parameters:
       - dev
       - prod
     ConstraintDescription: Must be a valid stage name (test, dev, prod)
-  
-  
+  TokenValue:
+    Type: String
+    Description: The token used to authenticate with the HuggingFace API
+
 Resources:
+  HuggingFaceFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub HuggingFaceFunctionRole-${Stage}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub HuggingFaceFunctionPolicy-${Stage}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:huggingface/apikey*
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
   HuggingFaceApp:
     Type: AWS::Serverless::Function
     Properties:
@@ -22,6 +57,7 @@ Resources:
       Handler: lambda_function.lambda_handler
       Runtime: python3.9
       MemorySize: 128
+      Role: !GetAtt HuggingFaceFunctionRole.Arn
       Timeout: 90
       Environment:
         Variables:
@@ -32,24 +68,28 @@ Resources:
         Api:
           Type: Api
           Properties:
-            Path: /{proxy+}
+            Path: /bartlarge
             Method: post
-            RestApiId: !Ref HuggingFaceAppApi
-      Policies:
-        SecretsManagerRead:
-          - !Ref SecretToken
+      Layers:
+        - !Ref Libs
+  
   Libs:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName: requests-layer
       Description: Lambda layer with requests library
       ContentUri: ./libs
+      CompatibleRuntimes:
+        - python3.9
       
   SecretToken:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: huggingface/apikey
       Description: Secret for HuggingFaceApp
-      GenerateSecretString:
-        SecretStringTemplate: '{"value": "TOKEN-VALUE"}'
-        GenerateStringKey: value
+      SecretString: !Join ['', ['{"value": "', !Ref TokenValue, '"}']]
+      Tags:
+        - Key: Project
+          Value: HuggingFaceApp
+        - Key: Stage
+          Value: !Ref Stage
