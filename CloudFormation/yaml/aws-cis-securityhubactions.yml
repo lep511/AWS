@@ -1,0 +1,175 @@
+
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+#  CloudFormation Template 2 of 3 - Real Time Automated Remediation for CIS AWS Foundations Benchmark 
+#  
+#  Pre-req : Uses the AWS SSM Automation CloudFormation Template. 
+#  This template integrates AWS Security Hub custom actions with Custom AWS SSM Automation Remediation Documents
+# 
+# @author Kanishk Mahajan
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation Template 2 of 3 - Real Time Automated Remediation for CIS AWS Foundations Benchmark. (qs-1t0eilb5g)
+
+Resources:
+
+  CreateSecurityHubCustomActionTargetLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CreateSecurityHubCustomActionTargetLambda
+      Description: Custom resource to create an action target in Security Hub
+      Handler: index.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt CreateSecurityHubCustomActionTargetLambdaRole.Arn
+      Runtime: python3.7
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import os
+          def lambda_handler(event, context):
+              try:
+                  properties = event['ResourceProperties']
+                  region = os.environ['AWS_REGION']
+                  client = boto3.client('securityhub', region_name=region)
+                  responseData = {}
+                  if event['RequestType'] == 'Create':
+                      response = client.create_action_target(
+                          Name=properties['Name'],
+                          Description=properties['Description'],
+                          Id=properties['Id']
+                      )
+                      responseData['Arn'] = response['ActionTargetArn']
+                  elif event['RequestType'] == 'Delete':
+                      account_id = context.invoked_function_arn.split(":")[4]
+                      client.delete_action_target(
+                          ActionTargetArn=f"arn:aws:securityhub:{region}:{account_id}:action/custom/{properties['Id']}"
+                      )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+              except Exception as e:
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+  CreateSecurityHubCustomActionTargetLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal: { Service: lambda.amazonaws.com }
+          Action:
+          - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AWSSecurityHubFullAccess"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+
+
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+# CIS AWS Foundations Benchmark - 2.9 – Ensure VPC flow logging is enabled in all VPCs
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+
+  VPCFlowLogsEnabledRule: 
+    Type: AWS::Events::Rule
+    Properties: 
+      Name: VPCFlowLogsEnabledRule
+      Description: "CIS AWS Foundations Benchmark - 2.9 – Ensure VPC flow logging is enabled in all VPCs"
+      EventPattern: 
+        source: 
+          - aws.securityhub
+        detail-type: 
+          - Security Hub Findings - Custom Action
+        resources: 
+          - !GetAtt VPCFlowLogsEnabledActionTarget.Arn
+      State: "ENABLED"
+      Targets: 
+        - 
+          Arn: 
+            Fn::GetAtt: 
+              - "VPCFlowLogsEnabledLambda"
+              - "Arn"
+          Id: "EnableVPCFlowLogs"
+   
+  VPCFlowLogsEnabledActionTarget:
+    Type: Custom::ActionTarget
+    Version: 1.0
+    Properties:
+      ServiceToken: !GetAtt CreateSecurityHubCustomActionTargetLambda.Arn
+      Name: EnableVPCFlowLogs
+      Description: CIS29 Event from Security Hub
+      Id: EnableVPCFlowLogs
+
+  VPCFlowLogsEnabledPermission: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Ref: "VPCFlowLogsEnabledLambda"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "VPCFlowLogsEnabledRule"
+          - "Arn"
+
+  VPCFlowLogsEnabledLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: VPCFlowLogsEnabledLambdaRole
+    Properties:
+      FunctionName: VPCFlowLogsEnabledLambda
+      Description: CIS 2.9 Remediation using Custom SSM Document
+      Handler: index.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt  VPCFlowLogsEnabledLambdaRole.Arn
+      Runtime: python3.7
+      Timeout: 60
+      Environment:
+        Variables:
+          CloudWatchLogGroupArn : !ImportValue FlowLogsCloudWatchLogGroupArn
+          CloudWatchLogGroupName : !ImportValue FlowLogsCloudWatchLogs
+          FlowLogRoleArn : !ImportValue FlowLogsRoleArn
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import os
+          def lambda_handler(event, context):
+
+              VpcArn = str(event['detail']['findings'][0]['Resources'][0]['Id'])
+              VpcId_1 = VpcArn.split(':')[-1] 
+              VpcId = VpcId_1.replace("vpc/","")
+              Id = str(event['detail']['findings'][0]['Id'])
+              CloudWatchLogGroupArn = os.environ['CloudWatchLogGroupArn']
+              CloudWatchLogGroupName  = os.environ['CloudWatchLogGroupName']
+              FlowLogRoleArn  = os.environ['FlowLogRoleArn']
+              ssm = boto3.client('ssm')
+              try:
+                  response = ssm.start_automation_execution(
+                      DocumentName='Custom-EnableVPCFlowLogsCF',
+                      DocumentVersion='1', # default
+                      Parameters={
+                          'FlowLogRoleArn': [ FlowLogRoleArn ],
+                          'CloudWatchLogGroupArn': [ CloudWatchLogGroupArn ],
+                          'CloudWatchLogGroupName': [ CloudWatchLogGroupName ],
+                          'VpcId': [ VpcId ]
+                      }
+                  )
+
+              except Exception as e:
+                  print(e)
+                  print("SSM automation execution error")
+                  raise
+
+  VPCFlowLogsEnabledLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal: { Service: lambda.amazonaws.com }
+          Action:
+          - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonSSMAutomationRole"

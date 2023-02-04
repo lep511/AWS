@@ -1,0 +1,372 @@
+
+# -------------------------------------------------------------------------------------------------
+# CloudFormation Template 1 of 3 - Real Time Automated Remediation for CIS AWS Foundations Benchmark
+#
+# Provisions Systems Manager Automation Documents for CIS AWS Foundations Benchmark 
+# Each document is invoked from a AWS Security Hub Custom Action 
+# 
+# 
+# @author Kanishk Mahajan
+# ---------------------------------------------------------------------------------------------------
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation Template 1 of 3 - Real Time Automated Remediation for CIS AWS Foundations Benchmark (qs-1t0eilb5g)
+
+Outputs:
+  FlowLogsRoleArn:
+    Description: Arn for FlowsLogsRole
+    Value: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${FlowLogsRole}'  
+    Export: # added to export
+      Name: FlowLogsRoleArn
+  AutomationAssumeRoleArn:
+    Description: Arn for AutomationAssumeRole
+    Value: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AutomationAssumeRole}'
+    Export: # added to export
+      Name: AutomationAssumeRoleArn
+  CloudTrailLogGroupArn:
+    Description: Arn for CloudTrail CloudWatch Logs
+    Value: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudTrailLogGroup}:*"
+    Export: # added to export
+      Name: CloudTrailLogGroupArn
+  S3LoggingBucketFullName:
+    Description: S3 Logging Bucket  - CIS 2.6
+    Value: !Ref S3LoggingBucket
+    Export: # added to export
+      Name: S3LoggingBucketFullName
+  FlowLogsCloudWatchLogGroupArn:
+    Description: Arn for FlowLogs CloudWatchLogs
+    Value: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${FlowLogsCloudWatchLogs}"
+    Export: # added to export
+      Name: FlowLogsCloudWatchLogGroupArn
+  FlowLogsCloudWatchLogs:
+    Description: Name of FlowLogs CloudWatch Logs
+    Value: !Ref FlowLogsCloudWatchLogs
+    Export: # added to export
+      Name: FlowLogsCloudWatchLogs
+  CISS3CloudTrailBucket:
+    Description: CIS S3 CloudTrail Bucket
+    Value: !Ref CISS3CloudTrailBucket
+    Export: # added to export
+      Name: CISS3CloudTrailBucket
+  CloudTrailLogGroup:
+    Description: CIS CloudTrail CloudWatch Log Group
+    Value: !Ref CloudTrailLogGroup
+    Export: # added to export
+      Name: CloudTrailLogGroup
+  CISCloudTrail:
+    Description: CIS CloudTrail
+    Value: 'remediation-cis-trail'
+    Export: # added to export
+      Name: CISCloudTrail
+
+  KMSKeyArn:
+    Description: Arn for KMS CMK
+    Value: !Sub "arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${KmsKeyId}"
+    Export: # added to export
+      Name: KMSKeyArn
+
+Resources:
+
+# ------------------------------------------------------------------------------------------
+# CIS AWS Foundations Benchmark - Pre-requesites
+#
+# Provisions all pre-req AWS Services for CIS benchmarks
+#
+# @kanishk.mahajan
+# ---------------------------------------------------------------------------------------------
+
+
+# Bucket Policy for CIS S3 Bucket. Restrict to allow access to only SSL transport.
+  CISBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CISS3CloudTrailBucket
+      PolicyDocument:
+        Statement:
+          -
+            Action:
+              - s3:PutObject
+              - s3:PutBucketLogging
+              - s3:PutBucketVersioning
+              - s3:GetObject
+              - s3:GetBucketLocation
+              - s3:ListBucket
+            Effect: "Allow"
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${CISS3CloudTrailBucket}
+              - !Sub arn:${AWS::Partition}:s3:::${CISS3CloudTrailBucket}/*
+            Principal:
+              AWS:
+              - !Ref AWS::AccountId
+          -
+            Action:
+              - s3:PutObject
+              - s3:PutBucketLogging
+              - s3:PutBucketVersioning
+              - s3:GetObject
+              - s3:GetBucketLocation
+              - s3:ListBucket
+            Effect: "Allow"
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${CISS3CloudTrailBucket}
+              - !Sub arn:${AWS::Partition}:s3:::${CISS3CloudTrailBucket}/*
+            Principal:
+              Service:
+              - cloudtrail.amazonaws.com
+      
+
+# S3 Bucket to store CloudTrail logs
+  CISS3CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "s3-cis-${AWS::AccountId}-${AWS::Region}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      AccessControl: BucketOwnerFullControl
+      LifecycleConfiguration:
+        Rules:
+          -
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 3
+            NoncurrentVersionExpirationInDays: 3
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        -
+          Key: Description
+          Value: S3 Bucket for CloudTrail Logs
+      VersioningConfiguration:
+        Status: Enabled
+
+# Bucket Policy for CIS S3 Bucket. Restrict to allow access to only SSL transport.
+  S3LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3LoggingBucket
+      PolicyDocument:
+        Statement:
+          -
+            Action:
+              - s3:PutObject
+              - s3:PutBucketLogging
+              - s3:PutBucketVersioning
+              - s3:GetObject
+              - s3:GetBucketLocation
+              - s3:ListBucket
+            Effect: "Allow"
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${S3LoggingBucket}
+              - !Sub arn:${AWS::Partition}:s3:::${S3LoggingBucket}/*
+            Principal:
+              AWS:
+              - !Ref AWS::AccountId
+          -
+            Effect: Deny
+            Principal: "*"
+            Action: "*"
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${S3LoggingBucket}
+              - !Sub arn:${AWS::Partition}:s3:::${S3LoggingBucket}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+# S3 Bucket for Bucket Logging
+  S3LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "s3-logging-${AWS::AccountId}-${AWS::Region}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      AccessControl: BucketOwnerFullControl
+      LifecycleConfiguration:
+        Rules:
+          -
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 3
+            NoncurrentVersionExpirationInDays: 3
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        -
+          Key: Description
+          Value: S3 Bucket for Logging
+      VersioningConfiguration:
+        Status: Enabled
+
+
+#FlowLogs CW Log Group
+  FlowLogsCloudWatchLogs: 
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Sub flowlogscloudwatchlogs-${AWS::Region}
+      RetentionInDays: 1827
+
+#CloudTrail CW Log Group
+  CloudTrailLogGroup: 
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Sub DefaultLogGroup-${AWS::Region}
+      RetentionInDays: 1827
+
+# Flow Logs Role
+  FlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub flowlogsrole-${AWS::Region}
+      Policies:
+      - PolicyName: SCCloudWatchLogsRolePolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: "*"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal: 
+            Service:
+              - vpc-flow-logs.amazonaws.com 
+              - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+
+# SSM Automation Role
+  AutomationAssumeRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub automationassumerole-${AWS::Region}
+      Policies:
+      - PolicyName: CISSSMRemidationPolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:CreateTags
+            - ec2:CreateFlowLogs
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - iam:PassRole
+            Resource:
+              !Sub |-
+                arn:aws:iam::${AWS::AccountId}:role/flowlogsrole-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ssm.amazonaws.com
+                - events.amazonaws.com
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+
+# CIS KMS CMK
+  KmsKeyId:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      EnableKeyRotation: true
+      Enabled: true
+      KeyUsage: ENCRYPT_DECRYPT
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+            Action: 'kms:*'
+            Resource: '*'
+
+
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+# CIS AWS Foundations Benchmark - 2.9 – Ensure VPC flow logging is enabled in all VPCs
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+  EnableVPCFlowLogsCF:
+    Type: AWS::SSM::Document
+    Properties:
+      DocumentType: Automation
+      Name: Custom-EnableVPCFlowLogsCF
+      Content:
+        schemaVersion: '0.3'
+        assumeRole: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AutomationAssumeRole}"
+        parameters:
+          CloudWatchLogGroupArn:
+            type: String
+            default: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:log-group:${FlowLogsCloudWatchLogs}"
+          FlowLogRoleArn:
+            type: String
+            default: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${FlowLogsRole}"
+          CloudWatchLogGroupName:
+            type: String
+            default: !Ref FlowLogsCloudWatchLogs
+          VpcId:
+            type: String
+          AutomationAssumeRole:
+            type: String
+            default: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AutomationAssumeRole}"
+        mainSteps:
+          - name: EnableFlowLogs
+            action: 'aws:executeScript'
+            inputs:
+              Runtime: python3.6
+              Handler: enableflowlogs_handler
+              Script: "def enableflowlogs_handler(events, context):\r\n  import boto3\r\n  client = boto3.client('ec2')\r\n\r\n  CloudWatchLogGroupArn = events['CloudWatchLogGroupArn']\r\n  FlowLogRoleArn = events['FlowLogRoleArn']\r\n  CloudWatchLogGroupName = events['CloudWatchLogGroupName']\r\n  VpcId = events['VpcId']\r\n  AutomationAssumeRole = events['AutomationAssumeRole']\r\n\r\n  response = client.create_flow_logs(\r\n    DeliverLogsPermissionArn=FlowLogRoleArn,\r\n    ResourceIds=[\r\n        VpcId\r\n    ],\r\n    ResourceType='VPC',\r\n    TrafficType='REJECT',\r\n    LogDestinationType='cloud-watch-logs',\r\n    LogDestination=CloudWatchLogGroupArn\r\n  )"
+              InputPayload:
+                CloudWatchLogGroupName: '{{CloudWatchLogGroupName}}'
+                CloudWatchLogGroupArn: '{{CloudWatchLogGroupArn}}'
+                AutomationAssumeRole: '{{AutomationAssumeRole}}'
+                FlowLogRoleArn: '{{FlowLogRoleArn}}'
+                VpcId: '{{VpcId}}'
+
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+# CIS AWS Foundations Benchmark - 4.1 and 4.2 –Disallow unrestricted security group access for incoming SSH or RDP traffic
+# -------------------------------------------------------------------------------------------------------------------------------------------------------
+  RestrictSecurityGroupPublicAccess:
+    Type: AWS::SSM::Document
+    Properties:
+      DocumentType: Automation
+      Name: Custom-RestrictSecurityGroupCF
+      Content:
+        schemaVersion: '0.3'
+        assumeRole: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AutomationAssumeRole}"
+        parameters:
+          groupId:
+            type: String
+          IpAddressToBlock:
+            type: String
+            default: '0.0.0.0/0'
+          AutomationAssumeRole:
+            type: String
+            default: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AutomationAssumeRole}"
+        mainSteps:
+          - name: RestrictSecurityGroup
+            action: 'aws:executeScript'
+            inputs:
+              Runtime: python3.6
+              Handler: restrict_sg
+              Script: "def restrict_sg(events, context):\r\n  import boto3\r\n  import json\r\n  import os\r\n  ec2 = boto3.resource('ec2')\r\n  defaultSecGroupId = events['groupId']\r\n  try:\r\n      defaultSG = ec2.SecurityGroup(defaultSecGroupId)\r\n      defaultIngress = defaultSG.ip_permissions\r\n      defaultEgress = defaultSG.ip_permissions_egress\r\n      revokeIngress = defaultSG.revoke_ingress(IpPermissions=defaultIngress)\r\n      revokeEgress = defaultSG.revoke_egress(IpPermissions=defaultEgress)\r\n  except Exception as e:\r\n      print(e)"
+              InputPayload:
+                AutomationAssumeRole: '{{AutomationAssumeRole}}'
+                groupId: '{{groupId}}'
+                IpAddressToBlock: '{{IpAddressToBlock}}'
