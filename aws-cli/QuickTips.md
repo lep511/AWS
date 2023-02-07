@@ -136,3 +136,8 @@ export AWS_DEFAULT_REGION=$(curl --silent http://169.254.169.254/latest/dynamic/
 identity/document \
 | awk -F'"' ' /region/ {print $4}')
 ```
+
+Get bucket for name
+```
+export BUCKET_NAME=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'generatedbucket')].Name" --output text)
+```
