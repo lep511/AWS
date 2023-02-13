@@ -537,11 +537,7 @@ Resources:
                   - Ref: AWS::AccountId
                   - :role/aws-service-role/macie.amazonaws.com/AWSServiceRoleForAmazonMacie
             Action:
-              - kms:DescribeKey
-              - kms:Encrypt
               - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey
             Resource: '*'
 
 #Policy to allow Macie to publish extended results to the Results bucket            
