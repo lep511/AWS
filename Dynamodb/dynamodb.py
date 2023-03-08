@@ -1,3 +1,5 @@
+#import awswrangler as wr 
+from awswrangler import dynamodb as wr_d
 from decimal import Decimal
 from io import BytesIO
 from datetime import datetime
@@ -9,6 +11,7 @@ import os
 from pprint import pprint
 import boto3
 import pandas as pd
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, TypeVar, Union, cast
 from boto3.dynamodb.types import Binary
 from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import ClientError
@@ -25,14 +28,14 @@ class DecimalEncoder(json.JSONEncoder):
 class DynamoTable:
     min_compress = 250
     
-    def __init__(self, table_name=None, dyn_resource=None, region='us-east-1'):
+    def __init__(self, table_name=None, profile_name=None, region='us-east-1'):
         """
         :param table_name: A DynamoDB table.
         """
         self.table_name = table_name
+        self.session = boto3.Session(profile_name=profile_name, region_name=region)
+        self.dyn_resource = self.session.resource("dynamodb", region_name=region)
         self.region = region
-        if dyn_resource is None:
-            self.dyn_resource = boto3.resource('dynamodb', region_name=self.region)
         self.__keyType = {"S": "s", "N": 0, "B": b"b"}
         if not table_name:
             self.table_name = None
@@ -319,6 +322,10 @@ class DynamoTable:
         else:
             return response['Attributes']
 
+    def query_partiql(self, query: str, parameters: Optional[List[Any]] = None, chunked: bool = False):
+        resp = wr_d.read_partiql_query(query=query, parameters=parameters, chunked=chunked, boto3_session=self.session)
+        return resp
+                      
     def query_items(self, query, to_pandas=False, consumed_capacity=False):
         """
         Query a table items.
@@ -411,7 +418,7 @@ class DynamoTable:
         if not provisioned:
             del gsi_main[0]["Create"]["ProvisionedThroughput"]
         try:
-            self.client = boto3.client('dynamodb', region_name=self.region)
+            self.client = self.session.client('dynamodb', region_name=self.region)
             resp = self.client.update_table(
                 TableName = self.table_name,
                 AttributeDefinitions=att_definition,
@@ -433,13 +440,31 @@ class DynamoTable:
         :param name_gsi: The name of global secondary index.
         """
         self.table.reload()
+        actual_status = []
         if self.table.global_secondary_indexes:
-            status = self.table.global_secondary_indexes[-1]["IndexStatus"]
+            for i in self.table.global_secondary_indexes:
+                actual_status.append(i['IndexStatus'])
+            if 'CREATING' in actual_status:
+                return 'CREATING'
+            else:
+                return actual_status[-1]
         else:
             status = None
         return status
             
-       
+    @property
+    def list_gsi(self):
+        """
+        Returns a list of all global secondary indexes of the table.
+        """
+        if self.table.global_secondary_indexes:
+            all_gsi = []
+            for gsi_name in self.table.global_secondary_indexes:
+                all_gsi.append(gsi_name["IndexName"])
+            return all_gsi
+        else:
+            return None
+    
     def found_binary(self, response, only_check=False):
         bin_found = []
         elem = "Item" if "Item" in response else "Items"
@@ -511,4 +536,4 @@ class DynamoTable:
             logger.error(
                 "Couldn't delete table. Here's why: %s: %s",
                 err.response['Error']['Code'], err.response['Error']['Message'])
-            raise
+            raise        
