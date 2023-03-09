@@ -1,0 +1,56 @@
+[
+    {
+        "customerId": 40003500,
+        "sk": "CUST#123",
+        "email": "shirley@example.net",
+        "fullName": "Shirley Rodriguez",
+        "userPreferences": {"language": "en", "sort": "date", "sortDirection": "ascending"}
+    },
+    {
+        "customerId": 40003500,
+        "sk": "https://aws.amazon.com",
+        "createDate": "2020-02-25T09:16:43-07:00",
+        "updateDate": "2020-03-25T09:16:46-07:00",
+        "folder": "Cloud",
+        "title": "AWS",
+        "description": "Amazon Web Services",
+        "url": "https://aws.amazon.com"
+    },
+    {
+        "customerId": 40003500,
+        "sk": "https://console.aws.amazon.com",
+        "createDate": "2020-03-12T09:16:43-07:00",
+        "updateDate": "2020-04-12T09:06:22-11:00",
+        "folder": "Cloud",
+        "title": "AWS Console",
+        "description": "Web console",
+        "url": "https://console.aws.amazon.com"
+    },
+    {
+        "customerId": 30008600,
+        "sk": "CUST#321",
+        "email": "shirley@example.net",
+        "fullName": "Shirley Rodriguez",
+        "userPreferences": {"language": "zh", "sort": "rating", "sortDirection": "descending"}
+    },
+    {
+        "customerId": 30008600,
+        "sk": "https://aws.amazon.com",
+        "createDate": "2020-08-12T04:22:12-01:00",
+        "updateDate": "2020-09-12T16:15:02-35:00",
+        "folder": "Cloud",
+        "title": "AWS",
+        "description": "Amazon Web Services",
+        "url": "https://aws.amazon.com"
+    },
+    {
+        "customerId": 30008600,
+        "sk": "https://console.aws.amazon.com",
+        "createDate": "2020-01-12T09:16:43-07:00",
+        "updateDate": "2020-04-12T09:06:22-11:00",
+        "folder": "Cloud",
+        "title": "AWS Console",
+        "description": "Web console",
+        "url": "https://console.aws.amazon.com"
+    }
+]

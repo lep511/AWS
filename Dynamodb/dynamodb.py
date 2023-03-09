@@ -523,17 +523,3 @@ class DynamoTable:
                         response[elem][i][att] = val_dec
             
         return response
-    
-    def delete_table(self):
-        """
-        Deletes the table.
-        """
-        try:
-            self.table.delete()
-            self.table = None
-            print("Table deleted successfully!")
-        except ClientError as err:
-            logger.error(
-                "Couldn't delete table. Here's why: %s: %s",
-                err.response['Error']['Code'], err.response['Error']['Message'])
-            raise        
