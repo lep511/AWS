@@ -323,6 +323,8 @@ class DynamoTable:
             return response['Attributes']
 
     def query_partiql(self, query: str, parameters: Optional[List[Any]] = None, chunked: bool = False):
+        if "<table>" in query:
+            query = query.replace("<table>", self.table.name)
         resp = wr_d.read_partiql_query(query=query, parameters=parameters, chunked=chunked, boto3_session=self.session)
         return resp
                       
@@ -432,7 +434,7 @@ class DynamoTable:
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
 
-    def check_status_gsi(self):
+    def check_status_gsi(self, index_name=None):
         """
         Usually, a new GSI should be created within 5 minutes. But the time duration can increase 
         when adding a GSI to an existing table since DynamoDB needs to backfill all the existing 
@@ -440,16 +442,27 @@ class DynamoTable:
         :param name_gsi: The name of global secondary index.
         """
         self.table.reload()
+        list_names = []
         actual_status = []
+        status = None
         if self.table.global_secondary_indexes:
             for i in self.table.global_secondary_indexes:
+                if index_name == i['IndexName']: 
+                    return i['IndexStatus']
+                list_names.append(i['IndexName'])
                 actual_status.append(i['IndexStatus'])
+        
             if 'CREATING' in actual_status:
-                return 'CREATING'
+                status = 'CREATING'
+            elif 'UPDATING' in actual_status:
+                status = 'UPDATING'
+            elif 'DELETING' in actual_status:
+                status = 'DELETING'
             else:
-                return actual_status[-1]
-        else:
-            status = None
+                status = 'ACTIVE'
+        
+        if index_name: raise ValueError("Global secondary index does not exist.")       
+        
         return status
             
     @property
