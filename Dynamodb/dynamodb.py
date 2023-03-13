@@ -104,7 +104,7 @@ class DynamoTable:
                      partition_key, 
                      partition_key_type, 
                      sort_key=None, 
-                     sort_key_type=None, 
+                     sort_key_type=None,
                      provisioned=False, # or 'PAY_PER_REQUEST'
                      rcu=10, 
                      wcu=10
@@ -122,16 +122,14 @@ class DynamoTable:
         :param wcu: (WriteCapacityUnits) Default: 10. The maximum number of writes consumed per second 
                     before DynamoDB returns a ThrottlingException.
         """           
+        
+        key_schema = [{'AttributeName': partition_key, 'KeyType': 'HASH'}]
+        att_definition=[{'AttributeName': partition_key, 'AttributeType': partition_key_type}]
+              
         if sort_key != None:
-            key_schema = [
-                        {'AttributeName': partition_key, 'KeyType': 'HASH'},  
-                        {'AttributeName': sort_key, 'KeyType': 'RANGE'}]
-            att_definition = [
-                        {'AttributeName': partition_key, 'AttributeType': partition_key_type},
-                        {'AttributeName': sort_key, 'AttributeType': sort_key_type}]
-        else:
-            key_schema = [{'AttributeName': partition_key, 'KeyType': 'HASH'}]
-            att_definition=[{'AttributeName': partition_key, 'AttributeType': partition_key_type}]
+            key_schema.append({'AttributeName': sort_key, 'KeyType': 'RANGE'})
+            att_definition.append({'AttributeName': sort_key, 'AttributeType': sort_key_type})
+
         try:
             if provisioned:
                 self.table = self.dyn_resource.create_table(
