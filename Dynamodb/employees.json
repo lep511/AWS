@@ -1,0 +1,50 @@
+[
+    {
+        "LoginAlias": "johns",
+        "FirstName": "John",
+        "LastName": "Stiles",
+        "Skills": ["executive management"]
+    },
+    {
+        "LoginAlias": "marthar",
+        "FirstName": "Martha",
+        "LastName": "Rivera",
+        "ManagerLoginAlias": "johns",
+        "Skills": ["software","management"]
+    },
+    {
+        "LoginAlias": "mateoj",
+        "FirstName": "Mateo",
+        "LastName": "Jackson",
+        "ManagerLoginAlias": "marthar",
+        "Skills": ["software"]
+    },
+    {
+        "LoginAlias": "janed",
+        "FirstName": "Jane",
+        "LastName": "Doe",
+        "ManagerLoginAlias": "marthar",
+        "Skills": ["software"]
+    },
+    {
+        "LoginAlias": "diegor",
+        "FirstName": "Diego",
+        "LastName": "Ramirez",
+        "ManagerLoginAlias": "johns",
+        "Skills": ["executive assistant"]
+    },
+    {
+        "LoginAlias": "marym",
+        "FirstName": "Mary",
+        "LastName": "Major",
+        "ManagerLoginAlias": "johns",
+        "Skills": ["operations"]
+    },
+    {
+        "LoginAlias": "janer",
+        "FirstName": "Jane",
+        "LastName": "Roe",
+        "ManagerLoginAlias": "marthar",
+        "Skills": ["software"]
+    }
+]

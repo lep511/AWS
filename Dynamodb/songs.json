@@ -1,0 +1,53 @@
+[
+    {
+        "Id": "1",
+        "Metadata": "Details",
+        "Artist": "Metallica",
+        "Title": "One",
+        "TotalDownloads": 3
+    },
+    {
+        "Id": "1",
+        "Metadata": "Dld-9349823681",
+        "DownloadTimestamp": "2018-01-01T00:00:07"
+    },
+    {
+        "Id": "1",
+        "Metadata": "Dld-9349823682",
+        "DownloadTimestamp": "2018-01-01T00:20:10"
+    },
+    {
+        "Id": "1",
+        "Metadata": "Dld-9349823683",
+        "DownloadTimestamp": "2018-01-02T00:11:10"
+    },
+    {
+        "Id": "1",
+        "Metadata": "Month-01-2018",
+        "DownloadMonth": "01-2018",
+        "TotalDownloadsInMonth": 3
+    },
+    {
+        "Id": "2",
+        "Metadata": "Details",
+        "Artist": "Black Sabbath",
+        "Title": "Paranoid",
+        "TotalDownloads": 2
+    },
+    {
+        "Id": "2",
+        "Metadata": "Dld-9349823684",
+        "DownloadTimestamp": "2018-01-02T00:00:00"
+    },
+    {
+        "Id": "2",
+        "Metadata": "Dld-9349823685",
+        "DownloadTimestamp": "2018-01-03T00:00:02"
+    },
+    {
+        "Id": "2",
+        "Metadata": "Month-01-2018",
+        "DownloadMonth": "01-2018",
+        "TotalDownloadsInMonth": 2
+    }
+]

@@ -1,0 +1,100 @@
+[
+    {
+        "PK": "ACCT#76584123",
+        "SK": "ACCT#76584123",
+        "AccountId": 76584123,
+        "PlasticCardNumber": 4235400034568756,
+        "FirstName": "Zhang",
+        "LastName": "Wei",
+        "Emailid": "zhang.wei@example.com",
+        "Addresses": {"RESIDENCE": {"street":"135 Any Street","city":"Florida", "country": "USA"}, "BUSINESS": {"street": "100 Main Street", "city": "Florida", "country": "USA"}},
+        "AccountIndexId": "ACCT#76584123",
+        "AuthUsers": {"AUTHUSER-1":{"Name":"Paulo Santos","PlasticCardNumber":"4036546984262340"},"AUTHUSER-2":{"Name":"Mateo Jackson","PlasticCardNumber":"4036516984267960"}}
+    },
+    {
+        "PK": "ACCT#76584123",
+        "SK": "OFR#10001",
+        "AccountId": 76584123,
+        "OfferId": 10001,
+        "OfferType": "BAX",
+        "AccountOfferStartDate": "2020-05-01",
+        "AccountOfferEndDate": "2020-08-01",
+        "Status": "CREATED",
+        "StatusChangeDate": "2020-12-01"
+    },
+    {
+        "PK": "ACCT#76584123",
+        "SK": "OFR#10002",
+        "AccountId": 76584123,
+        "OfferId": 10002,
+        "OfferType": "BAX",
+        "AccountOfferStartDate": "2020-06-01",
+        "AccountOfferEndDate": "2020-09-01",
+        "Status": "CREATED",
+        "StatusChangeDate": "2020-06-15"
+    },
+    {
+        "PK": "ACCT#76584123",
+        "SK": "OFR#10010",
+        "AccountId": 76584123,
+        "OfferId": 10010,
+        "OfferType": "CRL",
+        "AccountOfferStartDate": "2020-03-01",
+        "AccountOfferEndDate": "2020-12-01",
+        "Status": "ACCEPTED",
+        "StatusChangeDate": "2020-03-25",
+        "GSI1SK": "ACCEPTED#CRL"
+    },
+    {
+        "PK": "ACCT#11584123",
+        "SK": "ACCT#11584123",
+        "AccountId": 11584123,
+        "PlasticCardNumber": 4235400134568790,
+        "FirstName": "Li",
+        "LastName": "Juan",
+        "Emailid": "li.juan12@example.com",
+        "Addresses": {"RESIDENCE": {"street":"559 Any Street","city":"Texas", "country": "USA"}, "BUSINESS": {"street": "101 Main Street", "city": "California", "country": "USA"}},
+        "AccountIndexId": "ACCT#11584123"
+    },
+    {
+        "PK": "ACCT#11584123",
+        "SK": "OFR#10010",
+        "AccountId": 11584123,
+        "OfferId": 10010,
+        "OfferType": "CRL",
+        "AccountOfferStartDate": "2020-02-01",
+        "AccountOfferEndDate": "2020-02-28",
+        "Status": "DECLINED",
+        "StatusChangeDate": "2020-04-25",
+        "GSI1SK": "DECLINED#CRL",
+        "DataOver": false
+    },
+    {
+        "PK": "ACCT#76584657",
+        "SK": "ACCT#76584657",
+        "AccountId": 76584657,
+        "PlasticCardNumber": 4235400034561244,
+        "FirstName": "Ana",
+        "MiddleName": "Carolina",
+        "LastName": "Silva",
+        "Emailid": "anacsilva@example.com",
+        "Addresses": {"RESIDENCE": {"street":"120 Any Street","city":"New Mexico", "country": "USA"}, "BUSINESS": {"street": "505 Main Street", "city": "New Mexico", "country": "USA"}},
+        "AccountIndexId": "ACCT#76584657",
+        "AuthUsers": {"AUTHUSER-1":{"Name":"Mary Major","PlasticCardNumber":"4411785464105490"},"AUTHUSER-2":{"Name":"Martha Rivera","PlasticCardNumber":"4509056796535263"}}
+    },
+    {
+        "PK": "ACCT#76584657",
+        "SK": "OFR#10022",
+        "AccountId": 76584657,
+        "OfferId": 10022,
+        "OfferType": "PROMO",
+        "AccountOfferStartDate": "2020-03-01",
+        "AccountOfferEndDate": "2020-12-28",
+        "Status": "CREATED",
+        "StatusChangeDate": "2020-04-25",
+        "DataOver": true,
+        "Out_register": null,
+        "DataSpend": [34, 22, 11, 55],
+        "Addresses": {"RESIDENCE": {"street":"120 Any Street","city":"New Mexico", "country": "USA"}, "BUSINESS": {"street": "505 Main Street", "city": "New Mexico", "country": "USA"}}
+    }
+]
