@@ -9,22 +9,15 @@ import uuid
 import shutil
 import logging
 import argparse
-from process_json import generate_json
+from appmigrate.process_json import generate_json
+from appmigrate import directories as dr
+
+JSON_DIR = dr.JSON_DIR
+PROC_DIR = dr.PROC_DIR
+ERRO_DIR = dr.ERRO_DIR
 
 # Set up basic logging configuration
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
-
-description = """
-Process data from a dataframe to send it to DynamoDB.
-    
-This is a command-line tool for migrating data from MySQL to DynamoDB.
-It allows users to specify the source and target databases, 
-and map MySQL tables to DynamoDB tables.
-"""
-
-JSON_DIR = "json_data/"
-ERRO_DIR = f"{JSON_DIR}/errors/"
-PROC_DIR = f"{JSON_DIR}/process/"
 
 ##########################################################################################################
 # 0 - Help functions
@@ -34,7 +27,7 @@ def actual_num_files(direct):
     return [f for f in os.listdir(direct) if os.path.isfile(os.path.join(direct,f))]
 
 
-def select_dynamo_table(name_table, profile=False, region='us-east-1'):
+def select_dynamo_table(table_name, profile=False, region='us-east-1'):
     
     if profile:
         session = boto3.Session(profile_name=profile, region_name=region)
@@ -149,8 +142,9 @@ def generate_json_files(df, size_shard=4000):
 # 2 - Send to Dynamo
 ##########################################################################################################  
 
-def send_to_dynamo(dynamo_table, count_session=-1):
+def send_to_dynamo(table_name, count_session=-1, profile=False, region="us-east-1"):
     
+    dynamo_table = select_dynamo_table(table_name=table_name, profile=profile, region=region)
     # Get a list of all JSON files in the specified directory
     all_files = actual_num_files(JSON_DIR)
     process_files = []
@@ -208,12 +202,12 @@ def send_to_dynamo(dynamo_table, count_session=-1):
         remain_sec = convert(calc_t)
         logging.info(f"[INFO] Time consumed for file: {tot_sec} seconds. Estimated time remaining: {remain_sec}")
         
+        count_session -= 1
+        count_files_end -= 1
         # Exit loop if count_session is 0
         if count_session == 0:
             break
-        else:
-            count_session -= 1
-            count_files_end -= 1
+       
     
     tot_all_sec = round(time.time() - init_time)
     tot_time = convert(tot_all_sec)
@@ -223,60 +217,3 @@ def send_to_dynamo(dynamo_table, count_session=-1):
         record_errors(errors)
     else:
         logging.info("No errors were found.")
-
-##########################################################################################################
-# Main
-##########################################################################################################       
-        
-if __name__ == "__main__":
-    
-    # Create an ArgumentParser object
-    parser = argparse.ArgumentParser(description=description)
-    
-    # Add arguments to the parser  
-    parser.add_argument("-d", "--dataframe", type=str, help="Dataframe name to be processed", 
-                        default=None, required=False)
-    
-    parser.add_argument("-s", "--shard", type=int, required=False, default=4000,
-                        help="Number of records in each json file")
-        
-    parser.add_argument("-f", "--files", type=int, required=False, default=-1,
-                        help="Number of json files to process, -1 indicates all files.")
-    
-    parser.add_argument("--profile", required=False, default=None,
-                        help="Profile from boto3 library.")    
-
-    parser.add_argument("--table", required=False, type=str, default=None,
-                        help="DynamoDB table name.")  
-    
-    parser.add_argument("--region", required=False, type=str, default='us-east-1',
-                        help="Region where the table is located.")  
-    
-    parser.add_argument("-o", "--operation",
-                        choices=["all", "json", "dynamo"],
-                        type=str, default="all", required=False, 
-                        help="Function to be executed, by default all are executed")
-    # Parse the arguments
-    args = parser.parse_args()
-    
-    dataframe_name = args.dataframe
-    size_shard = args.shard
-    operation = args.operation
-    files_to_process = args.files
-    table_name = args.table
-    profile = args.profile
-    region = args.region
-    logging.debug(f"Operation: {operation}")
-
-    if operation == "all" or operation == "json":
-        if not dataframe_name:
-            raise Exception('No dataframe was specified.')      
-        df = pd.read_csv(dataframe_name)
-        df = df.where(pd.notnull(df), None)
-        response = generate_json_files(df, size_shard)
-    
-    elif operation == "all" or operation == "dynamo":
-        if not table_name:
-            raise Exception('Table name is not specified.')
-        table = select_dynamo_table(name_table=table_name, profile=profile, region=region)
-        send_to_dynamo(dynamo_table=table, count_session=files_to_process) 
