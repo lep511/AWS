@@ -1,0 +1,25 @@
+{
+   "detail-type":[
+      "AWS Console Sign In via CloudTrail"
+   ],
+   "source":[
+      "aws.signin"
+   ],
+   "detail":{
+      "eventSource":[
+         "signin.amazonaws.com"
+      ],
+      "eventName":[
+         "ConsoleLogin"
+      ],
+      "userIdentity":{
+         "sessionContext":{
+            "sessionIssuer":{
+               "arn":[
+                  "arn:aws:iam::831949637367:role/AWSLabsUser-aga45z7LiNLckBQQpwmhJs"
+               ]
+            }
+         }
+      }
+   }
+}

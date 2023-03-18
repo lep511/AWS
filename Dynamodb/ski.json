@@ -1,0 +1,111 @@
+[
+    {
+        "Lift": "Lift 3",
+        "Metadata": "01/01/20",
+        "TotalUniqueLiftRiders": 5000,
+        "AverageSnowCoverageInches": 30,
+        "LiftStatus": "Open",
+        "AvalancheDanger": "Low"
+    },
+    {
+        "Lift": "Lift 3",
+        "Metadata": "02/01/20",
+        "TotalUniqueLiftRiders": 6000,
+        "AverageSnowCoverageInches": 35,
+        "LiftStatus": "Open",
+        "AvalancheDanger": "Low"
+    },
+    {
+        "Lift": "Lift 3",
+        "Metadata": "03/01/20",
+        "TotalUniqueLiftRiders": 1300,
+        "AverageSnowCoverageInches": 20,
+        "LiftStatus": "Open",
+        "AvalancheDanger": "Low"
+    },
+    {
+        "Lift": "Lift 3",
+        "Metadata": "Static Data",
+        "ExperiencedRidersOnly": false,
+        "VerticalFeet": 1300,
+        "LiftTime": "7:30"
+    },
+    {
+        "Lift": "Lift 23",
+        "Metadata": "01/01/20",
+        "TotalUniqueLiftRiders": 0,
+        "AverageSnowCoverageInches": 50,
+        "LiftStatus": "Closed",
+        "AvalancheDanger": "Extreme"
+    },
+    {
+        "Lift": "Lift 23",
+        "Metadata": "02/01/20",
+        "TotalUniqueLiftRiders": 1500,
+        "AverageSnowCoverageInches": 45,
+        "LiftStatus": "Open",
+        "AvalancheDanger": "Moderate"
+    },
+    {
+        "Lift": "Lift 23",
+        "Metadata": "Static Data",
+        "ExperiencedRidersOnly": true,
+        "VerticalFeet": 900,
+        "LiftTime": "5:45"
+    },
+    {
+        "Lift": "Lift 16",
+        "Metadata": "01/01/20",
+        "TotalUniqueLiftRiders": 2500,
+        "AverageSnowCoverageInches": 35,
+        "LiftStatus": "Open",
+        "AvalancheDanger": "Low"
+    },
+    {
+        "Lift": "Lift 16",
+        "Metadata": "02/01/20",
+        "TotalUniqueLiftRiders": 5000,
+        "AverageSnowCoverageInches": 50,
+        "LiftStatus": "Open",
+        "AvalancheDanger": "Low"
+    },
+    {
+        "Lift": "Lift 16",
+        "Metadata": "03/01/20",
+        "TotalUniqueLiftRiders": 4000,
+        "AverageSnowCoverageInches": 40,
+        "LiftStatus": "Open",
+        "AvalancheDanger": "Low"
+    },
+    {
+        "Lift": "Lift 16",
+        "Metadata": "Static Data",
+        "ExperiencedRidersOnly": false,
+        "VerticalFeet": 1500,
+        "LiftTime": "9:00"
+    },
+    {
+        "Lift": "Resort Data",
+        "Metadata": "01/01/20",
+        "TotalUniqueLiftRiders": 5500,
+        "AverageSnowCoverageInches": 35,
+        "AvalancheDanger": "High",
+        "OpenLifts": ["3","23","16"]
+    },
+    {
+        "Lift": "Resort Data",
+        "Metadata": "02/01/20",
+        "TotalUniqueLiftRiders": 6500,
+        "AverageSnowCoverageInches": 45,
+        "AvalancheDanger": "Considerable",
+        "OpenLifts": ["3","16","10"]
+    },
+    {
+        "Lift": "Resort Data",
+        "Metadata": "03/01/20",
+        "TotalUniqueLiftRiders": 6000,
+        "AverageSnowCoverageInches": 40,
+        "AvalancheDanger": "Considerable",
+        "OpenLifts": ["3","23","16","10"]
+    }
+]

@@ -2,10 +2,10 @@ version = 0.1
 [default]
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "my-app"
-s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1bpwyymdf9k6k"
-s3_prefix = "my-app"
+stack_name = "sem-app"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-8wlozpnuc9zf"
+s3_prefix = "sem-app"
 region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "DynamoDBTableName=\"SuperMissionTable\""
+parameter_overrides = "DynamoDBTableName=\"SampleTable\""
 image_repositories = []

@@ -5,56 +5,191 @@ Parameters:
   DynamoDBTableName:
     Type: String
     Description: The name of the DynamoDB table
-    Default: SuperMissionTable
+    Default: SampleTable
 Resources:
+  AddFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: DynamoDBPutItem
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}'
+  GetFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: DynamoDBGetItem
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}'
+  DeleteFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: DynamoDBDeletItem
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:DeleteItem'
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}'
+  UpdateFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: DynamoDBUpdateItem
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:UpdateItem'
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}'
   DynamoDBTable:
     Type: 'AWS::Serverless::SimpleTable'
     Properties:
       TableName: !Ref DynamoDBTableName
       PrimaryKey:
-        Name: 'SuperHero'
+        Name: 'id'
         Type: 'String'
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
-  MissionDetailsFunction:
+  AddFunction:
     Type: 'AWS::Serverless::Function'
     Properties:
-      Handler: get_superhero/lambda_function.lambda_handler
+      Handler: lambda_function.lambda_handler
       Runtime: python3.9
-      CodeUri: .
+      CodeUri: lambda/add/
       MemorySize: 128
       Timeout: 90
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref DynamoDBTable
+      Role: !GetAtt AddFunctionRole.Arn
+      Environment:
+        Variables:
+          DDB_TABLE: !Ref DynamoDBTableName
       Events:
-        GetMission:
+        AddMovie:
           Type: Api
           Properties:
-            Path: /mission/{SuperHero}
-            Method: get
-  GetMissionFunction:
+            Path: /movie/
+            Method: post
+  GetFunction:
     Type: 'AWS::Serverless::Function'
     Properties:
-      Handler: all_missions/lambda_function.lambda_handler
+      Handler: lambda_function.lambda_handler
       Runtime: python3.9
-      CodeUri: .
+      CodeUri: lambda/get/
       MemorySize: 128
       Timeout: 90
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref DynamoDBTable
-        - DynamoDBWritePolicy:
-            TableName: !Ref DynamoDBTable
+      Role: !GetAtt GetFunctionRole.Arn
+      Environment:
+        Variables:
+          DDB_TABLE: !Ref DynamoDBTableName
       Events:
-        GetMission:
+        GetMovie:
           Type: Api
           Properties:
-            Path: /allmission/
+            Path: /movie/{id}
             Method: get
+  
+  DeleteFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.9
+      CodeUri: lambda/delete/
+      MemorySize: 128
+      Timeout: 90
+      Role: !GetAtt DeleteFunctionRole.Arn
+      Environment:
+        Variables:
+          DDB_TABLE: !Ref DynamoDBTableName
+      Events:
+        DeleteMovie:
+          Type: Api
+          Properties:
+            Path: /movie/{id}
+            Method: delete
+  
+  UpdateFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.9
+      CodeUri: lambda/update/
+      MemorySize: 128
+      Timeout: 90
+      Role: !GetAtt UpdateFunctionRole.Arn
+      Environment:
+        Variables:
+          DDB_TABLE: !Ref DynamoDBTableName
+      Events:
+        UpdateMovie:
+          Type: Api
+          Properties:
+            Path: /movie/{id}
+            Method: put
 
 Outputs:
   WebEndpoint:
     Description: "API Gateway endpoint URL for Prod stage"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/movie/"

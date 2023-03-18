@@ -1,0 +1,1430 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Security Hub Workshop template v10
+Parameters:
+  MyAssetsBucketName:
+    Description: Assets bucket name
+    Type: String
+  MyAssetsBucketPrefix:
+    Description: Assets bucket prefix
+    Type: String
+  LatestAMZNLinuxAMI:
+    Description: 'DO NOT CHANGE: The latest AMI ID for Amazon Linux'
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2
+  LatestAMZNLinux2AMI:
+    Description: 'DO NOT CHANGE: The latest AMI ID for Amazon Linux2'
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  LatestWindows2012R2AMI:
+    Description: 'DO NOT CHANGE: The latest AMI ID for Windows 2012R2'
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: >-
+      /aws/service/ami-windows-latest/Windows_Server-2012-R2_RTM-English-64Bit-Base
+  LatestECSOptimizedAMI:
+    Description: AMI ID
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_id
+Mappings:
+  AWSRegionAMIMap:
+    ap-south-1:
+      HVM64: ami-b46f48db
+    eu-west-3:
+      HVM64: ami-cae150b7
+    eu-west-2:
+      HVM64: ami-c12dcda6
+    eu-west-1:
+      HVM64: ami-9cbe9be5
+    ap-northeast-3:
+      HVM64: ami-68c1cf15
+    ap-northeast-2:
+      HVM64: ami-efaf0181
+    ap-northeast-1:
+      HVM64: ami-28ddc154
+    sa-east-1:
+      HVM64: ami-f09dcc9c
+    ca-central-1:
+      HVM64: ami-2f39bf4b
+    ap-southeast-1:
+      HVM64: ami-64260718
+    ap-southeast-2:
+      HVM64: ami-60a26a02
+    eu-central-1:
+      HVM64: ami-1b316af0
+    us-east-1:
+      HVM64: ami-467ca739
+    us-east-2:
+      HVM64: ami-976152f2
+    us-west-1:
+      HVM64: ami-46e1f226
+    us-west-2:
+      HVM64: ami-6b8cef13
+Resources:
+  KmsNoRotateKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: Sample KMS Key to trigger CIS Check
+      Enabled: true
+      EnableKeyRotation: false
+      KeyPolicy:
+        Version: 2012-10-17
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: 'kms:*'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:CallerAccount': !Ref 'AWS::AccountId'
+  SSMInstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ssm.amazonaws.com
+                - ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: S3andSSMAccess
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:DescribeAssociation'
+                  - 'ssm:GetDeployablePatchSnapshotForInstance'
+                  - 'ssm:GetDocument'
+                  - 'ssm:DescribeDocument'
+                  - 'ssm:GetManifest'
+                  - 'ssm:GetParameters'
+                  - 'ssm:GetParameter'
+                  - 'ssm:ListAssociations'
+                  - 'ssm:ListInstanceAssociations'
+                  - 'ssm:PutInventory'
+                  - 'ssm:PutComplianceItems'
+                  - 'ssm:PutConfigurePackageResult'
+                  - 'ssm:UpdateAssociationStatus'
+                  - 'ssm:UpdateInstanceAssociationStatus'
+                  - 'ssm:UpdateInstanceInformation'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ssmmessages:CreateControlChannel'
+                  - 'ssmmessages:CreateDataChannel'
+                  - 'ssmmessages:OpenControlChannel'
+                  - 'ssmmessages:OpenDataChannel'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ec2messages:AcknowledgeMessage'
+                  - 'ec2messages:DeleteMessage'
+                  - 'ec2messages:FailMessage'
+                  - 'ec2messages:GetEndpoint'
+                  - 'ec2messages:GetMessages'
+                  - 'ec2messages:SendReply'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeInstanceStatus'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ds:CreateComputer'
+                  - 'ds:DescribeDirectories'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketLocation'
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:GetEncryptionConfiguration'
+                  - 's3:AbortMultipartUpload'
+                  - 's3:ListMultipartUploadParts'
+                  - 's3:ListBucket'
+                  - 's3:ListBucketMultipartUploads'
+                Resource: '*'
+              - Sid: S3ListBuckets
+                Effect: Allow
+                Action:
+                  - 's3:ListAllMyBuckets'
+                Resource: 'arn:aws:s3:::*'
+              - Sid: S3GetObjects
+                Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                  - 's3:GetObject'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - agentbucket-
+                    - !Ref 'AWS::AccountId'
+                    - /*
+      Path: /
+  IsolateInstanceLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: LambdaPolicyName
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'logs:CreateLogGroup'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:logs:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:logs:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':log-group:/aws/lambda/isolate-ec2-security-group:*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:Describe*'
+                  - 'ec2:ModifyInstanceAttribute'
+                  - 'ec2:CreateSecurityGroup'
+                  - 'ec2:AuthorizeSecurityGroupIngress'
+                Resource: '*'
+  IsolateInstanceLambdaFunction:
+    DependsOn: SecurityTeamSecurityGroup
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        S3Bucket: !Ref MyAssetsBucketName
+        S3Key: !Sub "${MyAssetsBucketPrefix}lambdas/isolate-ec2-security-group.zip"
+      Description: Function that swaps the security groups on an EC2 instance.
+      FunctionName: isolate-ec2-security-group
+      Runtime: python3.7
+      Handler: isolate-ec2-security-group.lambda_handler
+      Role: !GetAtt 
+        - IsolateInstanceLambdaRole
+        - Arn
+      Environment:
+        Variables:
+          Security_SG: !Ref SecurityTeamSecurityGroup
+          Corp_CIDR: 172.33.44.55/32
+          Security_Group_Name: Security Team SG
+  SecurityHubToSlackRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /service-role/
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      Policies: []
+  SecHubSlackLambdaFunction:
+    DependsOn: SecurityHubToSlackRole
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        S3Bucket: !Ref MyAssetsBucketName
+        S3Key: !Sub "${MyAssetsBucketPrefix}lambdas/sechub-to-slack.zip"
+      Description: Function to take a finding from SecHub and send it to Slack
+      FunctionName: sechub-to-slack
+      Runtime: nodejs12.x
+      Handler: sechub-to-slack.handler
+      Role: !GetAtt 
+        - SecurityHubToSlackRole
+        - Arn
+      Environment:
+        Variables:
+          slackChannel: ''
+          webHookUrl: ''
+      MemorySize: 128
+      Timeout: 10
+      TracingConfig:
+        Mode: Active
+  SecurityTeamSecurityGroup:
+    DependsOn: VPC
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: Security Team SG
+      GroupDescription: >-
+        Defines a sepecific Security Group for the security team.  Limited
+        inbound access no outbound.
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Security Team SG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 172.33.44.55/32
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 127.0.0.1/32
+  AMIComplianceLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: LambdaPolicyName
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'logs:CreateLogGroup'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:logs:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:logs:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':log-group:/aws/lambda/ec2-non-compliant-ami-sechub:*'
+              - Effect: Allow
+                Action:
+                  - 'securityhub:UpdateFindings'
+                  - 'securityhub:BatchImportFindings'
+                  - 'securityhub:GetFindings'
+                Resource: '*'
+  AMIComplianceLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    DependsOn: AMIComplianceLambdaRole
+    Properties:
+      Code:
+        S3Bucket: !Ref MyAssetsBucketName
+        S3Key: !Sub "${MyAssetsBucketPrefix}lambdas/ec2-non-compliant-ami-sechub.zip"
+      Description: Function to raise SecHub findings for non-compliant AMIs
+      FunctionName: ec2-non-compliant-ami-sechub
+      Runtime: python3.7
+      Handler: ec2-non-compliant-ami-sechub.lambda_handler
+      Role: !GetAtt 
+        - AMIComplianceLambdaRole
+        - Arn
+      MemorySize: 128
+      Timeout: 30
+      TracingConfig:
+        Mode: Active
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Name
+          Value: !Join 
+            - '-'
+            - - VPC
+              - !Ref 'AWS::StackName'
+  PublicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: 'true'
+      AvailabilityZone: !Select 
+        - '0'
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - '-'
+            - - Pub1
+              - !Ref 'AWS::StackName'
+  IGW:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref IGW
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn:
+      - AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+  PublicSubnetRouteAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+  ExtraInstanceSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: SecurityGroup for all the right access
+      GroupName: WKSHP-InstanceSecurityGroup
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 23
+          ToPort: 23
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+  ExtraInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !FindInMap 
+        - AWSRegionAMIMap
+        - !Ref 'AWS::Region'
+        - HVM64
+      SecurityGroupIds:
+        - !GetAtt 
+          - ExtraInstanceSecurityGroup
+          - GroupId
+      Tags:
+        - Key: Name
+          Value: WKSHP-InspectorTarget
+      SubnetId: !Ref PublicSubnet
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash
+            - |
+              wget https://inspector-agent.amazonaws.com/linux/latest/install
+            - |
+              sudo bash install
+  ConfigBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties: {}
+  ConfigTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties: {}
+  DeliveryChannel:
+    Type: 'AWS::Config::DeliveryChannel'
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: Six_Hours
+      S3BucketName: !Ref ConfigBucket
+      SnsTopicARN: !Ref ConfigTopic
+  ConfigurationRecorderRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AssumeRole1
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: s3-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 's3:PutObject'
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/*'
+                Condition:
+                  StringLike:
+                    's3:x-amz-acl': bucket-owner-full-control
+              - Effect: Allow
+                Action: 's3:GetBucketAcl'
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
+        - PolicyName: sns-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'sns:Publish'
+                Resource: !Ref ConfigTopic
+  ConfigurationRecorder:
+    Type: 'AWS::Config::ConfigurationRecorder'
+    DependsOn: ConfigurationRecorderRole
+    Properties:
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+      RoleARN: !GetAtt 
+        - ConfigurationRecorderRole
+        - Arn
+  AMIConfigRule:
+    Type: 'AWS::Config::ConfigRule'
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: approved-amis-by-id
+      Description: Config Rule to check for approved AMIs in the account
+      InputParameters:
+        amiIds: !Join 
+          - ','
+          - - !Ref LatestAMZNLinuxAMI
+            - !Ref LatestAMZNLinux2AMI
+            - !Ref LatestWindows2012R2AMI
+      Source:
+        Owner: AWS
+        SourceIdentifier: APPROVED_AMIS_BY_ID
+  EnrichSecHubLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - 'arn:aws:iam::aws:policy/AWSSecurityHubFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+  EnrichEc2Lambda:
+    DependsOn: EnrichSecHubLambdaRole
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        S3Bucket: !Ref MyAssetsBucketName
+        S3Key: !Sub "${MyAssetsBucketPrefix}lambdas/enrich-sec-hub-finding.zip"
+      Description: Enrich Finding with EC2 Instance Tags - Automating Security Workshop.
+      FunctionName: enrich-sec-hub-finding
+      Runtime: python3.7
+      Handler: enrich-sec-hub-finding.lambda_handler
+      Role: !GetAtt 
+        - EnrichSecHubLambdaRole
+        - Arn
+      MemorySize: 128
+      Timeout: 30
+      TracingConfig:
+        Mode: Active
+  SecHubEnable:
+    DependsOn: ConfigurationRecorder
+    Type: 'AWS::SecurityHub::Hub'
+  GDdetector:
+    Type: 'AWS::GuardDuty::Detector'
+    DependsOn: SecHubEnable
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+  IAMAAEnable:
+    Type: 'AWS::AccessAnalyzer::Analyzer'
+    DependsOn: SecHubEnable
+    Properties:
+      Type: ACCOUNT
+      ArchiveRules:
+        - Filter:
+            - Contains:
+                - EEOverlordRole
+                - EEOrganizations
+                - OpsRole
+              Property: resource
+          RuleName: ArchiveEEAccess
+  WkshpIngestionQueue:
+    Type: 'AWS::SQS::Queue'
+    DependsOn: BasicLinuxTarget
+    Properties:
+      QueueName: IngestionQueue
+  WkshpQueuePolicy:
+    DependsOn: WkshpIngestionQueue
+    Type: 'AWS::SQS::QueuePolicy'
+    Properties:
+      Queues:
+        - !Ref WkshpIngestionQueue
+      PolicyDocument:
+        Statement:
+          - Sid: IngestionQueueAccess
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: 'sqs:SendMessage'
+            Resource: !GetAtt 
+              - WkshpIngestionQueue
+              - Arn
+
+  RedTeamECSCluster:
+    Type: 'AWS::ECS::Cluster'
+  CloudwatchLogsGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Join 
+        - '-'
+        - - ECSLogGroup
+          - !Ref 'AWS::StackName'
+      RetentionInDays: 14
+  taskdefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Join 
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-ecs-demo-app'
+      ContainerDefinitions:
+        - Name: simple-app
+          Cpu: '10'
+          Essential: 'true'
+          Image: 'httpd:2.4'
+          Memory: '300'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudwatchLogsGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: ecs-demo-app
+          PortMappings:
+            - ContainerPort: 80
+          Command:
+            - >-
+              /bin/sh -c "apt update -y && apt install zip -y && echo -n 'X5O!P%@AP[4\PZX54(P^)7CC)7}\$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!\$H+H*' >/tmp/eicar.com && cp /tmp/eicar.com /tmp/eicar.com.txt && zip -j /tmp/eicar_com.zip /tmp/eicar.com && zip -j /tmp/eicarcom2.zip /tmp/eicar_com.zip && sleep infinity"
+          EntryPoint:
+            - sh
+            - '-c'
+  ECSAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier: 
+        - !Ref PublicSubnet
+      LaunchConfigurationName: !Ref ContainerInstances
+      MinSize: '1'
+      MaxSize: 1
+      DesiredCapacity: 1
+      Tags:
+        - Key: Name
+          Value: RedTeam
+          PropagateAtLaunch: "true"
+        - Key: CreatedBy
+          Value: GuardDuty Test Script
+          PropagateAtLaunch: "true"
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: 'true'
+
+  ContainerInstances:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    DependsOn:
+      - BasicLinuxTarget
+      - BasicWindowsTarget
+    Properties:
+      ImageId: !Ref LatestECSOptimizedAMI
+      SecurityGroups:
+        - !Ref RedTeamSecurityGroup
+      InstanceType: t3.micro
+      IamInstanceProfile: !Ref RedTeamEC2InstanceProfile
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - echo ECS_CLUSTER=
+            - !Ref RedTeamECSCluster
+            - |2
+               >> /etc/ecs/ecs.config
+            - |
+              export PATH=$PATH:/usr/local/bin:/usr/sbin:/root/.local/bin
+            - >
+              echo 'export PATH=/root/.local/bin:/usr/sbin:$PATH' >>
+              /home/ec2-user/.profile
+            - |
+              yum update -y
+            - >
+              yum install nmap git python python2-pip python3 python-argparse
+              gcc gcc-c++ glib2-devel bind-utils wget unzip -y
+            - >
+              yum install cmake openssl-devel libX11-devel libXi-devel
+              libXtst-devel libXinerama-devel libusb-static libusbmuxd-devel
+              libusbx-devel libusb-devel -y
+            - |
+              yum install freerdp freerdp-devel desktop-file-utils -y
+            - |
+              pip install paramiko
+            - |
+              pip3 install paramiko
+            - >
+              export privateIP=`curl
+              http://169.254.169.254/latest/meta-data/local-ipv4`
+            - >
+              curl -L
+              https://raw.githubusercontent.com/awslabs/amazon-guardduty-tester/master/guardduty_tester.sh
+              > /home/ec2-user/guardduty_tester.sh
+            - >
+              mkdir /home/ec2-user/compromised_keys
+              /home/ec2-user/domains
+              /home/ec2-user/passwords
+            - >
+              curl -L
+              https://raw.githubusercontent.com/awslabs/amazon-guardduty-tester/master/artifacts/queries.txt
+              > /home/ec2-user/domains/queries.txt
+            - >
+              curl -L
+              https://raw.githubusercontent.com/awslabs/amazon-guardduty-tester/master/artifacts/password_list.txt
+              > /home/ec2-user/passwords/password_list.txt
+            - >
+              curl -L
+              https://raw.githubusercontent.com/awslabs/amazon-guardduty-tester/master/artifacts/never_used_sample_key.foo
+              > /home/ec2-user/compromised_keys/compromised.pem
+            - |
+              FILE="/home/ec2-user/compromised_keys/compromised.pem"
+            - >
+              for FILE in {1..20}; do cp
+              /home/ec2-user/compromised_keys/compromised.pem
+              /home/ec2-user/compromised_keys/compromised$FILE.pem; done
+            - echo 'BASIC_LINUX_TARGET="
+            - !GetAtt 
+              - BasicLinuxTarget
+              - PrivateIp
+            - |
+              "' >> /home/ec2-user/localIps.sh
+            - echo 'BASIC_WINDOWS_TARGET="
+            - !GetAtt 
+              - BasicWindowsTarget
+              - PrivateIp
+            - |
+              "' >> /home/ec2-user/localIps.sh
+            - |
+              echo -n 'RED_TEAM_INSTANCE="' >> /home/ec2-user/localIps.sh
+            - >
+              wget -q -O - http://169.254.169.254/latest/meta-data/instance-id
+              >> /home/ec2-user/localIps.sh
+            - |
+              echo '"' >> /home/ec2-user/localIps.sh
+            - |
+              echo -n 'RED_TEAM_IP="' >> /home/ec2-user/localIps.sh
+            - >
+              wget -q -O - http://169.254.169.254/latest/meta-data/local-ipv4 >>
+              /home/ec2-user/localIps.sh
+            - |
+              echo '"' >> /home/ec2-user/localIps.sh
+            - echo 'BASIC_LINUX_INSTANCE="
+            - !Ref BasicLinuxTarget
+            - |
+              "' >> /home/ec2-user/localIps.sh
+            - echo 'BASIC_WINDOWS_INSTANCE="
+            - !Ref BasicWindowsTarget
+            - |
+              "' >> /home/ec2-user/localIps.sh
+            - |
+              cd /home/ec2-user/
+            - |
+              cat << EOF >> users
+            - |
+              ec2-user
+              root
+              admin
+              administrator
+              ftp
+              www
+              nobody
+              EOF
+            - |
+              pip install cmake
+            - >
+              wget https://github.com/vanhauser-thc/thc-hydra/archive/refs/tags/v9.4.zip 
+              -P /home/ec2-user
+            - >
+              wget -q -O /home/ec2-user/libssh.tar.xz
+              https://www.libssh.org/files/0.9/libssh-0.9.4.tar.xz
+            - |
+              tar -xvf /home/ec2-user/libssh.tar.xz
+            - |
+              cd /home/ec2-user/libssh-0.9.4
+            - |
+              mkdir build
+            - |
+              cd build
+            - >
+              cmake -DUNIT_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/usr
+              -DCMAKE_BUILD_TYPE=Release ..
+            - |
+              make && make install
+            - |
+              cd /home/ec2-user
+            - |
+              unzip v9.4.zip
+            - |
+              cd /home/ec2-user/thc-hydra-9.4
+            - |
+              /home/ec2-user/thc-hydra-9.4/configure
+            - |
+              make
+            - |
+              make install
+            - |
+              git clone https://github.com/galkan/crowbar /home/ec2-user/crowbar
+            - |
+              chown -R ec2-user: /home/ec2-user
+            - |
+              chmod +x /home/ec2-user/guardduty_tester.sh
+            - |
+              chmod +x /home/ec2-user/crowbar/crowbar.py
+            - |
+              sed -i 's#localIps.sh#/home/ec2-user/localIps.sh#g' /home/ec2-user/guardduty_tester.sh
+            - |
+              sed -i 's#hydra#/usr/local/bin/hydra#g' /home/ec2-user/guardduty_tester.sh
+            - |
+              echo 'MAILTO=' >> cron_file
+            - |
+              echo '*/5 * * * * /home/ec2-user/guardduty_tester.sh >>/tmp/guardduty_tester.log' >>cron_file
+            - |
+              crontab -u ec2-user cron_file
+            - |
+              cd /home/ec2-user
+            - |
+              wget https://secure.eicar.org/eicar.com
+            - |
+              wget https://secure.eicar.org/eicar.com.txt
+            - |
+              wget https://secure.eicar.org/eicar_com.zip
+            - |
+              wget https://secure.eicar.org/eicarcom2.zip
+            - |
+              # Signal the status from cfn-init
+              yum install -y aws-cfn-bootstrap
+            - '/opt/aws/bin/cfn-signal -e $? '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource ECSAutoScalingGroup '
+            - '         --region '
+            - !Ref 'AWS::Region'
+            - |+
+
+  service:
+    Type: 'AWS::ECS::Service'
+    Properties:
+      Cluster: !Ref RedTeamECSCluster
+      DesiredCount: '1'
+      TaskDefinition: !Ref taskdefinition
+
+  ServiceScalingTarget:
+    Type: 'AWS::ApplicationAutoScaling::ScalableTarget'
+    DependsOn: service
+    Properties:
+      MaxCapacity: 2
+      MinCapacity: 1
+      ResourceId: !Join 
+        - ''
+        - - service/
+          - !Ref RedTeamECSCluster
+          - /
+          - !GetAtt 
+            - service
+            - Name
+      RoleARN: !GetAtt 
+        - AutoscalingRole
+        - Arn
+      ScalableDimension: 'ecs:service:DesiredCount'
+      ServiceNamespace: ecs
+
+  ServiceScalingPolicy:
+    Type: 'AWS::ApplicationAutoScaling::ScalingPolicy'
+    Properties:
+      PolicyName: AStepPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            ScalingAdjustment: 200
+
+  RedTeamEC2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ecs-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:Submit*'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+
+  AutoscalingRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - application-autoscaling.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: service-autoscaling
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'application-autoscaling:*'
+                  - 'cloudwatch:DescribeAlarms'
+                  - 'cloudwatch:PutMetricAlarm'
+                  - 'ecs:DescribeServices'
+                  - 'ecs:UpdateService'
+                Resource: '*'
+
+  RedTeamEC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref RedTeamEC2Role
+
+  RedTeamSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enables SSH Access to RedTeam Tools Host
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: !GetAtt 
+            - VPC
+            - CidrBlock
+        - IpProtocol: udp
+          FromPort: '53'
+          ToPort: '53'
+          CidrIp: !GetAtt 
+            - VPC
+            - CidrBlock
+        - IpProtocol: tcp
+          FromPort: '5050'
+          ToPort: '5050'
+          CidrIp: !GetAtt 
+            - VPC
+            - CidrBlock
+
+  BasicLinuxNetInt:
+    Type: 'AWS::EC2::NetworkInterface'
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      GroupSet:
+        - !Ref BasicLinuxSecurityGroup
+
+  BasicLinuxSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enables Admin Access to basic linux hosts
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          SourceSecurityGroupId: !Ref RedTeamSecurityGroup
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourceSecurityGroupId: !Ref RedTeamSecurityGroup
+        - IpProtocol: tcp
+          FromPort: '5050'
+          ToPort: '5050'
+          SourceSecurityGroupId: !Ref RedTeamSecurityGroup
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          SourceSecurityGroupId: !Ref RedTeamSecurityGroup
+
+  BasicLinuxIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess'
+
+  BasicLinuxInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+        - !Ref BasicLinuxIAMRole
+      Path: /
+
+  BasicLinuxTarget:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref BasicLinuxNetInt
+          DeviceIndex: '0'
+      IamInstanceProfile: !Ref BasicLinuxInstanceProfile
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash
+            - |
+              export PATH=$PATH:/usr/local/bin
+            - |
+              yum update -y
+            - >
+              yum install -y httpd24 php70 mysql56-server php70-mysqlnd gcc
+              openssl-devel* nmap
+            - |
+              service httpd start
+            - >
+              export LOCAL_HOST=`curl
+              http://169.254.169.254/latest/meta-data/local-hostname`
+            - >
+              wget -O /home/ec2-user/install
+              https://d1wk0tztpsntt1.cloudfront.net/linux/latest/install
+            - |
+              chmod +x /home/ec2-user/install
+            - |
+              bash /home/ec2-user/install -u false
+      InstanceType: m4.large
+      ImageId: !Ref LatestAMZNLinux2AMI
+      Tags:
+        - Key: Name
+          Value: BasicLinuxTarget
+        - Key: CreatedBy
+          Value: GuardDuty Test Script
+
+  BasicWindowsSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enables Admin Access to basic windows hosts
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          SourceSecurityGroupId: !Ref RedTeamSecurityGroup
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          SourceSecurityGroupId: !Ref RedTeamSecurityGroup
+
+  BasicWindowsIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+
+  BasicWindowsInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+        - !Ref BasicWindowsIAMRole
+      Path: /
+
+  BasicWindowsTarget:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref BasicWindowsSecurityGroup
+          AssociatePublicIpAddress: 'false'
+          DeviceIndex: '0'
+          DeleteOnTermination: 'true'
+          SubnetId: !Ref PublicSubnet
+      InstanceType: m4.large
+      ImageId: !Ref LatestWindows2012R2AMI
+      Tags:
+        - Key: Name
+          Value: BasicWindowsTarget
+        - Key: CreatedBy
+          Value: GuardDuty Test Script
+
+  CloudCustodianInstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ssm.amazonaws.com
+                - ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSSecurityHubFullAccess'
+        - 'arn:aws:iam::aws:policy/ReadOnlyAccess'
+      Path: /
+  CloudCustodianInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref CloudCustodianInstanceRole
+  CloudCustodianInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref LatestAMZNLinux2AMI
+      InstanceType: t3.micro
+      SecurityGroupIds:
+        - !GetAtt 
+          - CloudCustodianSG
+          - GroupId
+      SubnetId: !Ref PublicSubnet
+      IamInstanceProfile: !Ref CloudCustodianInstanceProfile
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              yum upgrade -y
+            - |
+              yum install python3-pip -y
+            - |
+              pip3 install c7n
+            - |
+              crontab<<EOF
+            - >
+              */15 * * * * /usr/local/bin/custodian run -s /tmp
+              /var/policies.yaml
+            - |
+              EOF
+            - 'aws configure set region '
+            - !Ref 'AWS::Region'
+            - |+
+
+            - 'aws s3 cp s3://'
+            - !Ref MyAssetsBucketName
+            - '/'
+            - !Ref MyAssetsBucketPrefix
+            - 'policies/policies.yaml' 
+            - |2
+               /var/policies.yaml
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - '-'
+            - - Cloud Custodian
+              - !Ref 'AWS::StackName'
+  CloudCustodianSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable SSH access via port 22 for testing
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+  CloudCustodianEBS:
+    Type: 'AWS::EC2::Volume'
+    Properties:
+      AvailabilityZone: !Select 
+        - '0'
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      Encrypted: false
+      Size: 100
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - '-'
+            - - EBS Volume
+              - !Ref 'AWS::StackName'
+      VolumeType: gp2
+  SecretOne:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Description: SecretOne
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"dbadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 30
+        ExcludeCharacters: '"@//'
+      Name: ImportantSecret
+  SecretOneRotation:
+    DependsOn: SecretRotationFunction
+    Type: 'AWS::SecretsManager::RotationSchedule'
+    Properties:
+      RotationLambdaARN: !GetAtt 
+        - SecretRotationFunction
+        - Outputs.RotationLambdaARN
+      RotationRules:
+        AutomaticallyAfterDays: 120
+      SecretId: !Ref SecretOne
+  SecretTwo:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Description: SecretOne
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"dbadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 30
+        ExcludeCharacters: '"@//'
+      Name: UltimateSecret
+  SecretTwoRotation:
+    DependsOn: SecretRotationFunction
+    Type: 'AWS::SecretsManager::RotationSchedule'
+    Properties:
+      RotationLambdaARN: !GetAtt 
+        - SecretRotationFunction
+        - Outputs.RotationLambdaARN
+      RotationRules:
+        AutomaticallyAfterDays: 120
+      SecretId: !Ref SecretTwo
+  SecretRotationFunction:
+    Type: 'AWS::Serverless::Application'
+    Properties:
+      Location:
+        ApplicationId: >-
+          arn:aws:serverlessrepo:us-east-1:297356227824:applications/SecretsManagerRDSMySQLRotationSingleUser
+        SemanticVersion: 1.1.192
+      Parameters:
+        endpoint: !Sub 'https://secretsmanager.${AWS::Region}.amazonaws.com'
+        functionName: SecretsManagerMySQLRotationLambda
+  SecretRotationComplianceLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: LambdaPolicyName
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'logs:CreateLogGroup'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:logs:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Join 
+                  - ''
+                  - - 'arn:aws:logs:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - ':log-group:/aws/lambda/find-secrets-without-rotation:*'
+              - Effect: Allow
+                Action:
+                  - 'securityhub:UpdateFindings'
+                  - 'securityhub:BatchImportFindings'
+                  - 'securityhub:GetFindings'
+                  - 'secretsmanager:ListSecrets'
+                  - 'secretsmanager:DescribeSecret'
+                Resource: '*'
+  SecretComplianceLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        S3Bucket: !Ref MyAssetsBucketName
+        S3Key: !Sub "${MyAssetsBucketPrefix}lambdas/find-secrets-without-rotation.zip"
+      Description: Function to raise SecHub findings for non-compliant secrets
+      FunctionName: find-secrets-without-rotation
+      Runtime: python3.7
+      Handler: find-secrets-without-rotation.lambda_handler
+      Role: !GetAtt 
+        - SecretRotationComplianceLambdaRole
+        - Arn
+      Environment:
+        Variables:
+          ROTATION_DAYS_MAX: '90'
+  SecretComplianceRunRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: Secret Compliance Assessment CRON
+      ScheduleExpression: rate(15 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt 
+            - SecretComplianceLambdaFunction
+            - Arn
+          Id: SecretComplianceLambdaFunctionId
+  SecretComplianceLambdaInvokePermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !GetAtt 
+        - SecretComplianceLambdaFunction
+        - Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt 
+        - SecretComplianceRunRule
+        - Arn
+  CustomBackedLambdaToEnableInspectorRole:
+    Type: AWS::IAM::Role
+    DependsOn: BasicLinuxTarget
+    Properties:
+      RoleName:
+        Fn::Sub: lambda-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+            - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
+        - arn:aws:iam::aws:policy/AmazonInspector2FullAccess
+      Path: /
+  CustomBackedLambdaToEnableInspector:
+    Type: AWS::Lambda::Function
+    DependsOn: CustomBackedLambdaToEnableInspectorRole
+    Properties:
+      Description: Lambda to enable Inspectorv2
+      FunctionName: CustomBackedLambdaToEnableInspector
+      Runtime: python3.9
+      Role: !GetAtt 
+        - CustomBackedLambdaToEnableInspectorRole
+        - Arn
+      Handler: index.lambda_handler
+      Timeout: 90
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+          client = boto3.client('inspector2')
+
+          def lambda_handler(event, context):
+              if event.get('RequestType') == 'Create':
+                    response = client.enable(
+                      resourceTypes=[
+                          'EC2','ECR','LAMBDA'
+                      ]
+                    )
+                    response['message'] = "TRUE"
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, response)
+              elif event.get('RequestType') == 'Delete':
+                    response = client.disable(
+                      resourceTypes=[
+                          'EC2','ECR','LAMBDA'
+                      ]
+                    )
+                    response['message'] = "FALSE"
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, response)
+  InvokeCustomLambda:
+    DependsOn: CustomBackedLambdaToEnableInspector
+    Type: Custom::InvokeCustomLambda
+    Properties:
+      ServiceToken: !GetAtt CustomBackedLambdaToEnableInspector.Arn

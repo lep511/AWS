@@ -1,3 +1,5 @@
+#import awswrangler as wr 
+from awswrangler import dynamodb as wr_d
 from decimal import Decimal
 from io import BytesIO
 from datetime import datetime
@@ -9,6 +11,7 @@ import os
 from pprint import pprint
 import boto3
 import pandas as pd
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, TypeVar, Union, cast
 from boto3.dynamodb.types import Binary
 from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import ClientError
@@ -25,13 +28,14 @@ class DecimalEncoder(json.JSONEncoder):
 class DynamoTable:
     min_compress = 250
     
-    def __init__(self, table_name=None, dyn_resource=None):
+    def __init__(self, table_name=None, profile_name=None, region='us-east-1'):
         """
         :param table_name: A DynamoDB table.
         """
         self.table_name = table_name
-        if dyn_resource is None:
-            self.dyn_resource = boto3.resource('dynamodb')
+        self.session = boto3.Session(profile_name=profile_name, region_name=region)
+        self.dyn_resource = self.session.resource("dynamodb", region_name=region)
+        self.region = region
         self.__keyType = {"S": "s", "N": 0, "B": b"b"}
         if not table_name:
             self.table_name = None
@@ -46,10 +50,10 @@ class DynamoTable:
         
     def __repr__(self):
         if self.table_name != None:
+            self.table.reload()
             rep = f"- Table name: {self.table_name}\
             \n- Table arn: {self.table.table_arn}\
             \n- Table creation: {self.table.creation_date_time}\
-            \n- Billing mode: {self.table.billing_mode_summary['BillingMode']}\
             \n- {self.table.key_schema}\
             \n- {self.table.attribute_definitions}"
         else:
@@ -80,8 +84,8 @@ class DynamoTable:
     
     def select_table(self, table_name):
         if not self.exists(table_name):
-            print("Table doesn't exist. To create use create_table() function.")
             self.table_name = None
+            raise ValueError("Table doesn't exist. To create use create_table() function.")
         else:
             self.table_name = table_name
 
@@ -100,7 +104,7 @@ class DynamoTable:
                      partition_key, 
                      partition_key_type, 
                      sort_key=None, 
-                     sort_key_type=None, 
+                     sort_key_type=None,
                      provisioned=False, # or 'PAY_PER_REQUEST'
                      rcu=10, 
                      wcu=10
@@ -112,21 +116,20 @@ class DynamoTable:
         :param partition_key_type: Primary key type.
         :param sort_key: Sort key name.
         :param sort_key_type: Sort key type.
+        :param provisioned: True = PROVISIONED, False = PAY_PER_REQUEST
         :param rcu: (Read Capacity Units) Default: 10. The maximum number of strongly consistent reads 
                     consumed per second before DynamoDB returns a ThrottlingException.
         :param wcu: (WriteCapacityUnits) Default: 10. The maximum number of writes consumed per second 
                     before DynamoDB returns a ThrottlingException.
         """           
+        
+        key_schema = [{'AttributeName': partition_key, 'KeyType': 'HASH'}]
+        att_definition=[{'AttributeName': partition_key, 'AttributeType': partition_key_type}]
+              
         if sort_key != None:
-            key_schema = [
-                        {'AttributeName': partition_key, 'KeyType': 'HASH'},  
-                        {'AttributeName': sort_key, 'KeyType': 'RANGE'}]
-            att_definition = [
-                        {'AttributeName': partition_key, 'AttributeType': partition_key_type},
-                        {'AttributeName': sort_key, 'AttributeType': sort_key_type}]
-        else:
-            key_schema = [{'AttributeName': partition_key, 'KeyType': 'HASH'}]
-            att_definition=[{'AttributeName': partition_key, 'AttributeType': partition_key_type}]
+            key_schema.append({'AttributeName': sort_key, 'KeyType': 'RANGE'})
+            att_definition.append({'AttributeName': sort_key, 'AttributeType': sort_key_type})
+
         try:
             if provisioned:
                 self.table = self.dyn_resource.create_table(
@@ -311,16 +314,24 @@ class DynamoTable:
         except ClientError as err:
             logger.error(
                 "Couldn't update movie %s in table %s. Here's why: %s: %s",
-                title, self.table.name,
+                title, self.table_name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
         else:
             return response['Attributes']
 
+    def query_partiql(self, query: str, parameters: Optional[List[Any]] = None, chunked: bool = False):
+        if "<table>" in query:
+            query = query.replace("<table>", self.table.name)
+        resp = wr_d.read_partiql_query(query=query, parameters=parameters, chunked=chunked, boto3_session=self.session)
+        return resp
+                      
     def query_items(self, query, to_pandas=False, consumed_capacity=False):
         """
         Query a table items.
         :param query: The key value to query.
+        :param to_pandas: If True, returns a pandas DataFrame.
+        :param consumed_capacity: If True, returns the consumed capacity.
         :return: Items matching the search.
         """
         try:
@@ -351,50 +362,120 @@ class DynamoTable:
             return response['Items']
 
 
-    def scan_movies(self, year_range):
+    def create_global_secondary_index(self, att_name, att_type, i_name, sort_index=None, 
+                                      sort_type=None, proj_type="ALL", provisioned=True, 
+                                      i_rcu=5, i_wcu=5):
         """
-        Scans for movies that were released in a range of years.
-        Uses a projection expression to return a subset of data for each movie.
-        :param year_range: The range of years to retrieve.
-        :return: The list of movies released in the specified years.
+        Add a global secondary index to a DynamoDB table
+        :param att_name: Name of attribute.
+        :param att_type: Attribute type (S-String, N-Number, B-Binary).
+        :param sort_index: Name of sort index.
+        :param sort_type: Attribute type (S-String, N-Number, B-Binary).
+        :param i_name: Name of index.
+        :param proj_type: Represents attributes that are copied (projected) from the table into the global secondary index
+                          (ALL, KEYS_ONLY, [list of INCLUDE non-key attribute])
+        :param provisioned: True = PROVISIONED, False = PAY_PER_REQUEST
+        :param i_rcu: Read capacity units.
+        :param i_wcu: Write capacity units.
         """
-        movies = []
-        scan_kwargs = {
-            'FilterExpression': Key('year').between(year_range['first'], year_range['second']),
-            'ProjectionExpression': "#yr, title, info.rating",
-            'ExpressionAttributeNames': {"#yr": "year"}}
+        # Check parameter proj_type
+        if type(proj_type) == list:
+            project = {
+                "ProjectionType": "INCLUDE",
+                "NonKeyAttributes": proj_type
+            }
+        else:
+            project = {
+                "ProjectionType": proj_type,
+            }
+        # Check parameter sort_index and sort_type
+        if sort_index != None:
+            key_schema = [
+                        {'AttributeName': att_name, 'KeyType': 'HASH'},  
+                        {'AttributeName': sort_index, 'KeyType': 'RANGE'}]
+            att_definition = [
+                        {'AttributeName': att_name, 'AttributeType': att_type},
+                        {'AttributeName': sort_index, 'AttributeType': sort_type}]
+        else:
+            key_schema = [{'AttributeName': att_name, 'KeyType': 'HASH'}]
+            att_definition=[{'AttributeName': att_name, 'AttributeType': att_type}]
+        ### Main Parameter
+        gsi_main =  [
+                        {
+                            "Create": {
+                                "IndexName": i_name,
+                                "KeySchema": key_schema,
+                                "Projection": project,
+                                # Global secondary indexes have read and write capacity separate from the underlying table.
+                                "ProvisionedThroughput": {
+                                    "ReadCapacityUnits": i_rcu,
+                                    "WriteCapacityUnits": i_wcu,
+                                }
+                            }
+                        }
+        ]
+        # Check parameter provisioned
+        if not provisioned:
+            del gsi_main[0]["Create"]["ProvisionedThroughput"]
         try:
-            done = False
-            start_key = None
-            while not done:
-                if start_key:
-                    scan_kwargs['ExclusiveStartKey'] = start_key
-                response = self.table.scan(**scan_kwargs)
-                movies.extend(response.get('Items', []))
-                start_key = response.get('LastEvaluatedKey', None)
-                done = start_key is None
+            self.client = self.session.client('dynamodb', region_name=self.region)
+            resp = self.client.update_table(
+                TableName = self.table_name,
+                AttributeDefinitions=att_definition,
+                GlobalSecondaryIndexUpdates=gsi_main
+            )
+            self.table.reload()
         except ClientError as err:
             logger.error(
-                "Couldn't scan for movies. Here's why: %s: %s",
+                "Global secondary index could not be created in table %s. Here's why: %s: %s",
+                self.table_name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
 
-        return movies
-
-    def delete_movie(self, title, year):
+    def check_status_gsi(self, index_name=None):
         """
-        Deletes a movie from the table.
-        :param title: The title of the movie to delete.
-        :param year: The release year of the movie to delete.
+        Usually, a new GSI should be created within 5 minutes. But the time duration can increase 
+        when adding a GSI to an existing table since DynamoDB needs to backfill all the existing 
+        database records.
+        :param name_gsi: The name of global secondary index.
         """
-        try:
-            self.table.delete_item(Key={'year': year, 'title': title})
-        except ClientError as err:
-            logger.error(
-                "Couldn't delete movie %s. Here's why: %s: %s", title,
-                err.response['Error']['Code'], err.response['Error']['Message'])
-            raise
-       
+        self.table.reload()
+        list_names = []
+        actual_status = []
+        status = None
+        if self.table.global_secondary_indexes:
+            for i in self.table.global_secondary_indexes:
+                if index_name == i['IndexName']: 
+                    return i['IndexStatus']
+                list_names.append(i['IndexName'])
+                actual_status.append(i['IndexStatus'])
+        
+            if 'CREATING' in actual_status:
+                status = 'CREATING'
+            elif 'UPDATING' in actual_status:
+                status = 'UPDATING'
+            elif 'DELETING' in actual_status:
+                status = 'DELETING'
+            else:
+                status = 'ACTIVE'
+        
+        if index_name: raise ValueError("Global secondary index does not exist.")       
+        
+        return status
+            
+    @property
+    def list_gsi(self):
+        """
+        Returns a list of all global secondary indexes of the table.
+        """
+        if self.table.global_secondary_indexes:
+            all_gsi = []
+            for gsi_name in self.table.global_secondary_indexes:
+                all_gsi.append(gsi_name["IndexName"])
+            return all_gsi
+        else:
+            return None
+    
     def found_binary(self, response, only_check=False):
         bin_found = []
         elem = "Item" if "Item" in response else "Items"
@@ -453,17 +534,3 @@ class DynamoTable:
                         response[elem][i][att] = val_dec
             
         return response
-    
-    def delete_table(self):
-        """
-        Deletes the table.
-        """
-        try:
-            self.table.delete()
-            self.table = None
-            print("Table deleted successfully!")
-        except ClientError as err:
-            logger.error(
-                "Couldn't delete table. Here's why: %s: %s",
-                err.response['Error']['Code'], err.response['Error']['Message'])
-            raise

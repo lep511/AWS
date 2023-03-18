@@ -1,0 +1,616 @@
+Resources:
+  rawbucket8DE4BA9D:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Join:
+          - ""
+          - - raw-bucket-
+            - Ref: AWS::AccountId
+            - "-777"
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+  processedbucketF143F473:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Join:
+          - ""
+          - - processed-bucket-
+            - Ref: AWS::AccountId
+            - "-777"
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+  LabVPC841D92ED:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.10.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: LabVPC
+  LabVPClambdasubnetSubnet1Subnet74B18281:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      CidrBlock: 10.10.0.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: lambda_subnet
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: Name
+          Value: batch-data/LabVPC/lambda_subnetSubnet1
+  LabVPClambdasubnetSubnet1RouteTable4DDF1D94:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      Tags:
+        - Key: Name
+          Value: batch-data/LabVPC/lambda_subnetSubnet1
+  LabVPClambdasubnetSubnet1RouteTableAssociation643838E3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: LabVPClambdasubnetSubnet1RouteTable4DDF1D94
+      SubnetId:
+        Ref: LabVPClambdasubnetSubnet1Subnet74B18281
+  LabVPClambdasubnetSubnet1DefaultRoute5A11AC54:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: LabVPClambdasubnetSubnet1RouteTable4DDF1D94
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: LabVPCIGW420A2B26
+    DependsOn:
+      - LabVPCVPCGW4296DBEB
+  LabVPClambdasubnetSubnet1EIP52C1C318:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: batch-data/LabVPC/lambda_subnetSubnet1
+  LabVPClambdasubnetSubnet1NATGateway8FCBC7B7:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId:
+        Ref: LabVPClambdasubnetSubnet1Subnet74B18281
+      AllocationId:
+        Fn::GetAtt:
+          - LabVPClambdasubnetSubnet1EIP52C1C318
+          - AllocationId
+      Tags:
+        - Key: Name
+          Value: batch-data/LabVPC/lambda_subnetSubnet1
+  LabVPClambdasubnetSubnet2SubnetFD48C9A2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      CidrBlock: 10.10.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: lambda_subnet
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: Name
+          Value: batch-data/LabVPC/lambda_subnetSubnet2
+  LabVPClambdasubnetSubnet2RouteTable25BB30D2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      Tags:
+        - Key: Name
+          Value: batch-data/LabVPC/lambda_subnetSubnet2
+  LabVPClambdasubnetSubnet2RouteTableAssociationEB0F4008:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: LabVPClambdasubnetSubnet2RouteTable25BB30D2
+      SubnetId:
+        Ref: LabVPClambdasubnetSubnet2SubnetFD48C9A2
+  LabVPClambdasubnetSubnet2DefaultRoute5CBF72AD:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: LabVPClambdasubnetSubnet2RouteTable25BB30D2
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: LabVPCIGW420A2B26
+    DependsOn:
+      - LabVPCVPCGW4296DBEB
+  LabVPClambdasubnetSubnet2EIP95CE1F7D:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: batch-data/LabVPC/lambda_subnetSubnet2
+  LabVPClambdasubnetSubnet2NATGatewayA0AD8574:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId:
+        Ref: LabVPClambdasubnetSubnet2SubnetFD48C9A2
+      AllocationId:
+        Fn::GetAtt:
+          - LabVPClambdasubnetSubnet2EIP95CE1F7D
+          - AllocationId
+      Tags:
+        - Key: Name
+          Value: batch-data/LabVPC/lambda_subnetSubnet2
+  LabVPCdatabasesubnetSubnet1SubnetFC8EEA49:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      CidrBlock: 10.10.2.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: database-subnet
+        - Key: aws-cdk:subnet-type
+          Value: Private
+        - Key: Name
+          Value: batch-data/LabVPC/database-subnetSubnet1
+  LabVPCdatabasesubnetSubnet1RouteTable0017E5FB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      Tags:
+        - Key: Name
+          Value: batch-data/LabVPC/database-subnetSubnet1
+  LabVPCdatabasesubnetSubnet1RouteTableAssociationC85244BA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: LabVPCdatabasesubnetSubnet1RouteTable0017E5FB
+      SubnetId:
+        Ref: LabVPCdatabasesubnetSubnet1SubnetFC8EEA49
+  LabVPCdatabasesubnetSubnet1DefaultRoute3835B9B9:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: LabVPCdatabasesubnetSubnet1RouteTable0017E5FB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: LabVPClambdasubnetSubnet1NATGateway8FCBC7B7
+  LabVPCdatabasesubnetSubnet2SubnetF18558BC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      CidrBlock: 10.10.3.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: database-subnet
+        - Key: aws-cdk:subnet-type
+          Value: Private
+        - Key: Name
+          Value: batch-data/LabVPC/database-subnetSubnet2
+  LabVPCdatabasesubnetSubnet2RouteTable4D4BB485:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      Tags:
+        - Key: Name
+          Value: batch-data/LabVPC/database-subnetSubnet2
+  LabVPCdatabasesubnetSubnet2RouteTableAssociationA0DC0D58:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: LabVPCdatabasesubnetSubnet2RouteTable4D4BB485
+      SubnetId:
+        Ref: LabVPCdatabasesubnetSubnet2SubnetF18558BC
+  LabVPCdatabasesubnetSubnet2DefaultRoute471E43C6:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: LabVPCdatabasesubnetSubnet2RouteTable4D4BB485
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: LabVPClambdasubnetSubnet2NATGatewayA0AD8574
+  LabVPCIGW420A2B26:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: LabVPC
+  LabVPCVPCGW4296DBEB:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      InternetGatewayId:
+        Ref: LabVPCIGW420A2B26
+  databaseSG1EBD1DA9:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Database SG
+      GroupName: Database Security Group
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow access to tcp port 3309
+          FromPort: 3306
+          IpProtocol: tcp
+          ToPort: 3306
+      Tags:
+        - Key: Name
+          Value: RDS Security Group
+      VpcId:
+        Ref: LabVPC841D92ED
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      GenerateSecretString:
+        ExcludeCharacters: " %+~`#$&*()|[]{}:;<>?!'/@\"\\"
+        GenerateStringKey: password
+        PasswordLength: 30
+        RequireEachIncludedType: false
+        SecretStringTemplate: '{"username": "clusteradmin"}'
+  rdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: private subnets for rds
+      SubnetIds:
+        - Ref: LabVPCdatabasesubnetSubnet1SubnetFC8EEA49
+        - Ref: LabVPCdatabasesubnetSubnet2SubnetF18558BC
+      DBSubnetGroupName: database-subnet
+  salesCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-mysql
+      DatabaseName: sales
+      DBClusterIdentifier: sales-database-cluster
+      DBClusterParameterGroupName: default.aurora-mysql5.7
+      DBSubnetGroupName:
+        Ref: rdsSubnetGroup
+      EngineVersion: 5.7.mysql_aurora.2.08.1
+      MasterUsername: clusteradmin
+      MasterUserPassword:
+        Fn::Join:
+          - ""
+          - - "{{resolve:secretsmanager:"
+            - Ref: RDSSecret
+            - :SecretString:password::}}
+      VpcSecurityGroupIds:
+        - Fn::GetAtt:
+            - databaseSG1EBD1DA9
+            - GroupId
+    DependsOn:
+      - rdsSubnetGroup
+  salesinstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier:
+        Ref: salesCluster
+      DBInstanceClass: db.t3.small
+      DBInstanceIdentifier: sales-database-instance-writer
+      DBParameterGroupName: default.aurora-mysql5.7
+      DBSubnetGroupName:
+        Ref: rdsSubnetGroup
+      Engine: aurora-mysql
+      EngineVersion: 5.7.mysql_aurora.2.08.1
+      PubliclyAccessible: false
+    DependsOn:
+      - rdsSubnetGroup
+  MyCfnSecretTargetAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId:
+        Ref: RDSSecret
+      TargetId:
+        Ref: salesCluster
+      TargetType: AWS::RDS::DBCluster
+  pymysqllayer3A934E33:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      Content:
+        S3Bucket: pu-base-buckets-v1-provision-lab
+        S3Key: b5ed0e57-4c23-4224-8f26-c0cac80b055c/pymysqlLayerPython3.8.zip
+      CompatibleRuntimes:
+        - python3.9
+        - python3.8
+        - python3.7
+      Description: Layer with pymysql
+  fakerlayer7EA48E90:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      Content:
+        S3Bucket: pu-base-buckets-v1-provision-lab
+        S3Key: b5ed0e57-4c23-4224-8f26-c0cac80b055c/fakerLayerPython3.8.zip
+      CompatibleRuntimes:
+        - python3.9
+        - python3.8
+        - python3.7
+      Description: Layer with faker
+  VPCSercretsManagerEndpointSecurityGroupB2EE8638:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: batch-data/VPC_SercretsManager_Endpoint/SecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp:
+            Fn::GetAtt:
+              - LabVPC841D92ED
+              - CidrBlock
+          Description:
+            Fn::Join:
+              - ""
+              - - "from "
+                - Fn::GetAtt:
+                    - LabVPC841D92ED
+                    - CidrBlock
+                - :443
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      VpcId:
+        Ref: LabVPC841D92ED
+  VPCSercretsManagerEndpoint1E1CA7AF:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: com.amazonaws.us-east-1.secretsmanager
+      VpcId:
+        Ref: LabVPC841D92ED
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - Fn::GetAtt:
+            - VPCSercretsManagerEndpointSecurityGroupB2EE8638
+            - GroupId
+      SubnetIds:
+        - Ref: LabVPClambdasubnetSubnet1Subnet74B18281
+        - Ref: LabVPClambdasubnetSubnet2SubnetFD48C9A2
+      VpcEndpointType: Interface
+  VPCRDSEndpointSecurityGroup3B0CB8B8:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: batch-data/VPC_RDS_Endpoint/SecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp:
+            Fn::GetAtt:
+              - LabVPC841D92ED
+              - CidrBlock
+          Description:
+            Fn::Join:
+              - ""
+              - - "from "
+                - Fn::GetAtt:
+                    - LabVPC841D92ED
+                    - CidrBlock
+                - :443
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      VpcId:
+        Ref: LabVPC841D92ED
+  VPCRDSEndpointD23168B6:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName:
+        Fn::Join:
+          - ""
+          - - com.amazonaws.
+            - Ref: AWS::Region
+            - .rds
+      VpcId:
+        Ref: LabVPC841D92ED
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - Fn::GetAtt:
+            - VPCRDSEndpointSecurityGroup3B0CB8B8
+            - GroupId
+      SubnetIds:
+        - Ref: LabVPCdatabasesubnetSubnet1SubnetFC8EEA49
+        - Ref: LabVPCdatabasesubnetSubnet2SubnetF18558BC
+      VpcEndpointType: Interface
+  LabFunctionRole82673BCB:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+  LabFunctionRoleDefaultPolicyD568DC80:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ec2:CreateNetworkInterface
+              - ec2:DeleteNetworkInterface
+              - ec2:DescribeNetworkInterfaces
+              - lambda:InvokeFunction
+              - s3:Get*
+              - s3:List*
+              - s3:Put*
+              - secretsmanager:Describe*
+              - secretsmanager:Get*
+              - secretsmanager:List*
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: LabFunctionRoleDefaultPolicyD568DC80
+      Roles:
+        - Ref: LabFunctionRole82673BCB
+  GlueRoleDEDFFD2C:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/AmazonS3FullAccess
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/service-role/AWSGlueServiceRole
+      RoleName:
+        Fn::Join:
+          - ""
+          - - GlueRole-
+            - Ref: AWS::AccountId
+            - "-777"
+  GlueRoleDefaultPolicy83D85957:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - glue:BatchStopJobRun
+              - glue:CreateConnection
+              - glue:CreateJob
+              - glue:CreateScript
+              - glue:DeleteConnection
+              - glue:DeleteJob
+              - glue:GetConnection
+              - glue:GetConnections
+              - glue:GetDatabases
+              - glue:GetJob
+              - glue:GetJobRun
+              - glue:GetJobRuns
+              - glue:GetJobs
+              - glue:GetMapping
+              - glue:GetPlan
+              - glue:GetSchema
+              - glue:GetSecurityConfigurations
+              - glue:GetTable
+              - glue:GetTables
+              - glue:GetTags
+              - glue:SearchTables
+              - glue:StartJobRun
+              - glue:UpdateConnection
+              - glue:UpdateJob
+              - glue:UseGlueStudio
+              - iam:GetRole
+              - iam:GetRolePolicy
+              - iam:ListGroups
+              - iam:ListRolePolicies
+              - iam:ListRoles
+              - iam:ListUsers
+              - secretsmanager:Describe*
+              - secretsmanager:Get*
+              - secretsmanager:List*
+              - secretsmanager:TagResource
+              - secretsmanager:UntagResource
+            Effect: Allow
+            Resource: "*"
+          - Action: iam:PassRole
+            Condition:
+              StringLike:
+                iam:PassedToService:
+                  - glue.amazonaws.com
+            Effect: Allow
+            Resource: arn:aws:iam::*:role/AWSGlueServiceRole*
+        Version: "2012-10-17"
+      PolicyName: GlueRoleDefaultPolicy83D85957
+      Roles:
+        - Ref: GlueRoleDEDFFD2C
+  lambdardsdataloadfunctionSecurityGroup61453FC0:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Automatic security group for Lambda Function batchdatalambdardsdataloadfunctionA16C35F5
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      VpcId:
+        Ref: LabVPC841D92ED
+  lambdardsdataloadfunction9B2B8A73:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: pu-base-buckets-v1-provision-lab
+        S3Key: b5ed0e57-4c23-4224-8f26-c0cac80b055c/rdsLoadData.zip
+      Role:
+        Fn::GetAtt:
+          - LabFunctionRole82673BCB
+          - Arn
+      Environment:
+        Variables:
+          secret_arn:
+            Ref: RDSSecret
+      FunctionName: dataLoad_function
+      Handler: lambda_function.lambda_handler
+      Layers:
+        - Ref: fakerlayer7EA48E90
+        - Ref: pymysqllayer3A934E33
+      MemorySize: 512
+      Runtime: python3.8
+      Timeout: 300
+      VpcConfig:
+        SecurityGroupIds:
+          - Fn::GetAtt:
+              - lambdardsdataloadfunctionSecurityGroup61453FC0
+              - GroupId
+        SubnetIds:
+          - Ref: LabVPCdatabasesubnetSubnet1SubnetFC8EEA49
+          - Ref: LabVPCdatabasesubnetSubnet2SubnetF18558BC
+    DependsOn:
+      - LabFunctionRoleDefaultPolicyD568DC80
+      - LabFunctionRole82673BCB
+  invokeCopyFunction:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+          - lambdardsdataloadfunction9B2B8A73
+          - Arn
+    DependsOn:
+      - salesinstance

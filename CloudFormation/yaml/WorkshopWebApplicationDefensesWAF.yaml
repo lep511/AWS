@@ -1,0 +1,1328 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Strengthen Your Web Application Defenses with AWS WAF - Workshop Event Engine Team Account Template
+
+  MIT No Attribution
+
+  Copyright 2022 Amazon Web Services
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this
+  software and associated documentation files (the "Software"), to deal in the Software
+  without restriction, including without limitation the rights to use, copy, modify,
+  merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+  permit persons to whom the Software is furnished to do so.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+  INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+  PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Parameters
+Parameters:
+  EC2InstanceSize:
+    Default: "t2.small"
+    Description: Instance size for Web Servers.
+    Type: String
+    AllowedValues:
+      - "t2.small"
+      - "t2.medium"
+      - "t3.small"
+      - "t3.medium"
+  MyTrustedNetwork:
+    Description: Only connections from this network are allowed to your site. Enter an IP or CIDR E.g. 10.10.10.10/32. Get your current IP @ https://ifconfig.co/
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    Type: String
+    Default: 0.0.0.0/0
+  ArtifactsBucket:
+    Description: S3 bucket with artifact files (Lambda functions, templates, html files, etc.). Leave default.
+    Type: String
+    Default: ws-event-91063004-d11-us-east-1
+    AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$
+    ConstraintDescription: ArtifactsBucket S3 bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-).
+      It cannot start or end with a hyphen (-).
+  ArtifactsPrefix:
+    Description: Path in the S3 bucket containing artifact files, ends with "/". Leave default.
+    Type: String
+    Default: 99a493d5-9200-4609-bd26-5f7b67d2eb58/assets/
+    AllowedPattern: ^[0-9a-zA-Z-/]*$
+    ConstraintDescription: ArtifactsPrefix key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-),
+      and forward slash (/). Leave default.
+  AMIPreviousVersionIndex:
+    Description: Number of previous version of AMI to use [0=current AMI through 15]
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 5
+
+## Metadata
+Metadata:
+
+## Friendly UI grouping for parameters
+#        - AmazonLinux2AmiId
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Instance Configuration
+        Parameters:
+        - EC2InstanceSize
+        - MyTrustedNetwork
+        - AMIPreviousVersionIndex
+      - Label:
+          default: Artifact Configuration
+        Parameters:
+        - ArtifactsBucket
+        - ArtifactsPrefix
+
+    ParameterLabels:
+      EC2InstanceSize:
+        default: EC2 Instance Size
+      MyTrustedNetwork:
+        default: Trusted Network CIDR
+      ArtifactsBucket:
+        default: S3 artifact bucket
+      ArtifactsPrefix:
+        default: S3 artifact path
+
+## Resources
+Resources:
+  
+  ####################################
+  # begin Dashboard web site         #
+  ####################################
+
+  WSWDashCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn: WSWDashOriginBucket
+    Properties:
+      DistributionConfig:
+        Comment: !Sub WSW Dashboard ${AWS::Region}
+        DefaultRootObject: index.html
+        Origins:
+          - Id: wsw-dash-s3-bucket
+            DomainName: !GetAtt WSWDashOriginBucket.RegionalDomainName
+            S3OriginConfig: 
+              OriginAccessIdentity: 
+                Fn::Sub: 'origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}'
+        Enabled: true
+        HttpVersion: 'http2'
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          SmoothStreaming: 'false'
+          MinTTL: '0'
+          DefaultTTL: '0'
+          ForwardedValues:
+            QueryString: 'false'
+          ViewerProtocolPolicy: redirect-to-https
+          TargetOriginId: 'wsw-dash-s3-bucket'
+
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: WSW Dashboard
+
+  WSWDashOriginBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      # Change bucket name to reflect your website
+      BucketName: !Sub '${AWS::StackName}-wsw-dashboard-${AWS::AccountId}'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - HEAD
+            MaxAge: 3000
+
+  WSWDashOriginBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WSWDashOriginBucket
+      PolicyDocument:
+      # Restricting access to cloudfront only.
+        Statement:
+          -
+            Effect: Allow
+            Action: 's3:GetObject'
+            Resource:
+              - !Sub 'arn:aws:s3:::${WSWDashOriginBucket}/*'
+            Principal:
+              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}'
+
+
+  PopulateS3BucketExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            Resource:
+            - !Sub 'arn:aws:s3:::${WSWDashOriginBucket}/*'
+
+            
+  PopulateS3BucketFunction: 
+    Type: AWS::Lambda::Function
+    Properties: 
+      Handler: index.handler
+      Role: !GetAtt PopulateS3BucketExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 60
+      MemorySize: 1536
+      Code: 
+        ZipFile: |
+          from io import BytesIO
+          from urllib.request import urlopen
+          from zipfile import ZipFile
+          import os
+          import boto3
+          import json
+          import cfnresponse
+          def handler(event, context):
+            print (str(event))
+            responseData = {}
+            contenttype = {'py':'text/x-python', 'png':'image/png', 'html': 'text/html', 'js': 'application/javascript', 'css': 'text/css', 'json':'application/json', 'zip':'application/zip', 'ico':'image/x-icon'}
+            try: 
+              SourceBucket = event['ResourceProperties']['SourceBucket']
+              SourceKey = event['ResourceProperties']['SourceKey']
+              DestinationBucket = event['ResourceProperties']['DestinationBucket']
+              baseDir = '/tmp/' + DestinationBucket + '/'
+              ZipDownload = '/tmp/'+SourceBucket+'.zip'
+              print("SourceBucket=" + SourceBucket)
+              print("SourceKey=" + SourceKey)
+              print("DestinationBucket=" + DestinationBucket)
+              print("baseDir=" + baseDir)
+              print("ZipDownload=" + ZipDownload)
+              s3client = boto3.client('s3')  
+              s3client.download_file(SourceBucket, SourceKey, ZipDownload)
+              print("downloaded")
+              with ZipFile(ZipDownload) as zfile:
+                zfile.extractall(baseDir)
+              print("unzipped")
+              for path, subdirs, files in os.walk(baseDir):
+                for filename in files:
+                  print("filename=" + filename)
+                  extension = os.path.splitext(filename)[1][1:]
+                  print("extension=" + extension + ", content type=" + contenttype[extension] )
+                  f = os.path.join(path, filename)
+                  print("f=" + f)
+                  key = f.replace(baseDir, "", 1)
+                  print("key=" + key)
+                  s3client.upload_file(f, DestinationBucket, key, ExtraArgs={ 'ContentType': contenttype[extension] })
+                  print("uploaded")
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+              print ('SUCCESS')
+            except Exception as e:
+              responseData['Error'] = str(e)
+              cfnresponse.send(event, context, cfnresponse.FAILED, responseData) 
+              print("FAILED ERROR: " + responseData['Error'])
+ 
+
+  PopulateS3Bucket:
+    Type: Custom::PopulatePublicBucket
+    Properties:
+      ServiceToken: !GetAtt PopulateS3BucketFunction.Arn
+      DestinationBucket: !Ref WSWDashOriginBucket
+      SourceBucket: !Ref ArtifactsBucket
+      SourceKey: !Sub ${ArtifactsPrefix}dashboard.zip
+
+
+####################################
+# End Dashboard web site           #
+####################################
+
+
+####################################
+# Begin Scanner Engine             #
+####################################
+
+
+  ScannerEngineSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        VpcId: !Ref vpc
+        GroupDescription: Outbound Security Group
+
+  ScannerEngineLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: PopulateS3Bucket
+    Properties: 
+      Environment:
+        Variables:
+          WSW_BUCKET: !Ref WSWDashOriginBucket
+          ALB_ENDPOINT: !GetAtt Alb.DNSName
+      Handler: scanner_engine.lambda_handler
+      Role: !GetAtt ScannerEngineRole.Arn
+      Runtime: python3.9
+      Timeout: 900
+      MemorySize: 1024
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref ScannerEngineSg
+        SubnetIds:
+          - !Ref sub1Private
+          - !Ref sub2Private
+      Code: 
+        S3Bucket: !Ref WSWDashOriginBucket
+        S3Key: scanner-lambda.zip
+
+  ScannerEngineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              "sts:AssumeRole"
+      Path: "/"
+      Policies:
+      - PolicyName: scannerlambda
+        PolicyDocument: 
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*"
+              -
+                Effect: Allow
+                Action:
+                - s3:ListObjects
+                - s3:PutObject
+                - s3:GetObject
+                - s3:DeleteObject
+                Resource: !Sub 'arn:aws:s3:::${WSWDashOriginBucket}/*'
+              -
+                Effect: Allow
+                Action:
+                - ec2:CreateNetworkInterface
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeNetworkInterfaces
+                - ec2:AssignPrivateIpAddresses
+                - ec2:UnassignPrivateIpAddresses
+                Resource: "*"
+
+
+  ScannerEngineLambdaSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "ScheduledScanner"
+      ScheduleExpression: "rate(1 minute)"
+      State: "ENABLED"
+      Targets:
+        -
+          Arn: !GetAtt ScannerEngineLambda.Arn
+          Id: TargetFunctionV1
+
+  ScannerEnginePermissionToInvoke:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !Ref ScannerEngineLambda
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt ScannerEngineLambdaSchedule.Arn
+
+####################################
+# End Scanner Engine               #
+####################################
+
+
+
+
+## The VPC
+  vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      CidrBlock: !Sub 10.5.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', vpc]]
+
+## Create an IGW & attach it to the VPC
+  vpcIgw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', Igw]]
+  attachIgwVpc:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref vpc
+      InternetGatewayId: !Ref vpcIgw
+
+## Create a public subnet in each AZ
+  sub1Public:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: !Sub 10.5.1.0/24
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', PubSub1]]
+  sub2Public:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: !Sub 10.5.2.0/24
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', PubSub2]]
+
+## Associate the public subnets with a public route table
+  rtbPublic:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpc
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', PubRoutes]]
+  rteToIgw:
+    Type: AWS::EC2::Route
+    DependsOn: attachIgwVpc
+    Properties:
+      RouteTableId: !Ref rtbPublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref vpcIgw
+  srta1Public:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref sub1Public
+      RouteTableId: !Ref rtbPublic
+  srta2Public:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref sub2Public
+      RouteTableId: !Ref rtbPublic
+
+## Create a private subnet in each AZ
+  sub1Private:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: !Sub 10.5.11.0/24
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', PrvSub1]]
+  sub2Private:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc
+      CidrBlock: !Sub 10.5.12.0/24
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', PrvSub2]]
+
+## Create a NAT Gateway & EIP
+  natEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  vpcNgw:
+    Type: AWS::EC2::NatGateway
+    DependsOn: attachIgwVpc
+    Properties:
+      AllocationId: !GetAtt natEip.AllocationId
+      SubnetId: !Ref sub2Public
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', Ngw]]
+
+## Associate the private subnets with a natted route table
+  rtbNat:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpc
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', NgwRoutes]]
+  rteToNgw:
+    Type: AWS::EC2::Route
+    DependsOn: vpcNgw
+    Properties:
+      RouteTableId: !Ref rtbNat
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref vpcNgw
+  srta1Ngw:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref sub1Private
+      RouteTableId: !Ref rtbNat
+  srta2Ngw:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref sub2Private
+      RouteTableId: !Ref rtbNat
+
+## Configure ALB: security group, load balancer, route 53 endpoint
+  
+  sgLoadBalancer1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref vpc
+      GroupDescription: Load Balancer Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref MyTrustedNetwork
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Join ["" , [!Ref natEip, "/32"]]
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', AlbSg]]
+
+
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: attachIgwVpc
+    Properties:
+      Scheme: internet-facing
+      SecurityGroups: 
+        - !Ref sgLoadBalancer1
+      Subnets: [ !Ref sub1Public, !Ref sub2Public ]
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', Alb]]
+
+  AlbTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /health.php
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 10
+      VpcId: !Ref vpc
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', TargGrp]]
+
+  AlbListenerHttp:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: [ AlbTargetGroup ]
+    Properties:
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AlbTargetGroup
+
+## Configure the ECS ASG, security group, launch configuration, IAM role, load balancer, cloudwatch log group, route53 endpoint
+  sgEC2Sg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref vpc
+      GroupDescription: EC2 Instance Security Group
+      Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', EC2Sg]]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: 
+            !Ref sgLoadBalancer1
+
+  LaunchConfiguration:
+    DependsOn: HttpAccessLogGroup
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId:
+        !GetAtt AMIInfo.Id
+      SecurityGroups:
+      - !GetAtt sgEC2Sg.GroupId
+      InstanceType: !Ref EC2InstanceSize
+      IamInstanceProfile:
+        Ref: EC2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          #yum update -y
+          curl --silent --location https://rpm.nodesource.com/setup_10.x | bash -
+          amazon-linux-extras install -y php7.2
+          yum install -y nodejs curl git httpd awslogs
+          ln -s /usr/bin/node /usr/bin/nodejs
+          node -v
+          npm install -g bower
+          /usr/bin/aws configure set region ${AWS::Region}
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --configsets site_config --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+
+    Metadata:
+        AWS::CloudFormation::Init:
+          configSets:
+            site_config:
+            - init_site
+          init_site:
+            files:
+              /etc/awslogs/awslogs.conf:
+                content: !Sub |
+                  [general]
+                  state_file = /var/lib/awslogs/agent-stat
+                  [/var/log/http-access]
+                  file = /var/log/httpd/access_log
+                  log_group_name = /var/log/httpd-${AWS::StackName}
+                  buffer_duration = 5000
+                  log_stream_name = {instance_id}-http-access
+                  initial_position = start_of_file
+                  [/var/log/http-forensic]
+                  file = /var/log/httpd/forensic_log
+                  log_group_name = /var/log/httpd-${AWS::StackName}
+                  buffer_duration = 5000
+                  log_stream_name = {instance_id}-http-forensic
+                  initial_position = start_of_file
+                mode: "000644"
+                owner: "root"
+                group: "root"
+            commands:
+              01getsite_content:
+                cwd: /tmp
+                command: !Sub "aws s3 cp s3://${ArtifactsBucket}/${ArtifactsPrefix}site.zip /tmp/"
+              02get_composer:
+                cwd: /tmp
+                env:
+                  COMPOSER_HOME: /composer
+                  COMPOSER_ALLOW_SUPERUSER: 1
+                  PATH: /usr/bin:/usr/local/bin:/sbin:$PATH
+                command: "curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer"
+              03putsite_content: 
+                cwd: /tmp
+                command: "unzip -qo /tmp/site.zip -d /var/www/ && chmod -R 755 /var/www/*"
+              04config_httpd:
+                cwd: /tmp
+                command:
+                  "echo -e \"LoadModule log_forensic_module /usr/lib64/httpd/modules/mod_log_forensic.so \n<IfModule log_forensic_module> \nForensicLog /var/log/httpd/forensic_log \n</IfModule> \n\" >> /etc/httpd/conf/httpd.conf"
+              05install_frameworks:
+                cwd: /var/www/
+                env:
+                  COMPOSER_HOME: /composer
+                  COMPOSER_ALLOW_SUPERUSER: 1
+                  PATH: /usr/bin:/usr/local/bin:/sbin:$PATH
+                command: "cd /var/www/; php /usr/local/bin/composer install; bower install --allow-root; systemctl enable httpd; systemctl start httpd; systemctl start awslogsd && systemctl enable awslogsd.service"
+
+  AutoScalingGroup:
+    DependsOn:
+    - Alb
+    - PopulateS3Bucket
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+      - !Ref sub1Private
+      - !Ref sub2Private
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MinSize: '1'
+      MaxSize: '1'
+      TargetGroupARNs:
+      - !Ref AlbTargetGroup
+      DesiredCapacity: '1'
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 480
+      Tags:
+       -
+        Key: Name
+        Value: !Join ["-" , [!Ref 'AWS::StackName', node]]
+        PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT60M
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: 'true'
+
+## Deploy a WAF WebACL, Sample Rule, Sample IPSet
+  wafBlocklistIpSetV4:
+    Type: 'AWS::WAFv2::IPSet'
+    Properties:
+      Description: SampleIPSetV4
+      Scope: REGIONAL
+      IPAddressVersion: IPV4
+      Addresses:
+        - 127.0.0.0/8
+  wafBlocklistIpSetV6:
+    Type: 'AWS::WAFv2::IPSet'
+    Properties:
+      Description: SampleIPSetV6
+      Scope: REGIONAL
+      IPAddressVersion: IPV6
+      Addresses:
+        - ::1/128
+  wafACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: ExampleWebACLMetric
+      Rules:
+        - Name: WafIpBlocklist
+          Priority: 0
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BlockIPMetric
+          Statement:
+            OrStatement:
+              Statements:
+              - IPSetReferenceStatement: 
+                  Arn: !GetAtt wafBlocklistIpSetV4.Arn
+              - IPSetReferenceStatement:
+                  Arn: !GetAtt wafBlocklistIpSetV6.Arn
+
+## Associate WAF ACL with load balancer
+  wafALBAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn:
+        !Sub 
+          - 'arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/${TargetALB}'
+          - TargetALB: !GetAtt Alb.LoadBalancerFullName
+      WebACLArn: !GetAtt wafACL.Arn
+
+##  Configure the EC2 IAM role along with supporting resources
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join ["-" , [!Ref 'AWS::StackName', EC2Role]]
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+                - "ssm.amazonaws.com"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      Policies:
+        - PolicyName: inline-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: [ "waf-regional:GetSampledRequests", "cloudwatch:GetMetricStatistics" ]
+                Resource: "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                  - "logs:DescribeLogStreams"
+                Resource: "arn:aws:logs:*:*:*"
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+      - Ref: EC2InstanceRole
+
+  HttpAccessLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Join ["-" , [/var/log/httpd, !Ref 'AWS::StackName']]
+      RetentionInDays: 7
+
+
+
+  AMILambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - ec2:DescribeImages
+            Resource: "*"
+
+# AMIInfoFunction - Look up an AMI based on a NameFilter
+#
+# This AWS Lambda function is used to look up an Amazon EC2 AMI based
+# on a name filter. An example of a name filter would be:
+#
+# amzn2-ami-hvm\*ebs
+#
+# After looking up the names of all images that satify the filter,
+# they are sorted in reverse by date/time stamp and the first AMI
+# ID (which corresponds to the newest AMI) is returned.
+#
+# Using a Lambda function makes it possible to look up the AMI
+# dynamically.  THe alternative would be to create a static map.
+
+  AMIInfoFunction:
+    Type: AWS::Lambda::Function
+    Properties: 
+      Description: "Look up an AMI based on a filter"
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt AMILambdaExecutionRole.Arn
+      Runtime: "python3.9"
+      Timeout: 30
+      Code:
+        ZipFile: !Sub |
+          import json
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+            if event['RequestType'] == 'Delete':
+              responseData = {}      
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+              return
+            
+            ec2=boto3.client('ec2')
+            imageDescriptions=ec2.describe_images(
+              Owners=['amazon'],
+              Filters=[
+                {'Name': 'name', 'Values': [event['ResourceProperties']['NameFilter']]}, 
+                {'Name': 'architecture', 'Values': ['x86_64']}
+              ],
+            )
+            
+            numImageDescriptions = len(imageDescriptions['Images'])
+            if numImageDescriptions < 2:
+              responseData = {}
+              cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
+            else:
+              amiNames = sorted(imageDescriptions['Images'],
+                key=lambda x: x['CreationDate'],
+                reverse=True)
+              responseData = {}
+              responseData['Id'] = amiNames[${AMIPreviousVersionIndex}]['ImageId']
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+            return
+
+# AMIInfo - The AWS Lambda-backed resource for looking up an Amazon EC2 AMI
+#
+# Parameters
+#
+# ServiceToken - a pointer to the AWS Lambda function
+# NameFilter - the name filter to pass to the describe_images API
+
+  AMIInfo:
+    Type: Custom::AMIInfo
+    Properties:
+      ServiceToken: !GetAtt AMIInfoFunction.Arn
+      NameFilter: 'amzn2-ami-hvm*gp2'
+
+  RedTeamHost:
+      Type: AWS::EC2::Instance
+      Metadata:
+        AWS::CloudFormation::Init:
+          configSets:
+              Scanner_Install:
+                - configure_scanner
+          configure_scanner:
+            commands:
+              download:
+                cwd: /usr/bin
+                command: !Sub "aws s3 cp s3://${ArtifactsBucket}/${ArtifactsPrefix}scanner.py /usr/bin/"
+              addtargetcmd:
+                env:
+                  SCANTARG: !Join ['', ['http://', !GetAtt Alb.DNSName]]
+                cwd: /usr/bin
+                command: "echo python3 /usr/bin/scanner.py \"$SCANTARG\" > /usr/bin/runscanner; chmod 755 /usr/bin/runscanner"
+            files:
+              /usr/bin/runratest:
+                mode: "000755"
+                content: !Sub |
+                  #!/bin/bash
+                  #Script to trigger WAF rate-based rule
+                  COUNTER=0
+                  for j in `seq 1 400`;
+                  do
+                   let COUNTER++
+                   printf "Request %d\n response" $COUNTER
+                   http -h ${Alb.DNSName} User-Agent:PHPCrawl/1.0
+                  done
+      Properties:
+        ImageId:
+          !GetAtt AMIInfo.Id
+        InstanceType: !Ref EC2InstanceSize
+        IamInstanceProfile:
+          Ref: EC2InstanceProfile
+        SubnetId:
+              Ref: sub2Private          
+        Tags:
+        - Key: Name
+          Value: !Join ["-" , [!Ref 'AWS::StackName', RedTeamHost]]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            yum update -y
+            yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+            # amazon-linux-extras install -y python3 
+            amazon-linux-extras enable python3
+            yum install -y python3 --disablerepo amzn2-core
+            yum install -y curl git python-pip
+            pip3 install httpie
+            /usr/bin/aws configure set region ${AWS::Region}
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource RedTeamHost --configsets Scanner_Install --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource RedTeamHost --region ${AWS::Region}
+      CreationPolicy:
+        ResourceSignal:
+          Timeout: PT15M
+
+  ####################################
+  # begin resources for AWS WAF Logs #
+  ####################################
+
+  WAFLogsS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+
+  WAFLogsFirehose:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub aws-waf-logs-${AWS::StackName}
+      ExtendedS3DestinationConfiguration:
+        RoleARN: !GetAtt WAFLogsDeliveryRole.Arn
+        BucketARN: !GetAtt WAFLogsS3Bucket.Arn
+        BufferingHints:
+          IntervalInSeconds: 60
+          SizeInMBs: 1
+        CompressionFormat: UNCOMPRESSED
+
+  WAFLogsDeliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref 'AWS::AccountId'
+
+  WAFLogsDeliveryPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: 'waf_logs_firehose_delivery_policy'
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:AbortMultipartUpload'
+              - 's3:GetBucketLocation'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketMultipartUploads'
+              - 's3:PutObject'
+            Resource:
+              - !GetAtt WAFLogsS3Bucket.Arn
+              - !Join
+                - ''
+                - - !GetAtt WAFLogsS3Bucket.Arn
+                  - '*'
+      Roles:
+        - !Ref WAFLogsDeliveryRole
+  
+  # custom resource to enable WAF logging
+  WAFLogsEnable:
+    Type: Custom::WAFLogsEnable
+    Properties:
+      ServiceToken: !GetAtt WAFLogsEnableLambda.Arn
+
+  # custom resource Lambda function to enable WAF logging
+  WAFLogsEnableLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub WAFLogs-${AWS::StackName}-EnableWafLogging
+      Code:
+        ZipFile: !Sub |
+          # This Lambda function enables WAF web ACLs logging.
+          import boto3
+          import json
+          import os
+          import cfnresponse
+
+          FIREHOSE_ARN = os.environ['FIREHOSE_ARN']
+          WEBACL = os.environ['WEBACL']
+
+          def handler(event, context):
+            if event['RequestType'] == 'Delete':
+              responseData = {}      
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+              return
+
+            hasConfig = False
+
+            #Setting up variables
+            client = ''
+            response = ''
+            wafArn = ''
+
+            wafArn = WEBACL
+            client = boto3.client('wafv2')
+
+            try:
+              response = client.get_logging_configuration(ResourceArn=wafArn)
+              hasConfig = True
+            except:
+              print('Attempting to enable logging')
+              print('WAF ARN: ' + wafArn)
+              response = client.put_logging_configuration(LoggingConfiguration={'ResourceArn': wafArn,'LogDestinationConfigs': [ FIREHOSE_ARN ]})
+
+            responseData = {}
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+            return
+      Handler: "index.handler"
+      Environment:
+        Variables:
+          FIREHOSE_ARN: !GetAtt WAFLogsFirehose.Arn
+          WEBACL: !GetAtt wafACL.Arn
+      Runtime: python3.8
+      Timeout: 30
+      Role: !GetAtt WAFLogsLambdaExecutionRole.Arn
+
+  # permissions for the custom resource Lambda function
+  WAFLogsLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: waf-logs-lambda-logging
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:*
+            Resource: arn:aws:logs:*:*:*
+      - PolicyName: waf-logs-wafv2-config
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - wafv2:PutLoggingConfiguration
+            - wafv2:GetLoggingConfiguration
+            - wafv2:GetWebACL
+            Resource:
+            - !GetAtt wafACL.Arn
+      - PolicyName: waf-logs-wafv2-createservicerole
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - iam:CreateServiceLinkedRole
+            Resource: arn:aws:iam::*:role/aws-service-role/*
+      - PolicyName: waf-logs-wafv2-firehoseliststreams
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - firehose:ListDeliveryStreams
+            Resource: "*"
+  ####################################
+  # end resources for AWS WAF Logs   #
+  ####################################
+
+  ####################################
+  # begin Athena tables and queries  #
+  ####################################
+
+  GlueAccessLogsDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      DatabaseInput:
+        Description: 'Supercharge WAF Workshop - Access Logs'
+      CatalogId: !Ref AWS::AccountId
+
+  GlueWafAccessLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      DatabaseName: !Ref GlueAccessLogsDatabase
+      CatalogId: !Ref AWS::AccountId
+      TableInput:
+        TableType: EXTERNAL_TABLE
+        Name: waf_access_logs
+        Parameters: {
+            "EXTERNAL": "TRUE",
+            "projection.enabled": "true",
+            "projection.day.type": "date",
+            "projection.day.range": "2021/01/01,NOW",
+            "projection.day.format": "yyyy/MM/dd",
+            "projection.day.interval": "1",
+            "projection.day.interval.unit": "DAYS",
+            "storage.location.template": !Join [ '', ['s3://', !Ref WAFLogsS3Bucket, '/${day}']]
+        }
+        PartitionKeys:
+          - Name: day
+            Type: string
+        StorageDescriptor:
+          Location:
+            Fn::Sub: "s3://${WAFLogsS3Bucket}/"
+          InputFormat: "org.apache.hadoop.mapred.TextInputFormat"
+          OutputFormat: "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat"
+          SerdeInfo:
+            Parameters: {
+              "paths": "action,formatVersion,httpRequest,httpSourceId,httpSourceName,nonTerminatingMatchingRules,rateBasedRuleList,ruleGroupList,terminatingRuleId,terminatingRuleType,timestamp,webaclId"
+            }
+            SerializationLibrary: "org.openx.data.jsonserde.JsonSerDe"
+          Compressed : true
+          StoredAsSubDirectories: false
+          Columns:
+            - Name: timestamp
+              Type: bigint
+            - Name: formatversion
+              Type: int
+            - Name: webaclid
+              Type: string
+            - Name: terminatingruleid
+              Type: string
+            - Name: terminatingruletype
+              Type: string
+            - Name: action
+              Type: string
+            - Name: httpsourcename
+              Type: string
+            - Name: httpsourceid
+              Type: string
+            - Name: rulegrouplist
+              Type: array<string>
+            - Name: ratebasedrulelist
+              Type: array<string>
+            - Name: nonterminatingmatchingrules
+              Type: array<string>
+            - Name: httprequest
+              Type: struct<clientip:string,country:string,headers:array<struct<name:string,value:string>>,uri:string,args:string,httpversion:string,httpmethod:string,requestid:string>
+
+  AthenaOutputLocation:
+    Type: AWS::S3::Bucket
+
+  WAFLogAthenaQueryWorkGroup:
+      Type: AWS::Athena::WorkGroup
+      Properties:
+        Name: !Join ["-" , [WSWLogQueryWorkGroup, !Ref 'AWS::StackName']]
+        Description: Athena WorkGroup for WAF log queries used by Supercharge WAF Workshop
+        State: ENABLED
+        RecursiveDeleteOption: true
+        WorkGroupConfiguration:
+          PublishCloudWatchMetricsEnabled: true
+          ResultConfiguration:
+            OutputLocation:
+              !Join
+              - ''
+              - - 's3://'
+                - !Ref AthenaOutputLocation
+                - '/'
+
+  AthenaNamedQueryTop100IPs:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueAccessLogsDatabase
+      Name: !Join ["-" , [WSWLogsTop100IPs, !Ref 'AWS::StackName']]
+      Description:  Show top 100 IP addresses for a specified date range
+      QueryString:
+        "SELECT httprequest.clientip, count(*) ipcount, httprequest.country
+        FROM waf_access_logs
+        WHERE action = 'ALLOW' and day >= '2021/03/01'
+        AND day < '2031/12/31'
+        GROUP BY httprequest.clientip, httprequest.country
+        ORDER BY ipcount DESC limit 100"
+      WorkGroup: !Ref WAFLogAthenaQueryWorkGroup
+
+  AthenaNamedQueryUserAgents:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueAccessLogsDatabase
+      Name: !Join ["-" , [WSWLogsUserAgents, !Ref 'AWS::StackName']]
+      Description: Show user agents in descending order by count
+      QueryString:
+        "WITH DATASET AS
+        (SELECT header FROM waf_access_logs
+        CROSS JOIN UNNEST(httprequest.headers) AS t(header) WHERE day >= '2021/01/01' AND day < '2031/12/31')
+        SELECT header.value,count(*) userAgentCount
+        FROM DATASET
+        WHERE LOWER(header.name)='user-agent'
+        GROUP BY header.value
+        ORDER BY userAgentCount DESC"
+      WorkGroup: !Ref WAFLogAthenaQueryWorkGroup
+
+  AthenaNamedQueryHttpHeaders:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueAccessLogsDatabase
+      Name: !Join ["-" , [WSWLogsHttpHeaders, !Ref 'AWS::StackName']]
+      Description: Show headers in descending order by count
+      QueryString:
+        "WITH DATASET AS
+        (SELECT header FROM waf_access_logs
+        CROSS JOIN UNNEST(httprequest.headers) AS t(header) WHERE day >= '2021/01/01' AND day < '2031/12/31')
+        SELECT header.name,count(*) headerNameCount
+        FROM DATASET
+        GROUP BY header.name
+        ORDER BY headerNameCount DESC"
+      WorkGroup: !Ref WAFLogAthenaQueryWorkGroup
+
+  AthenaNamedQueryReqBlockCount:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueAccessLogsDatabase
+      Name: !Join ["-" , [WSWLogsReqBlockCount, !Ref 'AWS::StackName']]
+      Description:  Show the number of times a request has been blocked, grouping by specific attributes
+      QueryString:
+        "SELECT COUNT(*) AS
+          count,
+          webaclid,
+          terminatingruleid,
+          httprequest.clientip,
+          httprequest.uri
+        FROM waf_access_logs
+        WHERE action='BLOCK'
+        GROUP BY webaclid, terminatingruleid, httprequest.clientip, httprequest.uri
+        ORDER BY count DESC
+        LIMIT 100;"
+      WorkGroup: !Ref WAFLogAthenaQueryWorkGroup
+
+  AthenaNamedQueryMysteryHintHeader:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueAccessLogsDatabase
+      Name: !Join ["-" , [WSWLogsMysteryHintHeader, !Ref 'AWS::StackName']]
+      Description: SPOILER ALERT -- Show distinct mysteryhint encoded and decoded header values
+      QueryString:
+        "WITH DATASET AS 
+        (SELECT header FROM waf_access_logs 
+        CROSS JOIN UNNEST(httprequest.headers) AS t(header) WHERE day >= '2021/01/01' AND day < '2031/12/31')
+        SELECT DISTINCT header.name header_name, header.value encoded_header_value
+        FROM DATASET 
+        WHERE LOWER(header.name)='mysteryhint'"
+      WorkGroup: !Ref WAFLogAthenaQueryWorkGroup
+
+  ####################################
+  # end Athena tables and queries  #
+  ####################################
+
+Outputs:
+  0xRedTeamHostSession:
+    Description: Start interactive shell on Red Team Host
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${RedTeamHost}?region=${AWS::Region}
+  1xWAFConsole:
+    Description: link to the WAF console
+    Value: !Sub https://console.aws.amazon.com/wafv2/homev2/web-acls?region=${AWS::Region}
+  2xWAFLogs:
+    Description: S3 bucket with WAF logs
+    Value: !Sub https://s3.console.aws.amazon.com/s3/buckets/${WAFLogsS3Bucket}?region=${AWS::Region}&tab=objects
+  3xHttpAccessLog:
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logStream:group=/var/log/httpd-${AWS::StackName}
+    Description: HTTP Access Logs
+  
+  4xAlbEndpoint:
+    Description: Test website
+    Value: !Sub http://${Alb.DNSName}
+  5xWAFDashboard:
+    Description: Dashboard with automated scanner results
+    Value: !Sub https://${WSWDashCloudFrontDistribution.DomainName}/?uid=scans

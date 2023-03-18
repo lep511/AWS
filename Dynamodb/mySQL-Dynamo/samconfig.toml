@@ -1,0 +1,12 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "sam-app"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1coidfavqn074"
+s3_prefix = "sam-app"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_NAMED_IAM"
+parameter_overrides = "vpccidr=\"10.0.0.0/16\" DBSubnetCIDR=\"10.0.1.0/24\" DbMasterUsername=\"dbuser\" DbMasterPassword=\"Password@123\" DBInstanceType=\"t2.micro\" DBSSHLocation=\"0.0.0.0/0\" DBLatestAmiId=\"/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2\" DBKeyName=\"my-keypair\""
+image_repositories = []

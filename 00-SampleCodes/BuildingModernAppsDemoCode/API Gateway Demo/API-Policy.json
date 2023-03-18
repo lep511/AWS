@@ -1,0 +1,22 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "execute-api:Invoke",
+            "Resource": "arn:aws:execute-api:us-east-1:904546716712:0fbmom29c6/test/GET/dragons"
+        },
+        {
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "execute-api:Invoke",
+            "Resource": "arn:aws:execute-api:us-east-1:904546716712:0fbmom29c6/test/POST/dragons",
+            "Condition" : {
+                "IpAddress": {
+                    "aws:SourceIp": ["192.0.2.0/24", "198.51.100.0/24" ]
+                }
+            }
+        }
+    ]
+}
