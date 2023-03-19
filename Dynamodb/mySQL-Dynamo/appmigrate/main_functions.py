@@ -131,11 +131,13 @@ def generate_json_files(df, size_shard=4000):
         
         data = []
         n_count += size_shard
-    
+               
     logging.info(f"Process {p} files.")
-    
     if len(reg_errors) > 0:
         record_errors(reg_errors)
+        logging.info(f"Found {len(reg_errors)} error/s.")
+    else:
+        logging.info("No errors were found.")
     
 
 ##########################################################################################################
@@ -171,7 +173,7 @@ def send_to_dynamo(table_name, count_session=-1, profile=False, region="us-east-
         rest_cs = abs(int_count_session - count_session) + 1
         
         logging.info(f"[INFO] ===================== File: {file} ==============================")
-        logging.info(f"[INFO] Processing file {i}/{count_files_end}: {file} - {rest_cs}/{int_count_session} session process files.")
+        logging.info(f"[INFO] Remainder of files {count_files_end} - {rest_cs}/{int_count_session} session process files.")
         
         # Record start time for processing each file
         start_time = time.time()
@@ -215,5 +217,6 @@ def send_to_dynamo(table_name, count_session=-1, profile=False, region="us-east-
     
     if len(errors) > 0:
         record_errors(errors)
+        logging.info(f"Found {len(errors)} error/s.")
     else:
         logging.info("No errors were found.")

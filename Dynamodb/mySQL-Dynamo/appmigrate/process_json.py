@@ -33,8 +33,7 @@ def generate_json(item):
             if isinstance(item["genres"], str):
                 jsfl["genres"] = item["genres"].split(",")
             else:
-                jsfl["genres"] = item["genres"]
-            
+                jsfl["genres"] = item["genres"]      
         except Exception as e:
             logging.error(f"[ERROR] Can't process this item: {item['genres']}. Error message: {e}")
             n_errors.append(item)
@@ -46,7 +45,11 @@ def generate_json(item):
     ##### CHARACTERS #####
     if item["characters"]:
         try:
-            jsfl["characters"] = item["characters"]
+            f_item = item["characters"].replace('"', '\\"') \
+                                       .replace('[\\"','["') \
+                                       .replace('\\"]','"]')
+            f_item = json.loads(f_item)
+            jsfl["characters"] = f_item
         except Exception as e:
             logging.error(f"[ERROR] Can't process this item: {item['characters']}. Error message: {e}")
             n_errors.append(item)
@@ -62,7 +65,6 @@ def generate_json(item):
                 jsfl["writers"] = item["writers"].split(",")
             else:
                 jsfl["writers"] = item["writers"]
-        
         except Exception as e:
             logging.error(f"[ERROR] Can't process this item: {item['writers']}. Error message: {e}")
             n_errors.append(item)
