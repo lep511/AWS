@@ -64,7 +64,7 @@ if __name__ == "__main__":
     if operation == "all" or operation == "json":
         if not csv_file:
             raise Exception('No csv file specified.')      
-        df = pd.read_csv(csv_file)
+        df = pd.read_csv(csv_file, index_col=[0])
         df = df.where(pd.notnull(df), None)
         response = generate_json_files(df, size_shard)
     
