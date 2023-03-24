@@ -8,7 +8,6 @@ import json
 import gzip
 import logging
 import os
-from pprint import pprint
 import boto3
 import pandas as pd
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, TypeVar, Union, cast
@@ -90,8 +89,11 @@ class DynamoTable:
             raise ValueError("Table doesn't exist. To create use create_table() function.")
         else:
             self.table_name = table_name
-            self.bill_mode = self.table.billing_mode_summary["BillingMode"]
-
+            if self.table.billing_mode_summary:
+                self.bill_mode = self.table.billing_mode_summary['BillingMode']
+            else:
+                self.bill_mode = 'PROVISIONED'
+            
     @property
     def all_tables(self):
         """
@@ -117,13 +119,13 @@ class DynamoTable:
         :param table_name: The name of the table to create.
         :param partition_key: Primary key name.
         :param partition_key_type: Primary key type.
-        :param sort_key: Sort key name.
-        :param sort_key_type: Sort key type.
-        :param provisioned: True = PROVISIONED, False = PAY_PER_REQUEST
+        :param sort_key: Sort key name. Default: None.
+        :param sort_key_type: Sort key type. Default: None.
+        :param provisioned: True = PROVISIONED, False = PAY_PER_REQUEST. Default: True.
         :param rcu: (Read Capacity Units) Default: 10. The maximum number of strongly consistent reads 
-                    consumed per second before DynamoDB returns a ThrottlingException.
+                    consumed per second before DynamoDB returns a ThrottlingException. Default: 5.
         :param wcu: (WriteCapacityUnits) Default: 10. The maximum number of writes consumed per second 
-                    before DynamoDB returns a ThrottlingException.
+                    before DynamoDB returns a ThrottlingException. Default: 5.
         """           
         
         key_schema = [{'AttributeName': partition_key, 'KeyType': 'HASH'}]
@@ -153,7 +155,7 @@ class DynamoTable:
                     BillingMode="PAY_PER_REQUEST")
             self.table.wait_until_exists()
             self.table_name = table_name
-            print("Table created successfully!")
+            logger.info("Table created successfully!")
 
         except ClientError as err:
             logger.error(
@@ -229,7 +231,7 @@ class DynamoTable:
         """
         Gets item data from the table.
         :param pk_value: Primary key value.
-        :param se_value: Sort key value.
+        :param se_value: Sort key value. Default: None.
         :return: The data about the requested item.
         """
         pk_name = self.table.key_schema[0]['AttributeName']
@@ -242,18 +244,18 @@ class DynamoTable:
             act_sh_type = self.__keyType[sh_type]
             
             if se_value is None:
-                print(f"The sort key value cannot be empty: {sh_name}")
+                logger.error(f"The sort key value cannot be empty: {sh_name}")
                 return
             elif type(pk_value) != type(act_pk_type):
-                print(f"The format of the main key is incorrect, it should be: {type(act_pk_type)}")
+                logger.error(f"The format of the main key is incorrect, it should be: {type(act_pk_type)}")
                 return
             elif type(se_value) != type(act_sh_type):
-                print(f"The format of the sort key is incorrect, it should be: {type(act_pk_type)}")
+                logger.error(f"The format of the sort key is incorrect, it should be: {type(act_pk_type)}")
                 return
             response = self.table.get_item(Key={pk_name: pk_value, sh_name: se_value})
         else:
             if type(pk_value) != type(act_pk_type):
-                print(f"The format of the main key is incorrect, it should be: {type(act_pk_type)}")
+                logger.info(f"The format of the main key is incorrect, it should be: {type(act_pk_type)}")
                 return
             response = self.table.get_item(Key={pk_name: pk_value})
         try:
@@ -263,7 +265,7 @@ class DynamoTable:
             result = json.loads(js_data)
             return result
         except:
-            return (None, response)
+            return response
 
     def scan_att(self, att_name, query, to_pandas=True, consumed_capacity=False, pages=None):
         scan_kwargs = {
@@ -289,7 +291,7 @@ class DynamoTable:
             pages -= 1
 
         if consumed_capacity:
-            print(f"Consumed Capacity: {consumed_capacity_count}")
+            logger.info(f"Consumed Capacity: {consumed_capacity_count}")
         
         for elem in response_total:
             for item in elem:
@@ -331,19 +333,30 @@ class DynamoTable:
         resp = wr_d.read_partiql_query(query=query, parameters=parameters, chunked=chunked, boto3_session=self.session)
         return resp
                       
-    def query_items(self, query, to_pandas=False, consumed_capacity=False):
+    def query_items(self, query, index_name=None, to_pandas=False, consumed_capacity=False):
         """
         Query a table items.
         :param query: The key value to query.
-        :param to_pandas: If True, returns a pandas DataFrame.
-        :param consumed_capacity: If True, returns the consumed capacity.
+        :param index_name: The index name to query. Default: None.
+        :param to_pandas: If True, returns a pandas DataFrame. Default: False.
+        :param consumed_capacity: If True, returns the consumed capacity. Default: False.
         :return: Items matching the search.
         """
         try:
-            pk_name = self.table.key_schema[0]['AttributeName']
-            response = self.table.query(KeyConditionExpression=Key(pk_name).eq(query), 
-                                        ReturnConsumedCapacity="TOTAL"
-            )
+            # If an index was specified, query the index
+            if index_name:
+                response = self.table.query(
+                        IndexName=index_name, 
+                        KeyConditionExpression=Key('Language_code').eq(query)
+                )
+                consumed_capacity = False # Indexes don't have consumed capacity
+            # If no index was specified, query the table
+            else:          
+                pk_name = self.table.key_schema[0]['AttributeName']
+                response = self.table.query(
+                        KeyConditionExpression=Key(pk_name).eq(query), 
+                        ReturnConsumedCapacity="TOTAL"
+                )
         except ClientError as err:
             logger.error(
                 f"Couldn't query for {query}. Here's why: {err.response['Error']['Code']} \
@@ -352,10 +365,10 @@ class DynamoTable:
         
         if consumed_capacity:
             consumed_text = f"Consumed Capacity: {response['ConsumedCapacity']['CapacityUnits']}"
-            print(consumed_text)
+            logger.info(consumed_text)
         
         if len(response['Items']) == 0:
-            print("No items were found matching your search query.")
+            logger.info("No items were found matching your search query.")
             return None
         
         if self.found_binary(response, only_check=True):
@@ -373,13 +386,13 @@ class DynamoTable:
         Add a global secondary index to a DynamoDB table
         :param att_name: Name of attribute.
         :param att_type: Attribute type (S-String, N-Number, B-Binary).
-        :param sort_index: Name of sort index.
-        :param sort_type: Attribute type (S-String, N-Number, B-Binary).
-        :param i_name: Name of index.
+        :param sort_index: Name of sort index. Default: None
+        :param sort_type: Attribute type (S-String, N-Number, B-Binary). Default: None
+        :param i_name: Name of index. Default: <att_name>-index
         :param proj_type: Represents attributes that are copied (projected) from the table into the global secondary index
                           (ALL, KEYS_ONLY, [list of INCLUDE non-key attribute])
-        :param i_rcu: Read capacity units.
-        :param i_wcu: Write capacity units.
+        :param i_rcu: Read capacity units. Default: 5
+        :param i_wcu: Write capacity units. Default: 5
         """
         # Check index name
         if not i_name:
