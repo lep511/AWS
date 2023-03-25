@@ -1,0 +1,221 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: "AWS::Serverless-2016-10-31"
+
+Resources:
+  ##########################################
+  #  COGNITO USER POOL FOR EDA WORKSHOP
+  ##########################################
+
+  UserPool:
+    Type: "AWS::Cognito::UserPool"
+    Properties:
+      UserPoolName: !Ref AWS::StackName
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 6
+          RequireLowercase: false
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: false
+
+  UserPoolClient:
+    Type: "AWS::Cognito::UserPoolClient"
+    Properties:
+      UserPoolId: !Ref UserPool
+
+  ##########################################
+  #  COGNITO USER POOL USER CREDENTIALS
+  ##########################################
+  UserCredentials:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: "Cognito User Pool Event Generator credentials"
+      Name: !Sub "${AWS::StackName}-event-generator-credentials"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "user"}'
+        GenerateStringKey: "password"
+        ExcludePunctuation: true
+
+  CreateUser:
+    Type: "Custom::CreateUser"
+    Properties:
+      ServiceToken: !GetAtt "CreateUserFunction.Arn"
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref UserPoolClient
+      SecretId: !Ref UserCredentials
+
+  CreateUserFunction:
+    Type: "AWS::Serverless::Function"
+    Properties:
+      Tracing: Active
+      Handler: "index.lambda_handler"
+      Timeout: 30
+      Runtime: "python3.9"
+      MemorySize: 256
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Action:
+                - "cognito-idp:AdminConfirmSignUp"
+              Resource: !GetAtt UserPool.Arn
+            - Effect: "Allow"
+              Action:
+                - "cognito-idp:SignUp"
+              Resource: "*"
+            - Effect: "Allow"
+              Action:
+                - "secretsmanager:GetSecretValue"
+              Resource: !Ref UserCredentials
+      InlineCode: |
+        import logging
+        import json
+        import cfnresponse
+        import boto3
+
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+
+        cognitoIdp = boto3.client('cognito-idp')
+        secretsmanager = boto3.client('secretsmanager')
+
+        def lambda_handler(event, context):
+          logger.info('{}'.format(event))
+          responseData = {}
+
+          try:
+            if event['RequestType'] == 'Create':
+              userPoolId = event['ResourceProperties'].get('UserPoolId')
+              clientId = event['ResourceProperties'].get('ClientId')
+              secretId = event['ResourceProperties'].get('SecretId')
+
+              response = secretsmanager.get_secret_value(
+                SecretId=secretId
+              )
+
+              secretString=json.loads(response['SecretString'])
+
+              response = cognitoIdp.sign_up(
+                ClientId=clientId,
+                Username=secretString['username'],
+                Password=secretString['password']
+              )
+
+              response = cognitoIdp.admin_confirm_sign_up(
+                UserPoolId=userPoolId,
+                Username=secretString['username']
+              )
+
+              responseData['username'] = secretString['username']
+              responseData['password'] = secretString['password']
+
+            else: # delete / update
+              rs = event['PhysicalResourceId']
+
+            logger.info('responseData {}'.format(responseData))
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+          except:
+            logger.error("custom resource failed", exc_info=True)
+            cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
+
+
+  ##########################################
+  # EVENT GENERATOR IDENTITY POOL
+  ##########################################
+
+  EventGeneratorIdentityPool:
+    Type: "AWS::Cognito::IdentityPool"
+    Properties:
+      IdentityPoolName: !Sub "${AWS::StackName}-event-generator"
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+  EventGeneratorIdentityPoolAuthenticatedRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action: "sts:AssumeRoleWithWebIdentity"
+      Policies:
+        - PolicyName: snsPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:ListTopics"
+                  - "sns:Publish"
+                Resource: "*"
+        - PolicyName: eventBridgePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "events:ListEventBuses"
+                  - "events:PutEvents"
+                Resource: "*"
+
+  EventGeneratorIdentityPoolRoles:
+    Type: "AWS::Cognito::IdentityPoolRoleAttachment"
+    Properties:
+      IdentityPoolId: !Ref EventGeneratorIdentityPool
+      Roles:
+        authenticated: !GetAtt EventGeneratorIdentityPoolAuthenticatedRole.Arn
+
+  ##########################################
+  # WILD RYDES SAAS PLAYGROUND IDENTITY POOL
+  ##########################################
+
+  WildRydesSaasPlaygroundIdentityPool:
+    Type: "AWS::Cognito::IdentityPool"
+    Properties:
+      IdentityPoolName: !Sub "${AWS::StackName}-playground"
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+  WildRydesSaasPlaygroundIdentityPoolAuthenticatedRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Federated: "cognito-identity.amazonaws.com"
+            Action: "sts:AssumeRoleWithWebIdentity"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonAPIGatewayInvokeFullAccess
+
+  WildRydesSaasPlaygroundIdentityPoolRoles:
+    Type: "AWS::Cognito::IdentityPoolRoleAttachment"
+    Properties:
+      IdentityPoolId: !Ref WildRydesSaasPlaygroundIdentityPool
+      Roles:
+        authenticated: !GetAtt WildRydesSaasPlaygroundIdentityPoolAuthenticatedRole.Arn
+
+Outputs:
+  EventGeneratorConfigurationUrl:
+    Description: Event Generator configuration link
+    Value: !Sub "http://event-generator.awsworkshops.io/#/?userPoolId=${UserPool}&appClientId=${UserPoolClient}&cognitoIdentityPoolId=${EventGeneratorIdentityPool}"
+
+  WildRydesSaasPlaygroundConfigurationUrl:
+    Description: Wild Rydes Saas Playground configuration link
+    Value: !Sub "http://saas.wildrydes.com/#/?userPoolId=${UserPool}&appClientId=${UserPoolClient}&cognitoIdentityPoolId=${WildRydesSaasPlaygroundIdentityPool}"
+
+  CognitoUsername:
+    Description: Cognito username for use with Event Generator and Wild Rydes SaaS Playground
+    Value: !GetAtt CreateUser.username
+
+  CognitoPassword:
+    Description: Event Generator password for use with Event Generator and Wild Rydes SaaS Playground
+    Value: !GetAtt CreateUser.password

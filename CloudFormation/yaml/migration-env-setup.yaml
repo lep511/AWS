@@ -24,7 +24,7 @@ Parameters:
   DBInstanceType:
     Description: WebServer EC2 instance type
     Type: String
-    Default: m5.large
+    Default: t2.micro
     AllowedValues: [t2.nano, t2.micro, t2.small, t2.medium, t2.large, t2.xlarge, t2.2xlarge,
       t3.nano, t3.micro, t3.small, t3.medium, t3.large, t3.xlarge, t3.2xlarge,
       m4.large, m4.xlarge, m4.2xlarge, m4.4xlarge, m4.10xlarge,
@@ -144,7 +144,6 @@ Resources:
       Path: /
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
   DbInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -159,7 +158,7 @@ Resources:
         - DeviceName: /dev/xvda
           Ebs:
             VolumeType: gp2
-            VolumeSize: '200'
+            VolumeSize: '30'
             DeleteOnTermination: 'true'
             Encrypted: 'true'
       UserData:
