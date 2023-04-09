@@ -1,0 +1,22 @@
+{
+    "source": [
+        "aws.s3"
+    ],
+    "detail-type": [
+        "Object Created",
+        "Object Deleted",
+        "Object Tags Added",
+        "Object Tags Deleted"
+    ],
+
+    "detail": {
+        "bucket": {
+            "name": [
+                "jbarr-public"
+            ]
+        },
+        "object" : {
+            "size": [{"numeric" :["<=", 1048576 ] }]
+        }
+    }
+}
