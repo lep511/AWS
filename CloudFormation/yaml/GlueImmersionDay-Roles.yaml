@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  AWSGlueServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: AWSGlueServiceRole-glueworkshop
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole'
+        - 'arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonKinesisFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonSNSFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonSQSFullAccess'
+      Policies:
+        - PolicyName: passRole-glue
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 'iam:PassRole'
+                Resource: "*"
+  AWSGlueDataBrewServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: AWSGlueDataBrewServiceRole-glueworkshop
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: databrew.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSGlueDataBrewServiceRole'
+  AWSEventBridgeInvokeGlueRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: AWSEventBridgeInvokeRole-glueworkshop
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: EventBridgeInvokeGlue
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 'glue:notifyEvent'
+                Resource: "*"
+        - PolicyName: EventBridgeInvokeStepFunction
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: 'states:StartExecution'
+                Resource: "*"
+  AWSStepFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: AWSStepFunctionRole-glueworkshop
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole'
+        - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonSNSFullAccess'
+  AWSEC2ServiceRole:  ###NEED TO CHECK WHICH ROLES ARE REALLY REQUIRED. TRY TO LIMIT AS MUCH AS POSSIBLE!!!
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: AWSEC2ServiceRole-etl-ttt-demo
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole'
+        - 'arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonKinesisFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonSNSFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonSQSFullAccess'
+        - 'arn:aws:iam::aws:policy/AWSCloudFormationFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonEC2FullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess'
+        - 'arn:aws:iam::aws:policy/IAMFullAccess'
+      Policies:
+        - PolicyName: FurtherRequiredInlinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:*
+                  - codecommit:*
+                  - codebuild:*
+                  - codepipeline:*
+                  - codedeploy:*
+                Resource:
+                  - !Sub arn:aws:codecommit:*:${AWS::AccountId}:*
+                  - !Sub arn:aws:codebuild:*:${AWS::AccountId}:*
+                  - !Sub arn:aws:codepipeline:*:${AWS::AccountId}:*
+                  - !Sub arn:aws:codedeploy:*:${AWS::AccountId}:*
+                  - !Sub arn:aws:lambda:*:${AWS::AccountId}:function:*
+              - Effect: Allow
+                Action:
+                  - codecommit:ListRepositories
+                  - databrew:*
+                  - states:*
+                Resource: "*"

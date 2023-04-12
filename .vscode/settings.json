@@ -1,5 +1,21 @@
 {
     "yaml.schemas": {
         "https://raw.githubusercontent.com/awslabs/goformation/master/schema/sam.schema.json": "file:///home/lep511/AWS/SAM/ArchSolution/Ejercicio02/api-rest/api-rest-template.yaml"
-    }
+    },
+    "serverlessConsole.services": [
+        {
+            "type": "dynamodb",
+            "title": "Songs",
+            "tableName": "Songs",
+            "awsProfile": "default",
+            "region": "us-east-1"
+        },
+        {
+            "type": "dynamodb",
+            "title": "StarbucksLocations",
+            "tableName": "StarbucksLocations",
+            "awsProfile": "default",
+            "region": "us-east-1"
+        }
+    ]
 }
