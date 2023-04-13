@@ -1,9 +1,0 @@
-Check for current node version
-node -v 
-
-Install AWS SDK
-npm install aws-sdk
-
-Run program
-node readDragons
-

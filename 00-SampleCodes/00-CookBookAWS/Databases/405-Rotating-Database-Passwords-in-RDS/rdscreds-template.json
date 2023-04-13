@@ -1,9 +1,0 @@
-{
-    "username": "admin",
-    "password": "PASSWORD",
-    "engine": "mysql",
-    "host": "HOST",
-    "port": 3306,
-    "dbname": "DBNAME",
-    "dbInstanceIdentifier": "DBIDENTIFIER"
-}
