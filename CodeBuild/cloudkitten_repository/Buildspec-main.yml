@@ -1,0 +1,31 @@
+version: 0.2
+phases:
+  build:
+    commands:
+      - docker info
+      - wget https://aws-jam-challenge-resources.s3.amazonaws.com/cloudkittens/badkitten.tar
+      - docker load --input badkitten.tar
+      - docker images
+      - aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 897120131472.dkr.ecr.us-east-2.amazonaws.com
+      - docker tag cloudkitten:latest 897120131472.dkr.ecr.us-east-2.amazonaws.com/cloudkitten:latest
+      - docker push 897120131472.dkr.ecr.us-east-2.amazonaws.com/cloudkitten:latest
+      - echo 'Pushing Code to CodeCommit'
+      - pip3 install git-remote-codecommit
+      - git clone codecommit::us-east-2://cloudkitten
+      - cd cloudkitten
+      - git config --local user.email 'test+user-actions[bot]@testuser.org'
+      - git config --local user.name 'github-actions[bot]'
+      - wget https://aws-jam-challenge-resources.s3.amazonaws.com/cloudkittens/cloudkitten_repository.zip
+      - unzip -o cloudkitten_repository.zip
+      - rm cloudkitten_repository.zip
+      - git add -A .
+      - git commit -m 'adding initial code to CodeCommit' -a
+      - git push
+      - echo "$CFN_URL_FINISH_BUILD"
+      - # 
+      - # Respond to the CloudFormation Custom Resource Wait-Handle
+      - 'echo > WaitHandle.jsonecho ''{'' >> WaitHandle.jsonecho ''   "Status" : "SUCCESS",''
+        >> WaitHandle.jsonecho ''   "Reason" : "Configuration Complete",'' >> WaitHandle.jsonecho
+        ''   "UniqueId" : "$(date +%s)",'' >> WaitHandle.jsonecho ''   "Data" : "Application
+        has completed configuration."'' >> WaitHandle.jsonecho ''}'' >> WaitHandle.json'
+      - curl -T WaitHandle.json "$CFN_URL_FINISH_BUILD"

@@ -1,0 +1,12 @@
+Acces pattern, Operation,Main Table, PK, SK, Notes
+Create a new product,WRITE,Main Table,PRODCUT#,,Uniqueness on ProductID
+CRUD on a product,READ / WRITE,Main Table,PRODCUT#,,
+Filter product by category,READ,GSI1,PRODUCT#CATEGORYID,PK PRODUCT#01
+Get all products,READ,GSI2,PRODCUT#,,
+Filter product by price range,READ,GSI2,PRODCUT# ,PRICE
+Search product by title,READ,GSI2,PRODCUT#,PRODUCT#DESCRIPTION,Begins with operations to do a fast search
+Register an user / CRUD operation,READ / WRITE,Main Table,USER#USERID,,Umiqueness on UserID
+CRUD operation in Orders,READ / WRITE,Main Table,USER#USERID,ORDER#ORDERID
+Get user current cart,READ,GSI3,ORDER#USERID,ORDER#STATUS
+CRUD operations on products in cart,READ / WRITE,Main Table,ORDERITEMS#ORDERID,ORDERITEM#PRODUCTID
+See user history of purchased,READ,Main Table,USER#USERID,,Brings all the orders in the past with x status

@@ -1,0 +1,36 @@
+version: 0.2
+
+env:
+  variables:
+    IMAGE_NAME: "cloudkitten"
+    IMAGE_VERSION: "latest"
+
+phases:
+  install:
+    commands:
+      - sudo apt update
+      - sudo apt upgrade -y
+      - sudo apt install lsb-release ca-certificates apt-transport-https software-properties-common -y
+      - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+      - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      - sudo apt -y install docker.io
+      - sudo apt -y install awscli
+  pre_build:
+    commands:
+      #- sudo systemctl status docker
+      - docker --version 
+      - echo "docker successfully installed"
+      - aws --version
+      - echo "AWS CLI successfully installed"
+      - ACCOUNT_ID=$(echo $CODEBUILD_BUILD_ARN | cut -f5 -d ':')
+      - echo "Account ID is set to ${ACCOUNT_ID}"
+  build:
+    commands:
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - docker build -t $IMAGE_NAME .
+      - docker tag $IMAGE_NAME:${IMAGE_VERSION} $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${IMAGE_NAME}:${IMAGE_VERSION}
+      - docker images
+      - docker push $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${IMAGE_NAME}:${IMAGE_VERSION}
+artifacts:
+  files:
+    - '**/*'

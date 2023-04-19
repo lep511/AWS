@@ -1,0 +1,20 @@
+//Tags on IAM (Event and Workshop same values with resources)
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Condition": {
+                "StringEquals": {
+                    "aws:ResourceTag/Event": "${aws:PrincipalTag/Event}",
+                    "aws:ResourceTag/Workshop": "${aws:PrincipalTag/Workshop}"
+                }
+            },
+            "Action": [
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        }
+    ]
+}

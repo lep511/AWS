@@ -1,0 +1,97 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowIAMRO",
+            "Effect": "Allow",
+            "Action": [
+                "iam:List*",
+                "iam:Get*",
+                "iam:Generate*",
+                "sts:GetCallerIdentity"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "iam:CreateServiceLinkedRole",
+            "Resource": "arn:aws:iam::*:role/aws-service-role/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:PassRole"
+            ],
+            "Resource": "arn:aws:iam::688733876861:role/TeamRole"
+        },
+        {
+            "Sid": "DenyBlocklist",
+            "Effect": "Deny",
+            "Action": [
+                "route53domains:*",
+                "ec2:ModifyReservedInstances",
+                "ec2:PurchaseHostReservation",
+                "ec2:PurchaseReservedInstancesOffering",
+                "ec2:PurchaseScheduledInstances",
+                "rds:PurchaseReservedDBInstancesOffering",
+                "dynamodb:PurchaseReservedCapacityOfferings",
+                "s3:PutObjectLegalHold"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "DenyAllOutsideAllowedRegions",
+            "Effect": "Deny",
+            "NotAction": [
+                "iam:*",
+                "sts:*",
+                "s3:*",
+                "ds:*",
+                "artifact:Get",
+                "artifact:DownloadAgreement",
+                "lightsail:*",
+                "networkmanager:*",
+                "braket:*",
+                "quicksight:*",
+                "cloudfront:*",
+                "route53:*",
+                "route53-recovery-cluster:*",
+                "route53-recovery-control-config:*",
+                "route53-recovery-readiness:*",
+                "servicediscovery:*",
+                "waf:*",
+                "waf-regional:*",
+                "wafv2:*",
+                "cloudwatch:DescribeAlarms",
+                "cloudwatch:PutMetricAlarm",
+                "cloudwatch:DeleteAlarms",
+                "cloudwatch:GetMetricStatistics",
+                "ec2:Describe*",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetAuthorizationToken",
+                "globalaccelerator:*",
+                "acm:List*",
+                "acm:Describe*",
+                "kms:Describe*",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:Get*",
+                "kms:List*",
+                "kms:CreateGrant",
+                "kms:RevokeGrant",
+                "ssm:List*",
+                "directconnect:*"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringNotEquals": {
+                    "aws:RequestedRegion": [
+                        "us-east-1"
+                    ]
+                }
+            }
+        }
+    ]
+}
