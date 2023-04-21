@@ -1,13 +1,10 @@
-#import awswrangler as wr 
-from awswrangler import dynamodb as wr_d
+from ._queries import read_items as wr_read_items
 from decimal import Decimal
 from io import BytesIO
 from datetime import datetime
-import ast
 import json
 import gzip
 import logging
-import os
 import boto3
 import pandas as pd
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, TypeVar, Union, cast
@@ -45,9 +42,11 @@ class DynamoTable:
                 "Table %s doesn't exist. To create use create_table() function.",
                 table_name)
             self.table_name = None
-            raise
+            raise ValueError("Table doesn't exist. To create use create_table() function.")
         else:
             self.select_table(table_name)
+            self.status_pitr = status_pitr
+            self.delete_protection = delete_protection
         
     def __repr__(self):
         if self.table_name != None:
@@ -56,7 +55,8 @@ class DynamoTable:
             \n- Table arn: {self.table.table_arn}\
             \n- Table creation: {self.table.creation_date_time}\
             \n- {self.table.key_schema}\
-            \n- {self.table.attribute_definitions}"
+            \n- {self.table.attribute_definitions}\
+            \n- Point-in-time recovery status: {self.status_pitr}"
         else:
             rep = "The table has not yet been selected"
         return rep
@@ -379,6 +379,121 @@ class DynamoTable:
         else:
             return response['Items']
 
+    def read_items(self, **kwargs):
+        response = wr_read_items(boto3_session=self.session, table_name=self.table_name, **kwargs)
+        return response
+
+    def make_backup(self, backup_name=None):
+        """
+        Create a backup of a DynamoDB table.
+        :param backup_name: The name of the backup. Default: <table_name>-<date>
+        """
+        if backup_name is None:
+            backup_name = f"{self.table_name}-{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}"
+        try:
+            response = self.table.meta.client.create_backup(
+                TableName=self.table_name,
+                BackupName=backup_name
+            )
+        except ClientError as err:
+            logger.error(
+                f"Couldn't create a backup for {self.table_name}. Here's why: {err.response['Error']['Code']} \
+                {err.response['Error']['Message']}")
+            raise
+        else:
+            logger.info(f"Backup {backup_name} created successfully.")
+            return response
+
+    @property
+    def delete_protection(self):
+        """
+        Get the status of deletion protection for a DynamoDB table.
+        """
+        try:
+            response = self.table.meta.client.describe_table(
+                TableName=self.table_name
+            )
+        except ClientError as err:
+            logger.error(
+                f"Couldn't get the status of deletion protection for {self.table_name}. Here's why: \
+                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            raise
+        else:
+            return response['Table']['DeletionProtectionEnabled']
+    
+    @delete_protection.setter
+    def delete_protection(self, value):
+        """
+        Set deletion protection for a DynamoDB table.
+        :param value: The value to set deletion protection to. Must be either True or False.
+        """
+        if not isinstance(value, bool):
+            raise TypeError("The value must be either True or False.")
+        
+        if self.delete_protection == value:
+            logger.info(f"Deletion protection for {self.table_name} is already set to {value}.")
+            return
+        
+        try:
+            response = self.table.meta.client.update_table(
+                TableName=self.table_name,
+                DeletionProtectionEnabled = value
+            )
+        except ClientError as err:
+            logger.error(
+                f"Couldn't set deletion protection for {self.table_name}. Here's why: \
+                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            raise
+        else:
+            logger.info(f"Deletion protection for {self.table_name} set to {value}.")
+    
+    @property
+    def status_pitr(self):
+        """
+        Get the status of point-in-time recovery for a DynamoDB table.
+        """
+        try:
+            response = self.table.meta.client.describe_continuous_backups(
+                TableName=self.table_name
+            )
+        except ClientError as err:
+            logger.error(
+                f"Couldn't get the status of point-in-time recovery for {self.table_name}. Here's why: \
+                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            raise
+        else:
+            return response['ContinuousBackupsDescription']['PointInTimeRecoveryDescription']['PointInTimeRecoveryStatus']
+
+    @status_pitr.setter
+    def status_pitr(self, value):
+        """
+        Turn on point-in-time recovery for a DynamoDB table.
+        :param value: The value to set point-in-time recovery to. Must be either 'ENABLED' or 'DISABLED'.
+        """
+        if value == "ENABLED":
+            point_in_time_recovery = True
+        elif value == "DISABLED":
+            point_in_time_recovery = False
+        else:
+            raise ValueError("Value must be either 'ENABLED' or 'DISABLED'")
+        
+        if self.status_pitr == value:
+            logger.info(f"Point-in-time recovery is already {value}.")
+            return
+        try:
+            response = self.table.meta.client.update_continuous_backups(
+                TableName=self.table_name,
+                PointInTimeRecoverySpecification={
+                    'PointInTimeRecoveryEnabled': point_in_time_recovery
+                }
+            )
+            logger.info(f"Point-in-time recovery turned on successfully.")
+            self.status_pitr = value
+        except ClientError as err:
+            logger.error(
+                f"Couldn't turn on point-in-time recovery for {self.table_name}. Here's why: \
+                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            raise
 
     def create_global_secondary_index(self, att_name, att_type, i_name=None, sort_index=None, 
                                       sort_type=None, proj_type="ALL", i_rcu=5, i_wcu=5):

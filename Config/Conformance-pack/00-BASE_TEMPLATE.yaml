@@ -1,0 +1,16 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: A Sample Template of a Custom Conformance Pack
+Parameters:
+    ConformancePackDeliveryBucket:
+        Type: String
+        Description: AWS Config stores intermediate files while processing conformance pack template. Please enter thename of the bucket that has been configured already for conformance pack to deliver to deliver findings.
+Resources:
+    ConformancePack:
+        Type: 'AWS::Config::ConformancePack'
+        Properties: 
+            ConformancePackName: custom-conformance-pack
+            DeliveryS3Bucket: !Ref ConformancePackDeliveryBucket
+            TemplateBody: |-
+                Resources: 
+                    ....
+

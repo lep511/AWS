@@ -1,0 +1,28 @@
+{
+"ConfigRuleName": "ebs-volume-iops-cli-version",
+"Description": "Evaluates whether EBS volumes have a specific IOPs setting.",
+"Scope": {
+    "ComplianceResourceTypes": [
+        "AWS::EC2::Volume"
+    ]
+},
+"Source": {
+     "Owner": "CUSTOM_POLICY",
+     "SourceDetails": [
+         {
+             "EventSource": "aws.config",
+             "MessageType": "ConfigurationItemChangeNotification"
+         },
+         {
+             "EventSource": "aws.config",
+             "MessageType": "OversizedConfigurationItemChangeNotification"
+         }
+      ],
+      "CustomPolicyDetails": {
+          "PolicyRuntime": "guard-2.x.x",
+          "PolicyText": "rule desiredebsvolumeiops { when configuration.volumeType == CONFIG_RULE_PARAMETERS.volumeType { configuration.iops in [3000,4000]}}",
+          "EnableDebugLogDelivery": false
+       }
+    },
+    "InputParameters": "{\"volumeType\":\"gp3\"}"
+}
