@@ -56,7 +56,7 @@ class DynamoTable:
             \n- Table creation: {self.table.creation_date_time}\
             \n- {self.table.key_schema}\
             \n- {self.table.attribute_definitions}\
-            \n- Point-in-time recovery status: {self.status_pitr}"
+            \n- Point-in-time recovery status: {self.status_pitr}  |  Delete protection: {self.delete_protection}"
         else:
             rep = "The table has not yet been selected"
         return rep
