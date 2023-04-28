@@ -217,10 +217,10 @@ def create_ec2_ssm(vpc_id, subnet_id=None, tag_instance='SSM-Instance'):
 
 
     wait_instance_ssm = len(ssm.describe_instance_information()['InstanceInformationList'])
-
+    print("Waiting for EC2-SSM connection to be available...")
+    print("This can take 5 minutes sometimes. Press Ctrl-C to stop waiting...")
+    
     while wait_instance_ssm == actual_ssm_instance:
-        print("Waiting for EC2-SSM connection to be available...")
-        print("This can take 5 minutes sometimes. Press Ctrl-C to stop waiting...")
         ec2_client.reboot_instances(InstanceIds=[resource_id])
         time.sleep(30)
         wait_instance_ssm = len(ssm.describe_instance_information()['InstanceInformationList'])

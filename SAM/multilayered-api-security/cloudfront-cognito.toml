@@ -1,0 +1,9 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "cloudfront-cognito"
+resolve_s3 = true
+s3_prefix = "cloudfront-cognito"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "ApiGatewayURL=\"https://jcc6vzpuq5.execute-api.us-east-1.amazonaws.com/Dev/?id=1\" HeaderName=\"X-Origin-Verify\" WAFRulePriority=\"0\""
+image_repositories = []

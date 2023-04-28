@@ -1,0 +1,10 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "app-sam"
+resolve_s3 = true
+s3_prefix = "app-sam"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "RDSDBName=\"playersdb\" DBTableName=\"players\" RDSUserName=\"admin\""
+image_repositories = []

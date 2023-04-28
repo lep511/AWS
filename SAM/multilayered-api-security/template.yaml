@@ -3,9 +3,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: WA Lab environment
 
 Parameters:
-  SBucketName:
-    Type: String
-    Description: S3 Bucket where you upload 3 Lambda deployment packages (.zip file)
   RDSDBName:
     Type: String
     Description: database name
@@ -534,19 +531,6 @@ Resources:
       TargetId: !Ref WADBInstance
       TargetType: AWS::RDS::DBInstance
 
-  #Cloud9 to provide IDE
-  Cloud9:
-    Type: 'AWS::Cloud9::EnvironmentEC2'
-    Properties:
-      Name: !Sub '${AWS::StackName}-Cloud9-IDE'
-      Description: 'Cloud9 Environment for WA Lab'
-      AutomaticStopTimeMinutes: 30
-      SubnetId: !Ref WApublicSubnet1
-      InstanceType: 't2.micro'
-      Repositories:
-        - PathComponent: /walab-scripts
-          RepositoryUrl: 'https://github.com/awswa/walab-scripts.git'
-
 Outputs:
   APIGatewayURL:
     Description: URL of your API endpoint
@@ -563,10 +547,3 @@ Outputs:
   RDS:
     Description: RDS Mysql
     Value: !Sub https://console.aws.amazon.com/rds/home?region=${AWS::Region}#database:id=${WADBInstance};is-cluster=false
-  Cloud9URL:
-    Description: Cloud9 Environment
-    Value:
-      Fn::Join:
-      - ''
-      - - !Sub https://${AWS::Region}.console.aws.amazon.com/cloud9/ide/
-        - !Ref 'Cloud9'
