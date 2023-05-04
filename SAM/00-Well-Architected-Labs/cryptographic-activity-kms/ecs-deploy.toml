@@ -1,0 +1,10 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "ecs-deploy"
+resolve_s3 = true
+s3_prefix = "ecs-deploy"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+parameter_overrides = "BaselineVpcStack=\"sam-app\" ECRImageURI=\"491534477676.dkr.ecr.us-east-1.amazonaws.com/sam-app-pattern1appcontainerrepository-z4vjmgmwuhdl\""
+image_repositories = []
+confirm_changeset = true
