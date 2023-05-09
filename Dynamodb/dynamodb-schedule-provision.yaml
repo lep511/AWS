@@ -1,0 +1,93 @@
+
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+    RoleArn:
+        Type: String
+        Default: "arn:aws:iam::<acct>:role/<rolename>"
+        Description: Role to be used by Autoscaling ScalableTarget. Refer to https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/AutoScaling.Console.html#AutoScaling.Permissions
+    InitialWriteCapacity: 
+      Type: Number
+      Default: 30
+      Description: Initial Write capacity when the table is created. This value only matters till first scale-in occurs
+    ScheduleWritePeakhourMinCapacity:
+      Type: Number
+      Default: 90
+      Description: Scheduled Min Write capacity (during peak time)
+    ScheduleWriteOffeakhourMinCapacity:
+      Type: Number
+      Default: 30
+      Description: Scheduled Min Write capacity (during off peak time)
+
+    AutoscaleWriteMinCapacity:
+      Type: Number
+      Default: 30
+      Description: Min Write capacity used by autoscaling till first schedule action kicks in.
+
+    AutoscaleWriteMaxCapacity:
+      Type: Number
+      Default: 90
+      Description: Max Write capacity used by autoscaling
+
+    PeakScheduleCron:
+      Type: String
+      Default: "cron(0 8 ? * 2 *)"
+      Description: Cron expression to be used when peak schedule starts. e.g. on Monday Morning. The time specified is in UTC, so adjust to your timezone.
+    OffPeakScheduleCron:
+      Type: String
+      Default: "cron(0 18 ? * 6 *)"
+      Description: Cron expression to be used when off-peak schedule starts. e.g. on Monday Morning. The time specified is in UTC, so adjust to your timezone.
+      
+Resources:
+  CyclicalTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: partionKeyId
+          AttributeType: S
+      SSESpecification:
+        SSEEnabled: True
+      KeySchema:
+        - AttributeName: partionKeyId
+          KeyType: HASH
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 100
+        WriteCapacityUnits: !Ref InitialWriteCapacity
+      TableName: CyclicalTable21
+
+
+
+  WriteScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MinCapacity: !Ref AutoscaleWriteMinCapacity
+      MaxCapacity: !Ref AutoscaleWriteMaxCapacity
+      ResourceId: !Sub "table/${ CyclicalTable }"
+      RoleARN: !Ref RoleArn
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ServiceNamespace: dynamodb
+      ScheduledActions:
+        - ScheduledActionName: startWeekday
+          #Monday Morning
+          Schedule: !Ref PeakScheduleCron          
+          ScalableTargetAction:
+            MinCapacity: !Ref ScheduleWritePeakhourMinCapacity
+        - ScheduledActionName: startWeekEnd
+          #Friday Night
+          Schedule: !Ref OffPeakScheduleCron          
+          ScalableTargetAction:
+            MinCapacity: !Ref ScheduleWriteOffeakhourMinCapacity
+        
+  ScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: WriteScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref WriteScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+        ScaleInCooldown: 300 #time in sconds to wait after previous scale-in
+        ScaleOutCooldown: 300 # time in seconds to wait after previous scale-out
+        TargetValue: 60  # Scale when target utilization is 60%
+    
