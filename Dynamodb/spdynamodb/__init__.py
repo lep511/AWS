@@ -16,12 +16,13 @@ logger = logging.getLogger(__name__)
 __version__ = "1.2.0"
 
 class DecimalEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Decimal):
-            return float(obj)
-        elif isinstance(obj, set):
-            return list(obj)
-        return json.JSONEncoder.default(self, obj)
+    def default(self, o):
+        if isinstance(o, Decimal):
+            if o % 1 > 0:
+                return float(o)
+            else:
+                return int(o)
+        return super(DecimalEncoder, self).default(o)
 
 class DynamoTable:
     min_compress = 250
@@ -326,6 +327,46 @@ class DynamoTable:
             raise
         else:
             return response['Attributes']
+    
+    def get_item(self, pk_value, sk_value=None):
+        """
+        Gets item data from the table.
+        :param pk_value: Primary key value.
+        :param sk_value: Sort key value if exist. Default: None.
+        :return: The data about the requested item.
+        """
+        pk_name = self.table.key_schema[0]['AttributeName']
+        pk_type = self.table.attribute_definitions[0]["AttributeType"]
+        act_pk_type = self.__keyType[pk_type]
+ 
+        if type(pk_value) != type(act_pk_type):
+            raise Exception(f"The format of the main key is incorrect, it should be: {pk_type}")
+        
+        try:
+            sk_name = self.table.key_schema[1]['AttributeName']
+            sk_type = self.table.attribute_definitions[1]["AttributeType"]
+            act_sk_type = self.__keyType[sk_type]
+            sk_exist = True
+        except:
+            sk_exist = False
+     
+        if sk_exist:
+            if sk_value is None:
+                raise Exception(f"The sort key value cannot be empty.")
+            elif type(sk_value) != type(act_sk_type):
+                raise Exception(f"The format of the sort key is incorrect, it should be: {sk_type}")
+            else:
+                response = self.table.get_item(Key={pk_name: pk_value, sk_name: sk_value})
+        else:
+            response = self.table.get_item(Key={pk_name: pk_value})
+        
+        try:
+            js_data = json.dumps(response['Item'], cls=DecimalEncoder)
+            result = json.loads(js_data)
+            return result
+        except:
+            print(f"Item not found: {pk_value} - {sk_value}")
+            return response
 
     def query_partiql(self, query: str, parameters: Optional[List[Any]] = None, chunked: bool = False):
         if "<table>" in query:
@@ -377,7 +418,7 @@ class DynamoTable:
         if to_pandas:
             return pd.DataFrame(response['Items'])
         else:
-            return response['Items']
+            return json.dumps(response['Items'], indent=4, cls=DecimalEncoder)
 
     def read_items(self, **kwargs):
         response = wr_read_items(boto3_session=self.session, table_name=self.table_name, **kwargs)
