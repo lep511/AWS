@@ -1,0 +1,33 @@
+------------------------------------------------------
+
+$ dig +short example.networkloadbalancer.com
+
+$ tracepath example.networkloadbalancer.com
+
+$ curl -Iv example.networkloadbalancer.com
+
+----------------------------------------------
+
+# Conecatrse a una instancia EC2
+mssh -o ServerAliveInterval=120 INSTANCE_ID -r REGION
+
+#  The -o tag sends a message between the two hosts at the specified interval, in seconds, to keep the SSH connection open.
+
+----------------------------------------------
+
+# Listar unidades
+df -k
+
+------------------------------------------------
+
+# Montar el servicio EFS mediante NFS
+
+sudo su -
+cd ..
+sudo yum install -y nfs-utils
+sudo mkdir efs
+sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-052e1c5d494dfd289.efs.us-west-2.amazonaws.com:/ efs
+
+#Unmount EFS - use the -l option with umount, if it complains of the device being busy
+sudo umount ./efs
+---------------------------------------------
