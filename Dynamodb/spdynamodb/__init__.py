@@ -26,14 +26,14 @@ class DecimalEncoder(json.JSONEncoder):
 class DynamoTable:
     min_compress = 250
     
-    def __init__(self, table_name=None, profile_name=None, region='us-east-1'):
+    def __init__(self, table_name=None, profile_name=None, region_name='us-east-1'):
         """
         :param table_name: A DynamoDB table.
         """
         self.table_name = table_name
-        self.session = boto3.Session(profile_name=profile_name, region_name=region)
-        self.dyn_resource = self.session.resource("dynamodb", region_name=region)
-        self.region = region
+        self.session = boto3.Session(profile_name=profile_name, region_name=region_name)
+        self.dyn_resource = self.session.resource("dynamodb", region_name=region_name)
+        self.region = region_name
         self.__keyType = {"S": "s", "N": 0, "B": b"b"}
         if not table_name:
             self.table_name = None
