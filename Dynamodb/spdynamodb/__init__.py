@@ -1,4 +1,5 @@
-from ._queries import read_items as wr_read_items
+from ._queries import wr_read_items, query_main
+from ._errors import handle_error
 from decimal import Decimal
 from io import BytesIO
 from datetime import datetime
@@ -228,46 +229,6 @@ class DynamoTable:
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
 
-    def get_item(self, pk_value, se_value=None):
-        """
-        Gets item data from the table.
-        :param pk_value: Primary key value.
-        :param se_value: Sort key value. Default: None.
-        :return: The data about the requested item.
-        """
-        pk_name = self.table.key_schema[0]['AttributeName']
-        pk_type = self.table.attribute_definitions[0]["AttributeType"]
-        act_pk_type = self.__keyType[pk_type]
-        
-        if len(self.table.key_schema) == 2:
-            sh_name = self.table.key_schema[1]['AttributeName']
-            sh_type = self.table.attribute_definitions[1]["AttributeType"]
-            act_sh_type = self.__keyType[sh_type]
-            
-            if se_value is None:
-                logger.error(f"The sort key value cannot be empty: {sh_name}")
-                return
-            elif type(pk_value) != type(act_pk_type):
-                logger.error(f"The format of the main key is incorrect, it should be: {type(act_pk_type)}")
-                return
-            elif type(se_value) != type(act_sh_type):
-                logger.error(f"The format of the sort key is incorrect, it should be: {type(act_pk_type)}")
-                return
-            response = self.table.get_item(Key={pk_name: pk_value, sh_name: se_value})
-        else:
-            if type(pk_value) != type(act_pk_type):
-                logger.info(f"The format of the main key is incorrect, it should be: {type(act_pk_type)}")
-                return
-            response = self.table.get_item(Key={pk_name: pk_value})
-        try:
-            #if self.found_binary(response):
-                #response = self.decompress_binary(response)
-            js_data = json.dumps(response['Item'], cls=DecimalEncoder)
-            result = json.loads(js_data)
-            return result
-        except:
-            return response
-
     def scan_att(self, att_name, query, to_pandas=True, consumed_capacity=False, pages=None):
         scan_kwargs = {
             'FilterExpression': Attr(att_name).eq(query),
@@ -328,46 +289,20 @@ class DynamoTable:
         else:
             return response['Attributes']
     
-    def get_item(self, pk_value, sk_value=None):
+    
+    def query(self, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None):
         """
-        Gets item data from the table.
+        Queries an Amazon DynamoDB table and returns the matching items.
         :param pk_value: Primary key value.
         :param sk_value: Sort key value if exist. Default: None.
-        :return: The data about the requested item.
+        :param index_name: The name of the index to query. If None, then the table itself is queried.
+        :param consistent_read: If True, then a strongly consistent read is used.
+        :param consumed_capacity: Return the consumed capacity. Valid values: None, "TOTAL", "INDEXES". Default: None.
+        :return: The item/items matching the query.
         """
-        pk_name = self.table.key_schema[0]['AttributeName']
-        pk_type = self.table.attribute_definitions[0]["AttributeType"]
-        act_pk_type = self.__keyType[pk_type]
- 
-        if type(pk_value) != type(act_pk_type):
-            raise Exception(f"The format of the main key is incorrect, it should be: {pk_type}")
-        
-        try:
-            sk_name = self.table.key_schema[1]['AttributeName']
-            sk_type = self.table.attribute_definitions[1]["AttributeType"]
-            act_sk_type = self.__keyType[sk_type]
-            sk_exist = True
-        except:
-            sk_exist = False
-     
-        if sk_exist:
-            if sk_value is None:
-                raise Exception(f"The sort key value cannot be empty.")
-            elif type(sk_value) != type(act_sk_type):
-                raise Exception(f"The format of the sort key is incorrect, it should be: {sk_type}")
-            else:
-                response = self.table.get_item(Key={pk_name: pk_value, sk_name: sk_value})
-        else:
-            response = self.table.get_item(Key={pk_name: pk_value})
-        
-        try:
-            js_data = json.dumps(response['Item'], cls=DecimalEncoder)
-            result = json.loads(js_data)
-            return result
-        except:
-            print(f"Item not found: {pk_value} - {sk_value}")
-            return response
-
+        response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity)
+        return response
+    
     def query_partiql(self, query: str, parameters: Optional[List[Any]] = None, chunked: bool = False):
         if "<table>" in query:
             query = query.replace("<table>", self.table.name)
