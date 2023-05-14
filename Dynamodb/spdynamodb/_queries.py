@@ -33,7 +33,7 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
     pk_type = table.attribute_definitions[0]["AttributeType"]
     map_type = {'S': str, 'N': int, 'B': bytes}
     index_exist = False
-    sk_exist = False
+    sk_name = None
     
     
     if index_name:
@@ -53,23 +53,19 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
             pk_type = [m for m in table.attribute_definitions if m['AttributeName'] == pk_name][0]['AttributeType']
             try:
                 sk_name = index_data['KeySchema'][1]['AttributeName']
-                sk_type = [m for m in table.attribute_definitions if m['AttributeName'] == sk_name][0]['AttributeType']
-                sk_exist = True
             except:
-                sk_exist = False
+                sk_name = False
     else:
         try:
             sk_name = table.key_schema[1]['AttributeName']
-            sk_type = table.attribute_definitions[1]["AttributeType"]
-            sk_exist = True
         except:
-            sk_exist = False
+            sk_name = None
                 
     if type(pk_value) != map_type[pk_type]:
         handle_error(f"The format of the main key is incorrect, it should be: {pk_type}")
         return
         
-    if not sk_exist:
+    if not sk_name:
         # If the sort key does not exist only run get_item
         response = table.get_item(
             Key={pk_name: pk_value},
@@ -78,38 +74,52 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
         )
 
     else:
-        print(pk_name, pk_value, sk_name, sk_value)
         # If the sort key exists
+ 
         if sk_value is None:
             handle_error(f"The sort key value cannot be empty.")
             return
+ 
         elif isinstance(sk_value, (int, float)):
             sk_value = Decimal(str(sk_value))
             qry = False
+        
         elif sk_value.startswith("<="):
             value = Decimal(sk_value[2:])
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).lte(value)
+
         elif sk_value.startswith("<"):
             value = Decimal(sk_value[1:])
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).lt(value)
+
         elif sk_value.startswith("=="):
             value = Decimal(sk_value[2:])
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).eq(value)
+  
         elif sk_value.startswith(">="):
             value = Decimal(sk_value[2:])
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).gte(value)
+  
         elif sk_value.startswith(">"):
             value = Decimal(sk_value[1:])
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).gt(value)
+  
         elif sk_value.startswith("!="):
             value = Decimal(sk_value[2:])
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).ne(value)
+   
         elif sk_value.endswith("*"):
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).begins_with(sk_value[:-1])
-        elif re.search(r'\d+-\d+', sk_value):
-            value = sk_value.split("-")
+            
+        elif re.search(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.*_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.*$', sk_value):
+            value = sk_value.split("_")
+            qry = Key(pk_name).eq(pk_value) & Key(sk_name).between(*value)
+ 
+        elif re.search(r'\d+_\d+', sk_value):
+            value = sk_value.split("_")
             value_dec = [Decimal(x) for x in value]
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).between(*value_dec)
+   
         else:
             qry = False
 

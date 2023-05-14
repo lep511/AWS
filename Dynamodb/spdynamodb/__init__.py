@@ -229,7 +229,7 @@ class DynamoTable:
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
 
-    def scan_att(self, att_name, query, to_pandas=True, consumed_capacity=False, pages=None):
+    def scan_att(self, att_name, query, to_pandas=False, consumed_capacity=False, pages=None):
         scan_kwargs = {
             'FilterExpression': Attr(att_name).eq(query),
             'ReturnConsumedCapacity': "TOTAL"
@@ -290,7 +290,7 @@ class DynamoTable:
             return response['Attributes']
     
     
-    def query(self, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None):
+    def query(self, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None, to_pandas=False):
         """
         Queries an Amazon DynamoDB table and returns the matching items.
         :param pk_value: Primary key value.
@@ -298,9 +298,18 @@ class DynamoTable:
         :param index_name: The name of the index to query. If None, then the table itself is queried.
         :param consistent_read: If True, then a strongly consistent read is used.
         :param consumed_capacity: Return the consumed capacity. Valid values: None, "TOTAL", "INDEXES". Default: None.
+        :param to_pandas: If True, returns a pandas DataFrame. Default: True.
         :return: The item/items matching the query.
         """
         response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity)
+        
+        if to_pandas:
+            if response:
+                if len(response) > 1:
+                    return pd.DataFrame(response)
+                else:
+                    return pd.DataFrame(response[0], index=[0])
+                
         return response
     
     def query_partiql(self, query: str, parameters: Optional[List[Any]] = None, chunked: bool = False):
