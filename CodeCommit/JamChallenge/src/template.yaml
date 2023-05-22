@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: jam-challenge Lambda Function
+
+Parameters:
+  StackName:
+    Description: Stack Name
+    Type: String
+    Default: jam-challenge-lambda-function
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.253.140.0/25
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: jam-challenge-vpc
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W60
+            reason: "VPC doesn't need to be attached with flow logs"
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow https Inbound Connections
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/8 
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${StackName}-role-${AWS::Region}" 
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: managed-prefix-list-refresher-lambda-role-Policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  JamChallengeLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${StackName}-${AWS::Region}" 
+      Role: GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.9
+      Handler: index.my_handler
+      Code:
+        ZipFile: |
+          def my_handler(event, context):
+            message = 'Hello Lambda World!'
+            return message
+
+Outputs:
+  LambdaARN:
+    Description: Lambda ARN
+    Value: !GetAtt JamChallengeLambdaFunction.Arn
+    Export:
+      Name: LambdaARN

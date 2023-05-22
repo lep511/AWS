@@ -1,0 +1,12 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - apt-get update -y
+      - pip install cfn-lint
+  build:
+    commands:
+        - cd src
+        - cfn-lint template.yaml

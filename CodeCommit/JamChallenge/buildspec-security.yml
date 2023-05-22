@@ -1,0 +1,13 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      ruby: 3.2
+    commands:
+      - apt-get update -y
+      - gem install cfn-nag
+  build:
+    commands:
+      - |
+        pwdir=$(pwd)
+        cfn_nag_scan --input-path $pwdir/src/
