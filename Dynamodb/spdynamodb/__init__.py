@@ -1,20 +1,19 @@
-from ._queries import wr_read_items, query_main
+from ._queries import query_main, query_partiql_main
 from ._errors import handle_error
 from decimal import Decimal
 from io import BytesIO
 from datetime import datetime
+import time
 import json
 import gzip
-import logging
 import boto3
 import pandas as pd
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, TypeVar, Union, cast
 from boto3.dynamodb.types import Binary
 from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import ClientError
-logger = logging.getLogger(__name__)
 
-__version__ = "1.2.0"
+__version__ = "1.4.0"
 
 class DecimalEncoder(json.JSONEncoder):
     def default(self, o):
@@ -39,8 +38,8 @@ class DynamoTable:
         self.__keyType = {"S": "s", "N": 0, "B": b"b"}
         if not table_name:
             self.table_name = None
-        elif not self.exists(table_name):
-            logger.error(
+        elif not self.table_exists(table_name):
+            print(
                 "Table %s doesn't exist. To create use create_table() function.",
                 table_name)
             self.table_name = None
@@ -49,21 +48,24 @@ class DynamoTable:
             self.select_table(table_name)
             self.status_pitr = status_pitr
             self.delete_protection = delete_protection
+            self.status_stream = status_stream
         
     def __repr__(self):
         if self.table_name != None:
             self.table.reload()
             rep = f"- Table name: {self.table_name}\
             \n- Table arn: {self.table.table_arn}\
-            \n- Table creation: {self.table.creation_date_time}\
+            \n- Table creation: {self.table.creation_date_time.strftime('%Y-%m-%d %H:%M:%S')}\
             \n- {self.table.key_schema}\
             \n- {self.table.attribute_definitions}\
             \n- Point-in-time recovery status: {self.status_pitr}  |  Delete protection: {self.delete_protection}"
+            if self.status_stream != "OFF":
+                rep += f"\n- Stream enabled: True  |  Stream view type: {self.table.stream_specification['StreamViewType']}"
         else:
             rep = "The table has not yet been selected"
         return rep
     
-    def exists(self, table_name):
+    def table_exists(self, table_name):
         """
         Determines whether a table exists. As a side effect, stores the table in
         a member variable.
@@ -78,7 +80,7 @@ class DynamoTable:
             if err.response['Error']['Code'] == 'ResourceNotFoundException':
                 exists = False
             else:
-                logger.error(
+                print(
                     "Couldn't check for existence of %s. Here's why: %s: %s",
                     table_name,
                     err.response['Error']['Code'], err.response['Error']['Message'])
@@ -86,7 +88,7 @@ class DynamoTable:
         return exists
     
     def select_table(self, table_name):
-        if not self.exists(table_name):
+        if not self.table_exists(table_name):
             self.table_name = None
             raise ValueError("Table doesn't exist. To create use create_table() function.")
         else:
@@ -157,10 +159,10 @@ class DynamoTable:
                     BillingMode="PAY_PER_REQUEST")
             self.table.wait_until_exists()
             self.table_name = table_name
-            logger.info("Table created successfully!")
+            print("Table created successfully!")
 
         except ClientError as err:
-            logger.error(
+            print(
                 "Couldn't create table %s. Here's why: %s: %s", table_name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
@@ -177,7 +179,7 @@ class DynamoTable:
             with open(json_file) as json_data:
                 parsed = json.load(json_data, parse_float=Decimal)
         except:
-            logger.error(
+            print(
                 "Couldn't load data from %s or the file does not exist.", json_file)
             raise
         if compress:
@@ -201,7 +203,7 @@ class DynamoTable:
                 for item in items:
                     writer.put_item(Item=item)
         except ClientError as err:
-            logger.error(
+            print(
                 "Couldn't load data into table %s. Here's why: %s: %s", self.table.name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
@@ -223,7 +225,7 @@ class DynamoTable:
                 Item=item
             )
         except ClientError as err:
-            logger.error(
+            print(
                 "Couldn't add item to table %s. Here's why: %s: %s",
                 self.table.name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
@@ -253,7 +255,7 @@ class DynamoTable:
             pages -= 1
 
         if consumed_capacity:
-            logger.info(f"Consumed Capacity: {consumed_capacity_count}")
+            print(f"Consumed Capacity: {consumed_capacity_count}")
         
         for elem in response_total:
             for item in elem:
@@ -281,7 +283,7 @@ class DynamoTable:
                     ':r': Decimal(str(rating)), ':p': plot},
                 ReturnValues="UPDATED_NEW")
         except ClientError as err:
-            logger.error(
+            print(
                 "Couldn't update movie %s in table %s. Here's why: %s: %s",
                 title, self.table_name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
@@ -304,69 +306,24 @@ class DynamoTable:
         response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity)
         
         if to_pandas:
-            if response:
-                if len(response) > 1:
-                    return pd.DataFrame(response)
-                else:
-                    return pd.DataFrame(response[0], index=[0])
+            if not isinstance(response, list):
+                return pd.DataFrame([response])
+            else:
+                return pd.DataFrame(response)
                 
         return response
     
-    def query_partiql(self, query: str, parameters: Optional[List[Any]] = None, chunked: bool = False):
-        if "<table>" in query:
-            query = query.replace("<table>", self.table.name)
-        resp = wr_d.read_partiql_query(query=query, parameters=parameters, chunked=chunked, boto3_session=self.session)
+    
+    def query_partiql(self, query, consumed_capacity=None):
+        """
+        Query a table using PartiQL.
+        :param query: The query to execute (statement).
+        :param consumed_capacity: Return the consumed capacity. Valid values: None, "TOTAL", "INDEXES". Default: None.
+        :return: The query results.
+        """     
+        resp = query_partiql_main(query=query, consumed_capacity=consumed_capacity, dyn_table=self.table)
         return resp
                       
-    def query_items(self, query, index_name=None, to_pandas=False, consumed_capacity=False):
-        """
-        Query a table items.
-        :param query: The key value to query.
-        :param index_name: The index name to query. Default: None.
-        :param to_pandas: If True, returns a pandas DataFrame. Default: False.
-        :param consumed_capacity: If True, returns the consumed capacity. Default: False.
-        :return: Items matching the search.
-        """
-        try:
-            # If an index was specified, query the index
-            if index_name:
-                response = self.table.query(
-                        IndexName=index_name, 
-                        KeyConditionExpression=Key('Language_code').eq(query)
-                )
-                consumed_capacity = False # Indexes don't have consumed capacity
-            # If no index was specified, query the table
-            else:          
-                pk_name = self.table.key_schema[0]['AttributeName']
-                response = self.table.query(
-                        KeyConditionExpression=Key(pk_name).eq(query), 
-                        ReturnConsumedCapacity="TOTAL"
-                )
-        except ClientError as err:
-            logger.error(
-                f"Couldn't query for {query}. Here's why: {err.response['Error']['Code']} \
-                {err.response['Error']['Message']}")
-            raise
-        
-        if consumed_capacity:
-            consumed_text = f"Consumed Capacity: {response['ConsumedCapacity']['CapacityUnits']}"
-            logger.info(consumed_text)
-        
-        if len(response['Items']) == 0:
-            logger.info("No items were found matching your search query.")
-            return None
-        
-        if self.found_binary(response, only_check=True):
-            response = self.decompress_binary(response)
-        
-        if to_pandas:
-            return pd.DataFrame(response['Items'])
-        else:
-            return json.dumps(response['Items'], indent=4, cls=DecimalEncoder)
-
-    def read_items(self, **kwargs):
-        response = wr_read_items(boto3_session=self.session, table_name=self.table_name, **kwargs)
-        return response
 
     def make_backup(self, backup_name=None):
         """
@@ -381,12 +338,12 @@ class DynamoTable:
                 BackupName=backup_name
             )
         except ClientError as err:
-            logger.error(
+            print(
                 f"Couldn't create a backup for {self.table_name}. Here's why: {err.response['Error']['Code']} \
                 {err.response['Error']['Message']}")
             raise
         else:
-            logger.info(f"Backup {backup_name} created successfully.")
+            print(f"Backup {backup_name} created successfully.")
             return response
 
     @property
@@ -399,7 +356,7 @@ class DynamoTable:
                 TableName=self.table_name
             )
         except ClientError as err:
-            logger.error(
+            print(
                 f"Couldn't get the status of deletion protection for {self.table_name}. Here's why: \
                 {err.response['Error']['Code']} {err.response['Error']['Message']}")
             raise
@@ -416,7 +373,7 @@ class DynamoTable:
             raise TypeError("The value must be either True or False.")
         
         if self.delete_protection == value:
-            logger.info(f"Deletion protection for {self.table_name} is already set to {value}.")
+            print(f"Deletion protection for {self.table_name} is already set to {value}.")
             return
         
         try:
@@ -425,12 +382,12 @@ class DynamoTable:
                 DeletionProtectionEnabled = value
             )
         except ClientError as err:
-            logger.error(
+            print(
                 f"Couldn't set deletion protection for {self.table_name}. Here's why: \
                 {err.response['Error']['Code']} {err.response['Error']['Message']}")
             raise
         else:
-            logger.info(f"Deletion protection for {self.table_name} set to {value}.")
+            print(f"Deletion protection for {self.table_name} set to {value}.")
     
     @property
     def status_pitr(self):
@@ -442,7 +399,7 @@ class DynamoTable:
                 TableName=self.table_name
             )
         except ClientError as err:
-            logger.error(
+            print(
                 f"Couldn't get the status of point-in-time recovery for {self.table_name}. Here's why: \
                 {err.response['Error']['Code']} {err.response['Error']['Message']}")
             raise
@@ -463,7 +420,7 @@ class DynamoTable:
             raise ValueError("Value must be either 'ENABLED' or 'DISABLED'")
         
         if self.status_pitr == value:
-            logger.info(f"Point-in-time recovery is already {value}.")
+            print(f"Point-in-time recovery is already {value}.")
             return
         try:
             response = self.table.meta.client.update_continuous_backups(
@@ -472,14 +429,98 @@ class DynamoTable:
                     'PointInTimeRecoveryEnabled': point_in_time_recovery
                 }
             )
-            logger.info(f"Point-in-time recovery turned on successfully.")
+            print(f"Point-in-time recovery turned on successfully.")
             self.status_pitr = value
         except ClientError as err:
-            logger.error(
+            print(
                 f"Couldn't turn on point-in-time recovery for {self.table_name}. Here's why: \
                 {err.response['Error']['Code']} {err.response['Error']['Message']}")
             raise
-
+    
+    @property
+    def status_stream(self):
+        """
+        Get the status of DynamoDB streams for a DynamoDB table.
+        """
+        try:
+            response = self.table.stream_specification
+        except ClientError as err:
+            print(
+                f"Couldn't get the status of DynamoDB streams for {self.table_name}. Here's why: \
+                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            raise
+        else:
+            if response:
+                self.stream_arn = self.table.latest_stream_arn
+                return response['StreamViewType']
+            else:
+                return "OFF"
+        
+    @status_stream.setter
+    def status_stream(self, value):
+        """
+        Set DynamoDB streams for a DynamoDB table.
+        :param value: The value to set DynamoDB streams to. Acceptable values are:
+          - "ON": Turn on DynamoDB streams and set the stream view type to NEW_AND_OLD_IMAGES.
+          - "KEYS_ONLY": Turn on DynamoDB streams and set the stream view type to KEYS_ONLY.
+          - "NEW_IMAGE": Turn on DynamoDB streams and set the stream view type to NEW_IMAGE.
+          - "OLD_IMAGE": Turn on DynamoDB streams and set the stream view type to OLD_IMAGE.
+          - "NEW_AND_OLD_IMAGES": Turn on DynamoDB streams and set the stream view type to NEW_AND_OLD_IMAGES.
+          - "OFF": Turn off DynamoDB streams.
+        """
+        value = value.upper()
+        acceptable_values = ["ON", "KEYS_ONLY", "NEW_IMAGE", "OLD_IMAGE", "NEW_AND_OLD_IMAGES", "OFF"]
+               
+        if value not in acceptable_values:
+            print(f"Value must be one of {acceptable_values}.")
+            return
+        
+        if value == "ON": 
+            value = "NEW_AND_OLD_IMAGES"
+        
+        if self.status_stream == value:
+            print(f"DynamoDB streams are already {value}.")
+            return # No need to do anything if the value is already set to what we want.
+        
+        if value != "OFF" and self.status_stream == "OFF":
+            try:
+                response = self.table.update(
+                    StreamSpecification={
+                        'StreamEnabled': True,
+                        'StreamViewType': value
+                    }
+                )
+                self.stream_arn = self.table.latest_stream_arn
+                print(f"DynamoDB streams turned on successfully.")
+            
+            except ClientError as err:
+                if err.response['Error']['Code'] == 'ResourceInUseException':
+                    print("A stream status change is currently in progress. Please try again later.")
+                    return
+                else:
+                    print(
+                        f"Couldn't turn on DynamoDB streams for {self.table_name}. Here's why: \
+                        {err.response['Error']['Code']} {err.response['Error']['Message']}")
+                raise
+        elif value == "OFF":
+            try:
+                response = self.table.update(
+                    StreamSpecification={
+                        'StreamEnabled': False
+                    }
+                )
+                self.stream_arn = None
+                print(f"DynamoDB streams turned off successfully.")
+            except ClientError as err:
+                print(
+                    f"Couldn't turn off DynamoDB streams for {self.table_name}. Here's why: \
+                    {err.response['Error']['Code']} {err.response['Error']['Message']}")
+                raise
+        else:
+            print(f"DynamoDB streams are already {self.status_stream}. You must turn them off before changing the stream view type.")
+            return    
+        
+    
     def create_global_secondary_index(self, att_name, att_type, i_name=None, sort_index=None, 
                                       sort_type=None, proj_type="ALL", i_rcu=5, i_wcu=5):
         """
@@ -548,7 +589,7 @@ class DynamoTable:
             )
             self.table.reload()
         except ClientError as err:
-            logger.error(
+            print(
                 "Global secondary index could not be created in table %s. Here's why: %s: %s",
                 self.table_name,
                 err.response['Error']['Code'], err.response['Error']['Message'])

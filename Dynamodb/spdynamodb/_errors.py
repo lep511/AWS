@@ -2,6 +2,11 @@ from botocore.exceptions import ClientError
 
 def handle_error(error):
     ERROR_HELP_STRINGS = {
+    # Operation specific errors
+    'ConditionalCheckFailedException': 'Condition check specified in the operation failed, review and update the condition check before retrying',
+    'TransactionConflictException': 'Operation was rejected because there is an ongoing transaction for the item, generally safe to retry with exponential back-off',
+    'ItemCollectionSizeLimitExceededException': 'An item collection is too large, you\'re using Local Secondary Index and exceeded size limit of items per partition key.' +
+                                                ' Consider using Global Secondary Index instead',
     # Common Errors
         'InternalServerError': 'Internal Server Error, generally safe to retry with exponential back-off',
         'ProvisionedThroughputExceededException': 'Request rate is too high. If you\'re using a custom retry strategy make sure to retry with exponential back-off.' +

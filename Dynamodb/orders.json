@@ -1,0 +1,32 @@
+[
+    {
+        "PK": 12,
+        "SK": 1,
+        "details": {"entree": "burger", "sides": ["fries", "soda"]},
+        "status": "WIP"
+    },
+    {
+        "PK": 12,
+        "SK": 2,
+        "details": {"entree": "BLT sw", "sides": ["water"]},
+        "status": "WIP"
+    },
+    {
+        "PK": 14,
+        "SK": 1,
+        "details": {"entree": "salad", "sides": ["apple", "water"]},
+        "status": "WIP"
+    },
+    {
+        "PK": 14,
+        "SK": 2,
+        "details": {"entree": "BLT sw", "sides": ["water"]},
+        "status": "WIP"
+    },
+    {
+        "PK": 15,
+        "SK": 1,
+        "details": {"entree": "burger", "sides": ["fries", "soda"]},
+        "status": "DONE"
+    }
+]   

@@ -1,4 +1,3 @@
-from awswrangler import dynamodb as wr
 import boto3
 from botocore.exceptions import ClientError
 from decimal import Decimal
@@ -198,24 +197,27 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
         print(f"Consumed Capacity: {consumed_capacity_count}")
 
     return result
-
-def wr_read_items(boto3_session, table_name, **kwargs):
-    """
-    Read items from a table.
-    :param kwargs: Keyword arguments to pass to the scan method.
-    :return: Items matching the search.
-    """
+   
+    
+def query_partiql_main(query, parameters=None, consumed_capacity=None, dyn_table=None):
+    if consumed_capacity is None: consumed_capacity = 'NONE'
     try:
-        args = {
-            "boto3_session": boto3_session, 
-            "table_name" : table_name, 
-            "as_dataframe" : True
-        }
-        response = wr.read_items(**args, **kwargs)
-        return response
-
-    except ClientError as err:
-        logger.error(
-            f"Couldn't read items from {table_name}. Here's why: {err.response['Error']['Code']} \
-            {err.response['Error']['Message']}")
-        raise
+        response = dyn_table.meta.client.execute_statement(Statement=query, ReturnConsumedCapacity=consumed_capacity)
+        print("ExecuteStatement executed successfully.")
+    except ClientError as error:
+        handle_error(error)
+    except BaseException as error:
+        print("Unknown error while executing executeStatement operation: " + error.response['Error']['Message'])
+    
+    if consumed_capacity != 'NONE':
+        response_json = json.loads(json.dumps(response['ConsumedCapacity'], cls=DecimalEncoder_))
+        consumed_capacity_count = response_json['CapacityUnits']
+        print(f"Consumed Capacity: {consumed_capacity_count}")
+        
+    if len(response.get('Items')) == 0:
+        print("Not found any items")
+        return None
+    
+    json_data = json.loads(json.dumps(response['Items'], cls=DecimalEncoder_))
+    
+    return json_data
