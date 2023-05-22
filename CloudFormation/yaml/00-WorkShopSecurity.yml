@@ -1,0 +1,1537 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  EnableDetective:
+    Type: String
+    Default: "False"
+    AllowedValues:
+      - "False"
+      - "True"
+
+Conditions:
+  CreateDetectiveResources: !Equals [!Ref "EnableDetective", "True"]
+
+Resources:
+  GeneralInstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM'
+        - 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'
+      Path: /
+      Policies:
+        - PolicyName: GeneralInstancePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameter'
+                  - 'ssm:GetParameters'
+                  - 'ssm:DescribeParameters'
+                Resource: !Join 
+                  - ':'
+                  - - 'arn:aws:ssm'
+                    - !Ref 'AWS::Region'
+                    - !Ref 'AWS::AccountId'
+                    - '*'
+  ThreatListLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: ThreatListLambdaPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'guardduty:GetDetector'
+                  - 'guardduty:ListDetectors'
+                  - 'guardduty:CreateThreatIntelSet'
+                  - 'guardduty:UpdateThreatIntelSet'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'iam:PutRolePolicy'
+                  - 'iam:DeleteRolePolicy'
+                Resource: !Join 
+                  - ':'
+                  - - 'arn:aws:iam:'
+                    - !Ref 'AWS::AccountId'
+                    - role/aws-service-role/guardduty.amazonaws.com/*
+  GeneralInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref GeneralInstanceRole
+  IAMEC2ROLE:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        - 'arn:aws:iam::aws:policy/AmazonSSMPatchAssociation'
+        - 'arn:aws:iam::aws:policy/AdministratorAccess'
+      RoleName: IAMEC2ROLE
+  IAMEC2InstanceRole:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref IAMEC2ROLE
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+  GatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+  RouteTable:
+    DependsOn:
+      - VPC
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+  PublicRoute:
+    DependsOn:
+      - RouteTable
+      - GatewayAttachment
+    Type: 'AWS::EC2::Route'
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+  Subnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      VpcId: !Ref VPC
+  Subnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      VpcId: !Ref VPC
+  SubnetAssoc:
+    DependsOn:
+      - Subnet
+      - RouteTable
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet
+  GeneralSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: No inbound ports required
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+          Description: Allow all ports outbound
+      VpcId: !Ref VPC
+  CompromisedSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: No inbound ports required
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: 5050
+          ToPort: 5050
+          CidrIp: 10.0.0.0/16
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+          Description: Allow all ports outbound
+      VpcId: !Ref VPC
+  EnableGuardDuty:
+    DependsOn:
+      - ThreatListBucket
+      - MaliciousEc2Instance
+    Type: 'AWS::GuardDuty::Detector'
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+  ThreatListBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  ThreatListLambda:
+    DependsOn:
+      - MaliciousEc2Instance
+      - ThreatListBucket
+      - EnableGuardDuty
+    Type: 'Custom::FileCopyLambda'
+    Properties:
+      ServiceToken: !GetAtt 
+        - ThreatListLambdaFunction
+        - Arn
+      BUCKET_NAME: !Ref ThreatListBucket
+      THREAT_LIST: !GetAtt 
+        - MaliciousEc2Instance
+        - PublicIp
+  ThreatListLambdaFunction:
+    DependsOn:
+      - MaliciousEc2Instance
+      - ThreatListBucket
+      - EnableGuardDuty
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Description: Create a TXT threat list in an S3 bucket and upload to GD
+      Handler: index.handler
+      Role: !GetAtt 
+        - ThreatListLambdaRole
+        - Arn
+      Runtime: python3.7
+      Timeout: '30'
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref ThreatListBucket
+          THREAT_LIST: !GetAtt 
+            - MaliciousEc2Instance
+            - PublicIp
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import os
+          import random
+          import string
+
+          def getRandom(stringLength=10):
+              #Generate a random string of alphanumeric characters
+              lettersAndDigits = string.ascii_lowercase + string.digits
+              return ''.join((random.choice(lettersAndDigits) for i in range(stringLength)))
+
+          bkN=os.environ['BUCKET_NAME']
+          tipL=os.environ['THREAT_LIST']
+          responseData={}
+          FbkN='https://s3.amazonaws.com/'+bkN+'/threatlist.txt'
+
+          def handler(event, context):
+              s3c = boto3.client('s3')
+              gdc = boto3.client('guardduty')
+
+              if event['RequestType'] == 'Create':
+                  tmpFn = '/tmp/'+getRandom(20)
+                  f = open(tmpFn, 'w')
+                  f.write(tipL)
+                  f.close
+                  with open(tmpFn, 'rb') as f:
+                      response = s3c.upload_fileobj(f, bkN, 'threatlist.txt')
+                  id = gdc.list_detectors()
+                  response = gdc.create_threat_intel_set(
+                      DetectorId=id['DetectorIds'][0],
+                      Name='S3BadIpAddressList',
+                      Location=FbkN,
+                      Format='TXT',
+                      Activate=True,
+                  )
+                  responseData['Data'] = 'Create Success'
+                  cfnresponse.send(event, context, 'SUCCESS', responseData)
+              elif event['RequestType'] == 'Update':
+                  tmpFn = '/tmp/'+getRandom(20)
+                  f = open(tmpFn, 'w')
+                  f.write(tipL)
+                  f.close
+                  with open(tmpFn, 'rb') as f:
+                      response = s3c.upload_fileobj(f, bkN, 'threatlist.txt')
+                  responseData['Data'] = 'Update'
+                  cfnresponse.send(event, context, 'SUCCESS', responseData)
+              elif event['RequestType'] == 'Delete':
+                  responseData['Data'] = 'Delete'
+                  cfnresponse.send(event, context, 'SUCCESS', responseData)
+  ScannerEc2Instance:
+    DependsOn:
+      - GatewayAttachment
+      - PublicRoute
+      - CompromisedInstance
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      IamInstanceProfile: !Ref GeneralInstanceProfile
+      InstanceType: m4.large
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref GeneralSecurityGroup
+          SubnetId: !Ref Subnet
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -x
+              export PATH=$PATH:/usr/local/bin:/usr/sbin:/root/.local/bin
+              aws configure set default.region
+            - !Ref 'AWS::Region'
+            - |
+              yum update -y
+              yum install -y java-1.7.0-openjdk-1.7.0.251-2.6.21.0.amzn2.0.1
+              yum install nmap -y
+            - |
+              cat  <<EOT >>/home/ec2-user/guarddutyscript.sh
+            - 'sudo nmap -sT '
+            - ''
+            - !GetAtt 
+              - CompromisedInstance
+              - PrivateIp
+            - |
+
+              EOT
+            - >
+              chown -R ec2-user: /home/ec2-user
+
+              chmod +x /home/ec2-user/guarddutyscript.sh
+
+              echo '*/5 * * * * /home/ec2-user/guarddutyscript.sh
+              >>/tmp/guarddutyscript.sh' >>cron_file
+
+              crontab -u ec2-user cron_file
+      Tags:
+        - Key: Name
+          Value: Scanner
+        - Key: ENV
+          Value: PROD
+  MaliciousEc2Instance:
+    DependsOn:
+      - GatewayAttachment
+      - PublicRoute
+      - CompromisedInstance
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      IamInstanceProfile: !Ref GeneralInstanceProfile
+      InstanceType: m4.large
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref GeneralSecurityGroup
+          SubnetId: !Ref Subnet
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -x
+              export PATH=$PATH:/usr/local/bin:/usr/sbin:/root/.local/bin
+              aws configure set default.region
+            - !Ref 'AWS::Region'
+            - |
+              yum update -y
+              yum install -y java-1.7.0-openjdk-1.7.0.251-2.6.21.0.amzn2.0.1
+              yum install nmap -y
+            - >
+              curl -L
+              https://raw.githubusercontent.com/awslabs/amazon-guardduty-tester/master/artifacts/queries.txt
+              > /home/ec2-user/queries.txt
+            - |
+              cat  <<EOT >>/home/ec2-user/guarddutyscript.sh
+            - 'sudo nmap -sT '
+            - ''
+            - !GetAtt 
+              - CompromisedInstance
+              - PrivateIp
+            - >
+
+              curl -s
+              http://pool.minergate.com/dkjdjkjdlsajdkljalsskajdksakjdksajkllalkdjsalkjdsalkjdlkasj 
+              > /dev/null &
+
+              curl -s
+              http://xmr.pool.minergate.com/dhdhjkhdjkhdjkhajkhdjskahhjkhjkahdsjkakjasdhkjahdjk 
+              > /dev/null &
+
+              dig -f /home/ec2-user/queries.txt > /dev/null &
+
+              dig GuardDutyC2ActivityB.com any
+
+              EOT
+            - >
+              chown -R ec2-user: /home/ec2-user
+
+              chmod +x /home/ec2-user/guarddutyscript.sh
+
+              echo '*/5 * * * * /home/ec2-user/guarddutyscript.sh
+              >>/tmp/guarddutyscript.sh' >>cron_file
+
+              crontab -u ec2-user cron_file
+      Tags:
+        - Key: Name
+          Value: RedTeam
+        - Key: ENV
+          Value: TEST
+  CompromisedInstance:
+    Type: 'AWS::EC2::Instance'
+    DependsOn:
+      - GatewayAttachment
+      - PublicRoute
+    Properties:
+      IamInstanceProfile: !Ref GeneralInstanceProfile
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref CompromisedSecurityGroup
+          SubnetId: !Ref Subnet
+      Tags:
+        - Key: Name
+          Value: TeamTarget
+        - Key: ENV
+          Value: PROD
+  GuardDutySNSTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      TopicName: GDWorkshop-Topic
+  GuardDutySNSTopicPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      PolicyDocument:
+        Id: ID-GD-Topic-Policy
+        Version: 2012-10-17
+        Statement:
+          - Sid: SID-GD-Example
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: !Ref GuardDutySNSTopic
+      Topics:
+        - !Ref GuardDutySNSTopic
+  GDLogBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketName: !Join 
+        - '-'
+        - - guardduty-example-log
+          - !Ref 'AWS::AccountId'
+          - !Ref 'AWS::Region'
+      AccessControl: LogDeliveryWrite
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  GDCompromisedBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketName: !Join 
+        - '-'
+        - - guardduty-example-finance
+          - !Ref 'AWS::AccountId'
+          - !Ref 'AWS::Region'
+      LoggingConfiguration:
+        DestinationBucketName: !Ref GDLogBucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  CustDynamoDBTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: name
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: '5'
+        WriteCapacityUnits: '5'
+      TableName: GuardDuty-Example-Customer-DB
+  CompromisedRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Join 
+        - '-'
+        - - GDWorkshop
+          - EC2
+          - Compromised
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM'
+      Policies:
+        - PolicyName: GuardDutyCompromisedPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:PutParameter'
+                  - 'ssm:DescribeParameters'
+                  - 'ssm:GetParameters'
+                  - 'ssm:DeleteParameter'
+                Resource: !Join 
+                  - ':'
+                  - - 'arn:aws:ssm'
+                    - !Ref 'AWS::Region'
+                    - !Ref 'AWS::AccountId'
+                    - parameter/*
+              - Effect: Allow
+                Action:
+                  - 'ssm:DescribeParameters'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:*'
+                Resource: !GetAtt 
+                  - CustDynamoDBTable
+                  - Arn
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:ListTables'
+                  - 'dynamodb:DescribeTable'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'guardduty:GetDetector'
+                  - 'guardduty:ListDetectors'
+                  - 'guardduty:CreateThreatIntelSet'
+                  - 'guardduty:UpdateThreatIntelSet'
+                Resource: '*'
+              - Effect: Allow
+                Action: 's3:*'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'iam:PutRolePolicy'
+                Resource: !Join 
+                  - ':'
+                  - - 'arn:aws:iam:'
+                    - !Ref 'AWS::AccountId'
+                    - role/aws-service-role/guardduty.amazonaws.com/*
+  CompromisedInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      InstanceProfileName: !Join 
+        - '-'
+        - - GDWorkshop
+          - Compromised
+          - Profile
+      Path: /
+      Roles:
+        - !Ref CompromisedRole
+  DBPWDParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: gd_prod_dbpwd_sample
+      Type: StringList
+      Value: NA
+      Description: Sample secret for generating GuardDuty findings.
+  CompromisedUser2:
+    Type: 'AWS::IAM::User'
+    Properties:
+      UserName: !Join 
+        - '-'
+        - - GD-Workshop
+          - Compromised2
+          - Simulated
+  CompromisedUserKey2:
+    Type: 'AWS::IAM::AccessKey'
+    Properties:
+      UserName: !Ref CompromisedUser2
+  CompromisedUserPolicy2:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: CompromisedUserPolicy2
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:PutBucketPublicAccessBlock'
+              - 's3:PutBucketLogging'
+            Resource: !Join 
+              - ':'
+              - - 'arn:aws:s3::'
+                - '*'
+      Users:
+        - !Ref CompromisedUser2
+  CompromisedInstance2:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref CompromisedInstanceProfile
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref GeneralSecurityGroup
+          SubnetId: !Ref Subnet
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - '-'
+            - - GuardDuty
+              - ICE Instance
+        - Key: GD-Finding
+          Value: 'UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS'
+      UserData: !Base64 
+        'Fn::Sub':
+          - >
+            #!/bin/bash
+
+            # Start SSM Agent
+            yum install -y java-1.7.0-openjdk-1.7.0.251-2.6.21.0.amzn2.0.1
+            sudo yum install -y
+            https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+
+            #Block public S3 access at the account level
+
+            aws s3control put-public-access-block --account-id ${Account}
+            --public-access-block-configuration
+            "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+            # Set Parameters in SSM
+
+            aws ssm put-parameter --name 'gd_prod_dbpwd_sample' --type
+            "SecureString" --value 'Password123' --overwrite
+
+
+            # Add Item to Customer DB
+
+            aws dynamodb put-item --table-name ${DB} --item '{ "name": { "S":
+            "Joshua Tree" }, "state": {"S": "California"}, "website":{"S":
+            "https://www.nps.gov/jotr/index.htm"} }'
+
+            # Create Creds and Config files
+
+            mkdir /home/ec2-user/.aws
+
+            touch /home/ec2-user/.aws/credentials
+
+            touch /home/ec2-user/.aws/config
+
+
+            cat <<EOT >> /home/ec2-user/.aws/credentials
+
+            [default]
+
+            aws_access_key_id = ${AccessKey}
+
+            aws_secret_access_key = ${SecretKey}
+
+            EOT
+
+
+            # Modify Permissions and Ownership
+
+            chmod 746 /home/ec2-user/.aws/credentials
+
+            chown ec2-user /home/ec2-user/.aws/credentials
+
+            chmod 746 /home/ec2-user/.aws/config
+
+            chown ec2-user /home/ec2-user/.aws/config
+
+            sleep 10m
+
+            # Create S3 findings
+
+            aws s3api list-buckets
+
+            aws s3api delete-public-access-block --bucket ${Bucket}
+
+            aws s3api put-bucket-logging --bucket ${Bucket}
+            --bucket-logging-status {}
+
+          - Profile: !Ref CompromisedInstanceProfile
+            Region: !Ref 'AWS::Region'
+            Account: !Ref 'AWS::AccountId'
+            DB: !Ref CustDynamoDBTable
+            Bucket: !Ref GDCompromisedBucket
+            AccessKey: !Ref CompromisedUserKey2
+            SecretKey: !GetAtt 
+              - CompromisedUserKey2
+              - SecretAccessKey
+  RemediationLambdaICERole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Join 
+        - '-'
+        - - GDWorkshop
+          - Lambda
+          - InstanceCredentialExfiltration
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: !Join 
+            - '-'
+            - - GDWorkshop
+              - InstanceCredentialExfiltration
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:DescribeParameters'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameter'
+                  - 'ssm:GetParameters'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:ReplaceIamInstanceProfileAssociation'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeIamInstanceProfileAssociations'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'iam:CreateInstanceProfile'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'iam:AddRoleToInstanceProfile'
+                  - 'iam:RemoveRoleFromInstanceProfile'
+                  - 'iam:ListInstanceProfilesForRole'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'iam:DeleteInstanceProfile'
+                Resource: !GetAtt 
+                  - CompromisedInstanceProfile
+                  - Arn
+              - Effect: Allow
+                Action:
+                  - 'iam:PassRole'
+                Resource: !GetAtt 
+                  - CompromisedRole
+                  - Arn
+              - Effect: Allow
+                Action:
+                  - 'iam:PutRolePolicy'
+                Resource: !GetAtt 
+                  - CompromisedRole
+                  - Arn
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref GuardDutySNSTopic
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+  RemediationLambdaICE:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: !Join 
+        - '-'
+        - - GDWorkshop
+          - Remediation
+          - InstanceCredentialExfiltration
+      Handler: index.handler
+      Environment:
+        Variables:
+          TOPIC_ARN: !Ref GuardDutySNSTopic
+      Role: !GetAtt 
+        - RemediationLambdaICERole
+        - Arn
+      Code:
+        ZipFile: |
+          from __future__ import print_function
+          from botocore.exceptions import ClientError
+          import json
+          import datetime
+          import boto3
+          import os
+
+          def handler(event, context):
+
+            # Log out event
+            print("log -- Event: %s " % json.dumps(event))
+
+            # Create generic function response
+            response = "Error auto-remediating the finding."
+
+            try:
+
+              # Set Clients
+              iam = boto3.client('iam')
+              ec2 = boto3.client('ec2')
+
+              # Set Role Variable
+              role = event['detail']['resource']['accessKeyDetails']['userName']
+
+              # Current Time
+              time = datetime.datetime.utcnow().isoformat()
+
+              # Set Revoke Policy
+              policy = """
+                {
+                  "Version": "2012-10-17",
+                  "Statement": {
+                    "Effect": "Deny",
+                    "Action": "*",
+                    "Resource": "*",
+                    "Condition": {"DateLessThan": {"aws:TokenIssueTime": "%s"}}
+                  }
+                }
+              """ % time
+
+              # Add policy to Role to Revoke all Current Sessions
+              iam.put_role_policy(
+                RoleName=role,
+                PolicyName='RevokeOldSessions',
+                PolicyDocument=policy.replace('\n', '').replace(' ', '')
+              )
+
+              # Send Response Email
+              response = "GuardDuty Remediation | ID:%s: GuardDuty discovered EC2 IAM credentials (Role: %s) being used outside of the EC2 service.  All sessions have been revoked.  Please follow up with any additional remediation actions." % (event['detail']['id'], role)
+              sns = boto3.client('sns')
+              sns.publish(
+                TopicArn=os.environ['TOPIC_ARN'],
+                Message=response
+              )
+            except ClientError as e:
+              print(e)
+
+            print("log -- Response: %s " % response)
+            return response
+      Runtime: python3.8
+      Timeout: '35'
+  RemediationLambdaICEInvokePermissions:
+    DependsOn:
+      - RemediationLambdaICE
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName: !Ref RemediationLambdaICE
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+  GuardDutyEventIAM:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: GuardDuty-Event-IAMUser-InstanceCredentialExfiltration
+      Description: >-
+        GuardDuty Event:
+        UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS
+      EventPattern:
+        source:
+          - aws.guardduty
+        detail:
+          type:
+            - >-
+              UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt 
+            - RemediationLambdaICE
+            - Arn
+          Id: GuardDutyEvent-Lambda-Trigger
+        - Arn: !Ref GuardDutySNSTopic
+          Id: GuardDutySNSTopic-EC2-IAM
+          InputTransformer:
+            InputTemplate: >-
+              "GuardDuty Finding | ID:<gdid>: An EC2 instance IAM credentials
+              (Role: <userName>) may be compromised and should be investigated.
+              Go to
+              https://console.aws.amazon.com/guardduty/home?region=<region>#/findings?macros=current&fId=<gdid>"
+            InputPathsMap:
+              userName: $.detail.resource.accessKeyDetails.userName
+              gdid: $.detail.id
+              region: $.detail.region
+  GuardDutyEventIAM2:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: GuardDuty-Event-IAMUser-MaliciousIPCaller
+      Description: 'GuardDuty Event: UnauthorizedAccess:IAMUser/MaliciousIPCaller.Custom'
+      EventPattern:
+        source:
+          - aws.guardduty
+        detail:
+          type:
+            - 'UnauthorizedAccess:IAMUser/MaliciousIPCaller.Custom'
+            - 'Discovery:S3/MaliciousIPCaller.Custom'
+      State: ENABLED
+      Targets:
+        - Arn: !Ref GuardDutySNSTopic
+          Id: GuardDutySNSTopic-IAM-ThreatList
+          InputTransformer:
+            InputTemplate: >-
+              "GuardDuty Finding | ID:<gdid>: An AWS API operation was invoked
+              (userName: <userName>) from an IP address that is included on your
+              threat list and should be investigated. Go to
+              https://console.aws.amazon.com/guardduty/home?region=<region>#/findings?macros=current&fId=<gdid>"
+            InputPathsMap:
+              userName: $.detail.resource.accessKeyDetails.userName
+              gdid: $.detail.id
+              region: $.detail.region
+  GuardDutyEventS3:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: GuardDuty-Event-S3-Stealth-Policy
+      Description: >-
+        GuardDuty Event: Stealth:S3/ServerAccessLoggingDisabled &
+        Policy:S3/BucketBlockPublicAccessDisabled
+      EventPattern:
+        source:
+          - aws.guardduty
+        detail:
+          type:
+            - 'Policy:S3/BucketBlockPublicAccessDisabled'
+            - 'Stealth:S3/ServerAccessLoggingDisabled'
+      State: ENABLED
+      Targets:
+        - Arn: !Ref GuardDutySNSTopic
+          Id: GuardDutySNSTopic-IAM-ThreatList
+          InputTransformer:
+            InputTemplate: >-
+              "GuardDuty Finding | ID:<gdid>: An AWS S3 related API operation
+              was invoked by user (userName: <userName>) in account <account> .
+              This activity seems suspicious. Please investigate with the user
+              to check if this was expectated behaviour. Go to
+              https://console.aws.amazon.com/guardduty/home?region=<region>#/findings?macros=current&fId=<gdid>"
+            InputPathsMap:
+              userName: $.detail.resource.accessKeyDetails.userName
+              gdid: $.detail.id
+              account: $.detail.accountId
+              region: $.detail.region
+  ConfigBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+  DeliveryChannel:
+    Type: 'AWS::Config::DeliveryChannel'
+    Properties:
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: Six_Hours
+      S3BucketName: !Ref ConfigBucket
+  ConfigurationRecorderRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: AssumeRole1
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: s3-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 's3:PutObject'
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/*'
+                Condition:
+                  StringLike:
+                    's3:x-amz-acl': bucket-owner-full-control
+              - Effect: Allow
+                Action: 's3:GetBucketAcl'
+                Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
+  ConfigurationRecorder:
+    Type: 'AWS::Config::ConfigurationRecorder'
+    Properties:
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+      RoleARN: !GetAtt 
+        - ConfigurationRecorderRole
+        - Arn
+  SecurityHubEnable:
+    DependsOn: ConfigurationRecorder
+    Type: 'AWS::SecurityHub::Hub'
+  Analyzer:
+    Type: 'AWS::AccessAnalyzer::Analyzer'
+    Properties:
+      Type: ACCOUNT
+      ArchiveRules:
+        - RuleName: ArchiveEEAccess
+          Filter:
+            - Property: resource
+              Contains:
+                - EEOverlordRole
+                - EEOrganizations
+                - OpsRole
+  CustomBackedLambdaToEnableInspectorRole:
+    Type: AWS::IAM::Role
+    DependsOn: CompromisedInstance2
+    Properties:
+      RoleName:
+        Fn::Sub: lambda-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+            - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
+        - arn:aws:iam::aws:policy/AmazonInspector2FullAccess
+      Path: /
+  CustomBackedLambdaToEnableInspector:
+    Type: AWS::Lambda::Function
+    DependsOn: CustomBackedLambdaToEnableInspectorRole
+    Properties:
+      Description: Lambda to enable Inspectorv2
+      FunctionName: CustomBackedLambdaToEnableInspector
+      Runtime: python3.9
+      Role: !GetAtt 
+        - CustomBackedLambdaToEnableInspectorRole
+        - Arn
+      Handler: index.lambda_handler
+      Timeout: 90
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+          client = boto3.client('inspector2')
+
+          def lambda_handler(event, context):
+              if event.get('RequestType') == 'Create':
+                    response = client.enable(
+                      resourceTypes=[
+                          'EC2','ECR','LAMBDA'
+                      ]
+                    )
+                    response['message'] = "TRUE"
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, response)
+              elif event.get('RequestType') == 'Delete':
+                    response = client.disable(
+                      resourceTypes=[
+                          'EC2','ECR','LAMBDA'
+                      ]
+                    )
+                    response['message'] = "FALSE"
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, response)
+  InvokeCustomLambda:
+    DependsOn: CustomBackedLambdaToEnableInspector
+    Type: Custom::InvokeCustomLambda
+    Properties:
+      ServiceToken: !GetAtt CustomBackedLambdaToEnableInspector.Arn
+
+  ## Below this comment will be used to enable Detective and recreate workshop findings
+
+  ## Creating an EventBridge rule, Lambda, and resource to enable Detective. The eventBridge rule will be set
+  ## to initiate the Lambda within 25 hours. The Lambda will rerun this template, enabling Detective, and recreate
+  ## all findings.
+
+  EnablementLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+
+  EnablementLambdaPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: EnablementLambdaPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Resource: "arn:aws:logs:*:*:*"
+          - Sid: EnablementLambdaPolicy
+            Effect: Allow
+            Action: "*"
+            Resource: "*"
+      Roles:
+        - !Ref EnablementLambdaRole
+
+  EnablementLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      TracingConfig:
+        Mode: Active
+      Runtime: python3.9
+      Role: !GetAtt
+      - EnablementLambdaRole
+      - Arn
+      Handler: index.lambda_handler
+      Environment:
+        Variables:
+          ExecutionRoleArn: !GetAtt
+          - ScheduledEventRole
+          - Arn
+          StackName: !Ref "AWS::StackName"
+      Code:
+        ZipFile: |
+          import boto3
+
+          def lambda_handler(event, context):
+              cft_client = boto3.client('cloudformation')
+
+              stacks = cft_client.list_stacks()
+              for stack in stacks['StackSummaries']:
+                if 'cfn' in stack['StackName']:
+                  stack_update = cft_client.update_stack(
+                    StackName=stack['StackName'],
+                    UsePreviousTemplate=True,
+                    Parameters=[
+                        {
+                            'ParameterKey': 'EnableDetective',
+                            'ParameterValue': 'True'
+                        },
+                    ],
+                    Capabilities=[
+                        'CAPABILITY_IAM',
+                        'CAPABILITY_NAMED_IAM',
+                        'CAPABILITY_AUTO_EXPAND',
+                    ]
+                  )
+                  print(stack_update)
+                else:
+                    print('Not the right template to update.')
+
+  ScheduledEventRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - events.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+
+  ScheduledEventRolePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: ScheduledEventRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Resource: "arn:aws:logs:*:*:*"
+          - Sid: ScheduledEventRole
+            Effect: Allow
+            Action: "*"
+            Resource: "*"
+      Roles:
+        - !Ref ScheduledEventRole
+
+  EnablementLambdaEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: default
+      Name: EnablementLambdaEventRule
+      ScheduleExpression: rate(25 hours)
+      State: ENABLED
+      Targets:
+        - 
+          Id: "TargetEnablementLamba"
+          Arn: !GetAtt
+            - EnablementLambda
+            - Arn
+    
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Ref "EnablementLambda"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "EnablementLambdaEventRule"
+          - "Arn"
+
+  Detective:
+    Condition: CreateDetectiveResources
+    Type: AWS::Detective::Graph
+
+
+
+
+  ScannerEc2InstanceDetective:
+    Condition: CreateDetectiveResources
+    DependsOn:
+      - CompromisedInstanceDetective
+      - Detective
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      IamInstanceProfile: !Ref GeneralInstanceProfile
+      InstanceType: m4.large
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref GeneralSecurityGroup
+          SubnetId: !Ref Subnet
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -x
+              export PATH=$PATH:/usr/local/bin:/usr/sbin:/root/.local/bin
+              aws configure set default.region
+            - !Ref 'AWS::Region'
+            - |
+              yum update -y
+              yum install -y java-1.7.0-openjdk-1.7.0.251-2.6.21.0.amzn2.0.1
+              yum install nmap -y
+            - |
+              cat  <<EOT >>/home/ec2-user/guarddutyscript.sh
+            - 'sudo nmap -sT '
+            - ''
+            - !GetAtt 
+              - CompromisedInstanceDetective
+              - PrivateIp
+            - |
+
+              EOT
+            - >
+              chown -R ec2-user: /home/ec2-user
+
+              chmod +x /home/ec2-user/guarddutyscript.sh
+
+              echo '*/5 * * * * /home/ec2-user/guarddutyscript.sh
+              >>/tmp/guarddutyscript.sh' >>cron_file
+
+              crontab -u ec2-user cron_file
+      Tags:
+        - Key: Name
+          Value: ScannerDetective
+        - Key: ENV
+          Value: PROD
+  
+  MaliciousEc2InstanceDetective:
+    Condition: CreateDetectiveResources
+    DependsOn:
+      - CompromisedInstanceDetective
+      - Detective
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      IamInstanceProfile: !Ref GeneralInstanceProfile
+      InstanceType: m4.large
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref GeneralSecurityGroup
+          SubnetId: !Ref Subnet
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -x
+              export PATH=$PATH:/usr/local/bin:/usr/sbin:/root/.local/bin
+              aws configure set default.region
+            - !Ref 'AWS::Region'
+            - |
+              yum update -y
+              yum install -y java-1.7.0-openjdk-1.7.0.251-2.6.21.0.amzn2.0.1
+              yum install nmap -y
+            - >
+              curl -L
+              https://raw.githubusercontent.com/awslabs/amazon-guardduty-tester/master/artifacts/queries.txt
+              > /home/ec2-user/queries.txt
+            - |
+              cat  <<EOT >>/home/ec2-user/guarddutyscript.sh
+            - 'sudo nmap -sT '
+            - ''
+            - !GetAtt 
+              - CompromisedInstanceDetective
+              - PrivateIp
+            - >
+
+              curl -s
+              http://pool.minergate.com/dkjdjkjdlsajdkljalsskajdksakjdksajkllalkdjsalkjdsalkjdlkasj 
+              > /dev/null &
+
+              curl -s
+              http://xmr.pool.minergate.com/dhdhjkhdjkhdjkhajkhdjskahhjkhjkahdsjkakjasdhkjahdjk 
+              > /dev/null &
+
+              dig -f /home/ec2-user/queries.txt > /dev/null &
+
+              dig GuardDutyC2ActivityB.com any
+
+              EOT
+            - >
+              chown -R ec2-user: /home/ec2-user
+
+              chmod +x /home/ec2-user/guarddutyscript.sh
+
+              echo '*/5 * * * * /home/ec2-user/guarddutyscript.sh
+              >>/tmp/guarddutyscript.sh' >>cron_file
+
+              crontab -u ec2-user cron_file
+      Tags:
+        - Key: Name
+          Value: RedTeamDetective
+        - Key: ENV
+          Value: TEST
+
+  CompromisedInstanceDetective:
+    Condition: CreateDetectiveResources
+    DependsOn:
+      - Detective
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      IamInstanceProfile: !Ref GeneralInstanceProfile
+      InstanceType: t2.micro
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref CompromisedSecurityGroup
+          SubnetId: !Ref Subnet
+      Tags:
+        - Key: Name
+          Value: TeamTarget
+        - Key: ENV
+          Value: PROD
+  
+  GDCompromisedBucketDetective:
+    Condition: CreateDetectiveResources
+    DependsOn:
+      - Detective
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketName: !Join 
+        - '-'
+        - - guardduty-example-finance-detective
+          - !Ref 'AWS::AccountId'
+          - !Ref 'AWS::Region'
+      LoggingConfiguration:
+        DestinationBucketName: !Ref GDLogBucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  CustDynamoDBTableDetective:
+    Condition: CreateDetectiveResources
+    DependsOn:
+      - Detective
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: name
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: '5'
+        WriteCapacityUnits: '5'
+      TableName: GuardDuty-Example-Customer-DB-Detective
+  
+  CompromisedInstance2Detective:
+    Condition: CreateDetectiveResources
+    DependsOn:
+      - Detective
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref CompromisedInstanceProfile
+      ImageId: !Ref LatestAmiId
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref GeneralSecurityGroup
+          SubnetId: !Ref Subnet
+      Tags:
+        - Key: Name
+          Value: !Join 
+            - '-'
+            - - GuardDuty
+              - ICE Instance
+              - Detective
+        - Key: GD-Finding
+          Value: 'UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS'
+      UserData: !Base64 
+        'Fn::Sub':
+          - >
+            #!/bin/bash
+
+            # Start SSM Agent
+            yum install -y java-1.7.0-openjdk-1.7.0.251-2.6.21.0.amzn2.0.1
+            sudo yum install -y
+            https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+
+            #Block public S3 access at the account level
+
+            aws s3control put-public-access-block --account-id ${Account}
+            --public-access-block-configuration
+            "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+            # Set Parameters in SSM
+
+            aws ssm put-parameter --name 'gd_prod_dbpwd_sample_detective' --type
+            "SecureString" --value 'Password123' --overwrite
+
+
+            # Add Item to Customer DB
+
+            aws dynamodb put-item --table-name ${DB} --item '{ "name": { "S":
+            "Joshua Tree" }, "state": {"S": "California"}, "website":{"S":
+            "https://www.nps.gov/jotr/index.htm"} }'
+
+            # Create Creds and Config files
+
+            mkdir /home/ec2-user/.aws
+
+            touch /home/ec2-user/.aws/credentials
+
+            touch /home/ec2-user/.aws/config
+
+
+            cat <<EOT >> /home/ec2-user/.aws/credentials
+
+            [default]
+
+            aws_access_key_id = ${AccessKey}
+
+            aws_secret_access_key = ${SecretKey}
+
+            EOT
+
+
+            # Modify Permissions and Ownership
+
+            chmod 746 /home/ec2-user/.aws/credentials
+
+            chown ec2-user /home/ec2-user/.aws/credentials
+
+            chmod 746 /home/ec2-user/.aws/config
+
+            chown ec2-user /home/ec2-user/.aws/config
+
+            sleep 10m
+
+            # Create S3 findings
+
+            aws s3api list-buckets
+
+            aws s3api delete-public-access-block --bucket ${Bucket}
+
+            aws s3api put-bucket-logging --bucket ${Bucket}
+            --bucket-logging-status {}
+
+          - Profile: !Ref CompromisedInstanceProfile
+            Region: !Ref 'AWS::Region'
+            Account: !Ref 'AWS::AccountId'
+            DB: !Ref CustDynamoDBTableDetective
+            Bucket: !Ref GDCompromisedBucketDetective
+            AccessKey: !Ref CompromisedUserKey2
+            SecretKey: !GetAtt 
+              - CompromisedUserKey2
+              - SecretAccessKey

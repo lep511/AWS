@@ -1,0 +1,128 @@
+[
+  {
+    "AccountId": "352253788922",
+    "Arn": "arn:aws:guardduty:us-east-1:352253788922:detector/3ec41011cdb8baf272e0118a3d1a50ab/finding/b6c415fcdfa274ace65d62681d23a930",
+    "CreatedAt": "2023-05-17T23:09:27.748Z",
+    "Description": "Credentials created exclusively for an EC2 instance using instance role GDWorkshop-EC2-Compromised have been used from external IP address 190.134.24.246.",
+    "Id": "b6c415fcdfa274ace65d62681d23a930",
+    "Partition": "aws",
+    "Region": "us-east-1",
+    "Resource": {
+      "AccessKeyDetails": {
+        "AccessKeyId": "ASIAVEA7WIL5KRPX7MIK",
+        "PrincipalId": "AROAVEA7WIL5K4HBUYJ5K:i-014ab3e987cc0f2f6",
+        "UserName": "GDWorkshop-EC2-Compromised",
+        "UserType": "AssumedRole"
+      },
+      "InstanceDetails": {
+        "AvailabilityZone": "us-east-1c",
+        "IamInstanceProfile": {
+          "Arn": "arn:aws:iam::352253788922:instance-profile/GDWorkshop-Compromised-Profile",
+          "Id": "AIPAVEA7WIL5MVFG4R6TR"
+        },
+        "ImageDescription": "Amazon Linux 2 AMI 2.0.20230504.1 x86_64 HVM gp2",
+        "ImageId": "ami-0d52ddcdf3a885741",
+        "InstanceId": "i-014ab3e987cc0f2f6",
+        "InstanceState": "running",
+        "InstanceType": "t2.micro",
+        "OutpostArn": null,
+        "LaunchTime": "2023-05-16T16:57:29.000Z",
+        "NetworkInterfaces": [
+          {
+            "Ipv6Addresses": [],
+            "NetworkInterfaceId": "eni-00f9a59c41c765cc9",
+            "PrivateDnsName": "ip-10-0-0-133.ec2.internal",
+            "PrivateIpAddress": "10.0.0.133",
+            "PrivateIpAddresses": [
+              {
+                "PrivateDnsName": "ip-10-0-0-133.ec2.internal",
+                "PrivateIpAddress": "10.0.0.133"
+              }
+            ],
+            "PublicDnsName": "ec2-44-203-144-87.compute-1.amazonaws.com",
+            "PublicIp": "44.203.144.87",
+            "SecurityGroups": [
+              {
+                "GroupId": "sg-0b17e8f518210f949",
+                "GroupName": "cfn-GeneralSecurityGroup-1L8G0KDMRL1AU"
+              }
+            ],
+            "SubnetId": "subnet-01abf2bff0820e559",
+            "VpcId": "vpc-065ed77b8fbae9db8"
+          }
+        ],
+        "Platform": null,
+        "ProductCodes": [],
+        "Tags": [
+          {
+            "Key": "aws:cloudformation:stack-name",
+            "Value": "cfn"
+          },
+          {
+            "Key": "aws:cloudformation:logical-id",
+            "Value": "CompromisedInstance2Detective"
+          },
+          {
+            "Key": "aws:cloudformation:stack-id",
+            "Value": "arn:aws:cloudformation:us-east-1:352253788922:stack/cfn/e742db70-f338-11ed-b6fb-12adb7ff6f53"
+          },
+          {
+            "Key": "GD-Finding",
+            "Value": "UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS"
+          },
+          {
+            "Key": "Name",
+            "Value": "GuardDuty-ICE Instance-Detective"
+          }
+        ]
+      },
+      "ResourceType": "AccessKey"
+    },
+    "SchemaVersion": "2.0",
+    "Service": {
+      "Action": {
+        "ActionType": "AWS_API_CALL",
+        "AwsApiCallAction": {
+          "Api": "DeleteParameter",
+          "CallerType": "Remote IP",
+          "RemoteIpDetails": {
+            "City": {
+              "CityName": "Montevideo"
+            },
+            "Country": {
+              "CountryName": "Uruguay"
+            },
+            "GeoLocation": {
+              "Lat": -34.9064,
+              "Lon": -56.1629
+            },
+            "IpAddressV4": "190.134.24.246",
+            "Organization": {
+              "Asn": "6057",
+              "AsnOrg": "Administracion Nacional de Telecomunicaciones",
+              "Isp": "Antel Uruguay",
+              "Org": "Antel Uruguay"
+            }
+          },
+          "ServiceName": "ssm.amazonaws.com",
+          "AffectedResources": {}
+        }
+      },
+      "Archived": false,
+      "Count": 1,
+      "DetectorId": "3ec41011cdb8baf272e0118a3d1a50ab",
+      "EventFirstSeen": "2023-05-17T22:52:01.000Z",
+      "EventLastSeen": "2023-05-17T22:52:01.000Z",
+      "ResourceRole": "TARGET",
+      "ServiceName": "guardduty",
+      "AdditionalInfo": {
+        "Value": "{\"recentCredentials\":[{\"accessKeyId\":\"ASIAVEA7WIL5KRPX7MIK\",\"principalId\":\"AROAVEA7WIL5K4HBUYJ5K:i-014ab3e987cc0f2f6\",\"ipAddressV4\":\"190.134.24.246\"}]}",
+        "Type": "default"
+      }
+    },
+    "Severity": 8,
+    "Title": "Credentials for instance role GDWorkshop-EC2-Compromised used from external IP address.",
+    "Type": "UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS",
+    "UpdatedAt": "2023-05-17T23:09:27.748Z"
+  }
+]
