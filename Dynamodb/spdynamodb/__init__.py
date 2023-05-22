@@ -306,11 +306,10 @@ class DynamoTable:
         response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity)
         
         if to_pandas:
-            if response:
-                if len(response) > 1:
-                    return pd.DataFrame(response)
-                else:
-                    return pd.DataFrame(response[0], index=[0])
+            if not isinstance(response, list):
+                return pd.DataFrame([response])
+            else:
+                return pd.DataFrame(response)
                 
         return response
     
