@@ -1,0 +1,23 @@
+{
+    "Version":"2012-10-17",
+    "Statement":[
+       {
+          "Sid":"DenyAllButProductManagers",
+          "Effect":"Deny",
+          "Principal":{
+             "AWS":"*"
+          },
+          "Action":[
+             "s3:PutObject"
+          ],
+          "Resource":[
+             "arn:aws:s3:::productionbucket/*"
+          ],
+          "Condition":{
+             "StringNotEquals":{
+                "aws:PrincipalTag/job-title":"Product-Manager"
+             }
+          }
+       }
+    ]
+ }

@@ -27,7 +27,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
     :param consumed_capacity: Return the consumed capacity. Valid values: None, "TOTAL", "INDEXES". Default: None.
     :return: The data about the requested item.
     """
-    if consumed_capacity is None: consumed_capacity = 'NONE'
+    if consumed_capacity is None or False: consumed_capacity = 'NONE'
+    if consumed_capacity is True: consumed_capacity = 'TOTAL'
     pk_name = table.key_schema[0]['AttributeName']
     pk_type = table.attribute_definitions[0]["AttributeType"]
     map_type = {'S': str, 'N': int, 'B': bytes}
@@ -201,13 +202,18 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
     
 def query_partiql_main(query, parameters=None, consumed_capacity=None, dyn_table=None):
     if consumed_capacity is None: consumed_capacity = 'NONE'
+    if consumed_capacity == True: consumed_capacity = 'TOTAL'
+    
     try:
         response = dyn_table.meta.client.execute_statement(Statement=query, ReturnConsumedCapacity=consumed_capacity)
         print("ExecuteStatement executed successfully.")
     except ClientError as error:
         handle_error(error)
+        return
+    
     except BaseException as error:
         print("Unknown error while executing executeStatement operation: " + error.response['Error']['Message'])
+        return
     
     if consumed_capacity != 'NONE':
         response_json = json.loads(json.dumps(response['ConsumedCapacity'], cls=DecimalEncoder_))

@@ -180,7 +180,7 @@ class DynamoTable:
                 parsed = json.load(json_data, parse_float=Decimal)
         except:
             print(
-                "Couldn't load data from %s or the file does not exist.", json_file)
+                f"Couldn't load data from {json_file} or the file does not exist.")
             raise
         if compress:
             parsed = self.convert_binary(parsed)

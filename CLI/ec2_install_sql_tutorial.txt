@@ -1,0 +1,9 @@
+sudo yum install git -y
+sudo yum install mysql -y
+sudo yum install python3 -y
+pip3 install --user virtualenv
+git clone https://github.com/aws-samples/amazon-elasticache-samples/
+cd amazon-elasticache-samples/database-caching
+virtualenv venv
+source ./venv/bin/activate
+pip3 install -r requirements.txt

@@ -1,0 +1,62 @@
+[
+    {
+        "Author": "John Grisham",
+        "Title": "The Rainmaker",
+        "Category": "Suspense",
+        "Formats": {
+            "Hardcover": true,
+            "Paperback": true,
+            "Audiobook": true
+        }
+    },
+    {
+        "Author": "William Shakespeare",
+        "Title": "The Tempest",
+        "Category": "Romance",
+        "Formats": {
+            "Hardcover": true,
+            "Paperback": true,
+            "Audiobook": false
+        }
+    },
+    {
+        "Author": "Charles Dickens",
+        "Title": "Great Expectations",
+        "Category": "Romance",
+        "Formats": {
+            "Hardcover": false,
+            "Paperback": true,
+            "Audiobook": false
+        }
+    },
+    {
+        "Author": "James Patterson",
+        "Title": "Along Came a Spider",
+        "Category": "Suspense",
+        "Formats": {
+            "Hardcover": true,
+            "Paperback": true,
+            "Audiobook": true
+        }
+    },
+    {
+        "Author": "Dr. Seuss",
+        "Title": "Green Eggs and Ham",
+        "Category": "Children",
+        "Formats": {
+            "Hardcover": true,
+            "Paperback": true,
+            "Audiobook": true
+        }
+    },
+    {
+        "Author": "Julie Simon",
+        "Title": "Learn Amazon SageMaker",
+        "Category": "Technology",
+        "Formats": {
+            "Hardcover": true,
+            "Paperback": false,
+            "Audiobook": false
+        }
+    }
+]
