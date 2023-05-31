@@ -1,0 +1,49 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "s3:GetObject"
+        ],
+        "Resource": "arn:aws:s3:::workshop-redshift-394-33/*",
+        "Condition": {
+          "StringEquals": {
+            "aws:userid": "AROARJY3TMYVZRVZHHEYB:TestUser"
+          }
+        }
+      },
+      {
+        "Effect": "Allow",
+        "Action": [
+          "s3:ListBucket"
+        ],
+        "Resource": "arn:aws:s3:::workshop-redshift-394-33",
+        "Condition": {
+          "StringEquals": {
+            "aws:userid": "YRWARJY3TMYVZMXZHHRES:AnotherUser"
+          }
+        }
+      },
+      {
+        "Effect": "Deny",
+        "Action": [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ],
+        "Resource": [
+          "arn:aws:s3:::workshop-redshift-394-33/*",
+          "arn:aws:s3:::workshop-redshift-394-33"
+        ],
+        "Condition": {
+          "StringNotEquals": {
+            "aws:userid": [
+              "AROARJY3TMYVZRVZHHEYB:TestUser",
+              "YRWARJY3TMYVZMXZHHRES:AnotherUser"
+            ]
+          }
+        }
+      }
+    ]
+  }
+  

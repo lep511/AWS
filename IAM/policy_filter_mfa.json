@@ -1,0 +1,44 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                    "acm:Describe*",
+                    "acm:List*",
+                    "cloudtrail:Describe*",
+                    "cloudtrail:Get*",
+                    "cloudtrail:GetTrailStatus",
+                    "cloudtrail:ListTags",
+                    "cloudtrail:LookupEvents",
+                    "cloudwatch:Describe*",
+                    "cloudwatch:ListTagsForResource",
+                    "config:BatchGetAggregateResourceConfig",
+                    "config:BatchGetResourceConfig",
+                    "config:Deliver*",
+                    "config:Describe*",
+                    "config:Get*",
+                    "config:List*",
+                    "ec2:Describe*",
+                    "ec2:Get*",
+                    "iam:GenerateCredentialReport",
+                    "iam:GenerateServiceLastAccessedDetails",
+                    "iam:Get*",
+                    "iam:List*",
+                    "kms:Describe*",
+                    "kms:Get*",
+                    "kms:List*",
+                    "s3:Get*",
+                    "s3:List*",
+                    "secretsmanager:DescribeSecret",
+                    "secretsmanager:GetResourcePolicy",
+                    "secretsmanager:List*",
+                    "trustedadvisor:Describe*"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "BoolIfExists": {"aws:MultiFactorAuthPresent": "true"}
+            }
+        }
+    ]
+}

@@ -1,0 +1,59 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                    "acm:Describe*",
+                    "acm:List*",
+                    "cloudtrail:Describe*",
+                    "cloudtrail:Get*",
+                    "cloudtrail:GetTrailStatus",
+                    "cloudtrail:ListTags",
+                    "cloudtrail:LookupEvents",
+                    "cloudwatch:Describe*",
+                    "cloudwatch:ListTagsForResource",
+                    "config:BatchGetAggregateResourceConfig",
+                    "config:BatchGetResourceConfig",
+                    "config:Deliver*",
+                    "config:Describe*",
+                    "config:Get*",
+                    "config:List*",
+                    "detective:GetGraphIngestState",
+                    "detective:ListGraphs",
+                    "detective:ListMembers",
+                    "ec2:Describe*",
+                    "ec2:Get*",
+                    "guardduty:DescribePublishingDestination",
+                    "guardduty:Get*",
+                    "guardduty:List*",
+                    "iam:GenerateCredentialReport",
+                    "iam:GenerateServiceLastAccessedDetails",
+                    "iam:Get*",
+                    "iam:List*",
+                    "inspector:Describe*",
+                    "kms:Describe*",
+                    "kms:Get*",
+                    "kms:List*",
+                    "s3:Get*",
+                    "s3:List*",
+                    "secretsmanager:DescribeSecret",
+                    "secretsmanager:GetResourcePolicy",
+                    "secretsmanager:List*",
+                    "securityhub:Describe*",
+                    "securityhub:Get*",
+                    "securityhub:List*",
+                    "trustedadvisor:Describe*"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "DateGreaterThan": {
+                    "aws:CurrentTime": "2023-05-30T00:00:00Z"
+                },
+                "DateLessThan": {
+                    "aws:CurrentTime": "2023-05-30T13:35:59Z"
+                }
+            }
+        }
+    ]
+}

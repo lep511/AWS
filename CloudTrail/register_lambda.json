@@ -1,0 +1,105 @@
+{
+   "eventVersion":"1.08",
+   "userIdentity":{
+      "type":"IAMUser",
+      "principalId":"AIDARJY3TMYVSKPRPWYOQ",
+      "arn":"arn:aws:iam::089715336747:user/admin",
+      "accountId":"089715336747",
+      "accessKeyId":"ASIARJY3TMYVXJXVKZHF",
+      "userName":"admin",
+      "sessionContext":{
+         "sessionIssuer":{
+            
+         },
+         "webIdFederationData":{
+            
+         },
+         "attributes":{
+            "creationDate":"2023-05-29T16:49:49Z",
+            "mfaAuthenticated":"false"
+         }
+      }
+   },
+   "eventTime":"2023-05-29T22:27:37Z",
+   "eventSource":"lambda.amazonaws.com",
+   "eventName":"CreateFunction20150331",
+   "awsRegion":"us-east-1",
+   "sourceIPAddress":"186.54.64.186",
+   "userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
+   "requestParameters":{
+      "functionName":"newFunctionLambda",
+      "runtime":"python3.10",
+      "role":"arn:aws:iam::089715336747:role/service-role/newFunctionLambda-role-v0kof4sw",
+      "handler":"lambda_function.lambda_handler",
+      "code":{
+         
+      },
+      "timeout":3,
+      "memorySize":128,
+      "publish":false,
+      "packageType":"Zip",
+      "deadLetterConfig":{
+         
+      },
+      "environment":{
+         
+      },
+      "tracingConfig":{
+         "mode":"PassThrough"
+      },
+      "architectures":[
+         "x86_64"
+      ]
+   },
+   "responseElements":{
+      "functionName":"newFunctionLambda",
+      "functionArn":"arn:aws:lambda:us-east-1:089715336747:function:newFunctionLambda",
+      "runtime":"python3.10",
+      "role":"arn:aws:iam::089715336747:role/service-role/newFunctionLambda-role-v0kof4sw",
+      "handler":"lambda_function.lambda_handler",
+      "codeSize":299,
+      "description":"",
+      "timeout":3,
+      "memorySize":128,
+      "lastModified":"2023-05-29T22:27:37.677+0000",
+      "codeSha256":"fI06ZlRH/KN6Ra3twvdRllUYaxv182Tjx0qNWNlKIhI=",
+      "version":"$LATEST",
+      "environment":{
+         
+      },
+      "tracingConfig":{
+         "mode":"PassThrough"
+      },
+      "revisionId":"5553ff5b-1e00-494b-9bc7-307dfe343064",
+      "state":"Pending",
+      "stateReason":"The function is being created.",
+      "stateReasonCode":"Creating",
+      "packageType":"Zip",
+      "architectures":[
+         "x86_64"
+      ],
+      "ephemeralStorage":{
+         "size":512
+      },
+      "snapStart":{
+         "applyOn":"None",
+         "optimizationStatus":"Off"
+      },
+      "runtimeVersionConfig":{
+         "runtimeVersionArn":"arn:aws:lambda:us-east-1::runtime:7764dc7f3ff1fc45718f596be4cd03d7bca223f0586f3bfa5fe6584d6af81cd8"
+      }
+   },
+   "requestID":"3da3e235-f803-485b-96f5-847cc1eace3e",
+   "eventID":"2889e6d0-7977-4ff0-9deb-cb56dc114a06",
+   "readOnly":false,
+   "eventType":"AwsApiCall",
+   "managementEvent":true,
+   "recipientAccountId":"089715336747",
+   "eventCategory":"Management",
+   "tlsDetails":{
+      "tlsVersion":"TLSv1.2",
+      "cipherSuite":"ECDHE-RSA-AES128-GCM-SHA256",
+      "clientProvidedHostHeader":"lambda.us-east-1.amazonaws.com"
+   },
+   "sessionCredentialFromConsole":"true"
+}

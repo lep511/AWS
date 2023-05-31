@@ -1,0 +1,37 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "S3ConsoleAccess",
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListAllMyBuckets"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ListObjectsInBucket",
+            "Effect": "Allow",
+            "Action": "s3:ListBucket",
+            "Resource": "arn:aws:s3:::workshop-redshift-394-33",
+            "Condition": {
+                "StringLike": {
+                    "s3:prefix": [
+                        "",
+                        "home/",
+                        "home/${aws:PrincipalTag/Department}/*"
+                    ]
+                }
+            }
+        },
+        {
+            "Sid": "AllObjectActions",
+            "Effect": "Allow",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::workshop-redshift-394-33/home/${aws:PrincipalTag/Department}",
+                "arn:aws:s3:::workshop-redshift-394-33/home/${aws:PrincipalTag/Department}/*"
+            ]
+        }
+    ]
+}
