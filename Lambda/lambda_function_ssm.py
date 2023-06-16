@@ -1,51 +1,39 @@
-import json
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except
+# in compliance with the License. A copy of the License is located at
+#
+# https://aws.amazon.com/apache-2-0/
+#
+# or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
+
 import boto3
 
-print('Loading function')
+s3 = boto3.client('s3', 'us-east-1')
+ssm = boto3.client('ssm', 'us-east-1')
+bucket_name = ssm.get_parameter( Name='dragon_data_bucket_name',WithDecryption=False)['Parameter']['Value']
+file_name = ssm.get_parameter( Name='dragon_data_file_name',WithDecryption=False)['Parameter']['Value']
 
-#Updates an SSM parameter
-#Expects parameterName, parameterValue
-def lambda_handler(event, context):
-    print("Received event: " + json.dumps(event, indent=2))
-
-    # get SSM client
-    client = boto3.client('ssm')
-
-    #confirm  parameter exists before updating it
-    response = client.describe_parameters(
-       Filters=[
-          {
-           'Key': 'Name',
-           'Values': [ event['parameterName'] ]
-          },
-        ]
-    )
-
-    if not response['Parameters']:
-        print('No such parameter')
-        return 'SSM parameter not found.'
-
-    #if parameter has a Description field, update it PLUS the Value
-    if 'Description' in response['Parameters'][0]:
-        description = response['Parameters'][0]['Description']
-        
-        response = client.put_parameter(
-          Name=event['parameterName'],
-          Value=event['parameterValue'],
-          Description=description,
-          Type='String',
-          Overwrite=True
-        )
+def listDragons():
     
-    #otherwise just update Value
-    else:
-        response = client.put_parameter(
-          Name=event['parameterName'],
-          Value=event['parameterValue'],
-          Type='String',
-          Overwrite=True
-        )
-        
-    reponseString = 'Updated parameter %s with value %s.' % (event['parameterName'], event['parameterValue'])
-        
-    return reponseString
+    expression = "select * from s3object[*][*] s"
+
+    result = s3.select_object_content(
+            Bucket=bucket_name,
+            Key=file_name,
+            ExpressionType='SQL',
+            Expression=expression,
+            InputSerialization={'JSON': {'Type': 'Document'}},
+            OutputSerialization={'JSON': {}}
+    )
+    
+    for event in result['Payload']:
+        if 'Records' in event:
+            print(event['Records']['Payload'].decode('utf-8'))
+   
+def lambda_handler(event, context):
+    listDragons()
+
+
