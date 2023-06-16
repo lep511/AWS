@@ -1,0 +1,35 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:ListSecrets"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "secretsmanager:*",
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": {
+                    "aws:ResourceTag/Department": "${aws:PrincipalTag/Department}"
+                },
+                "ForAllValues:StringEquals": {
+                    "aws:TagKeys": [
+                        "Department",
+                        "Name"
+                    ]
+                },
+                "StringEqualsIfExists": {
+                    "aws:RequestTag/Department": "${aws:PrincipalTag/Department}"
+                },
+                "StringLikeIfExists": {
+                    "secretsmanager:Name": "${aws:PrincipalTag/Department}-*",
+                    "aws:RequestTag/Name": "${aws:PrincipalTag/Department}-*"
+                }
+            }
+        }
+    ]
+}

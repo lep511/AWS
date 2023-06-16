@@ -1,0 +1,53 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AssertExpectedNetworks",
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::mybucket/*"
+            ],
+            "Condition": {
+                "StringNotEqualsIfExists": {
+                    "aws:SourceVpc": [
+                        "vpc-12345678"
+                    ]
+                },
+                "NotIpAddress": {
+                    "aws:SourceIp": [
+                        "111.222.333.444/32",
+                        "222.333.444.555/32"
+                    ]
+                },
+                "BoolIfExists": {
+                    "aws:PrincipalIsAWSService": "false",
+                    "aws:ViaAWSService": "false"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation"
+            ],
+            "Resource": [
+                "arn:aws:s3:::mybucket"
+            ]
+        },
+        {
+            "Sid": "Stmt1420751757002",
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::mybucket/*"
+            ]
+        }
+    ]
+}

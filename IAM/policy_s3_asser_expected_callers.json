@@ -1,0 +1,38 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AssertExpectedCallers",
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::mybucket",
+                "arn:aws:s3:::mybucket/*"
+            ],
+            "Condition": {
+                "StringNotEqualsIfExists": {
+                    "aws:PrincipalOrgID": "o-1234567890"
+                },
+                "BoolIfExists": {
+                    "aws:PrincipalIsAWSService": "false"
+                }
+            }
+        },
+        {
+            "Sid": "AllowAssumedRoles",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::123456789012:role/role1",
+                    "arn:aws:iam::123456789012:role/role2"
+                ]
+            },
+            "Action": "s3:*",
+            "Resource": [
+                "arn:aws:s3:::mybucket",
+                "arn:aws:s3:::mybucket/*"
+            ]
+        }
+    ]
+}

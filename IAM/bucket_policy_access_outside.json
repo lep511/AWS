@@ -1,0 +1,23 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "RWAccessForOtherAccounts",
+            "Principal": {
+                "AWS": [
+                    "arn:aws:iam::123456789012:root",
+                    "arn:aws:iam::210987654321:root"
+                ]
+            },
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::examplebucket/*"
+            ]
+        }
+    ]
+}

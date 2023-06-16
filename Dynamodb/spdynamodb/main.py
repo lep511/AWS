@@ -52,7 +52,7 @@ class DynamoTable:
         if self.table_name != None:
             self.table.reload()
             rep = f"- Table name: {self.table_name}\
-            \n- Table arn: {self.table.table_arn}\
+            \n- Table arn: {self.table_arn}\
             \n- Table creation: {self.table.creation_date_time.strftime('%Y-%m-%d %H:%M:%S')}\
             \n- {self.table.key_schema}\
             \n- {self.table.attribute_definitions}\
@@ -83,6 +83,8 @@ class DynamoTable:
                     table_name,
                     err.response['Error']['Code'], err.response['Error']['Message'])
                 raise
+        else:
+            self.table_arn = self.table.table_arn
         return exists
     
     def select_table(self, table_name):
@@ -157,13 +159,15 @@ class DynamoTable:
                     BillingMode="PAY_PER_REQUEST")
             self.table.wait_until_exists()
             self.table_name = table_name
-            print("Table created successfully!")
 
         except ClientError as err:
             print(
                 "Couldn't create table %s. Here's why: %s: %s", table_name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
+        else:
+            print("Table created successfully!")
+            self.table_arn = self.table.table_arn
     
     def batch_pandas(self, dataframe, compress=False):
         json_df = dataframe.fillna("").to_json(orient="records")
@@ -183,6 +187,7 @@ class DynamoTable:
         if compress:
             parsed = self.convert_binary(parsed)
         self.write_batch(parsed)
+        print(f"Data loaded successfully from {json_file}.")
     
     def write_batch(self, items):
         """
