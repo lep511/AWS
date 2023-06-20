@@ -1,0 +1,30 @@
+[
+    {
+        "PK": "23215355658335#PAYMENT",
+        "SK": "PAYMENT#SCHEDULED#a8c0d388-5d29-4eb3-b481-253e36b3a9e2",
+        "AccountId": "23215355658335",
+        "ScheduledDate": "2019-12-01T14:33:00",
+        "Status": "SCHEDULED",
+        "DataBlob": 
+            {
+                "BeneficiaryId": "88966545556221",
+                "BeneficiaryName": "John Doe",
+                "Description": "Electricity Bill",
+                "PaymentId": "a8c0d388-5d29-4eb3-b481-253e36b3a9e2"
+            }
+    },
+    {
+        "PK": "18866545556221#PAYMENT",
+        "SK": "PAYMENT#SCHEDULED#3ae6e5b2-361c-43ed-af4e-782b1ea45ae6",
+        "AccountId": "18866545556221",
+        "ScheduledDate": "2019-12-01T14:55:00",
+        "Status": "SCHEDULED",
+        "DataBlob": 
+            {
+                "BeneficiaryId": "23215355658335",
+                "BeneficiaryName": "Mary Doe",
+                "Description": "Rent",
+                "PaymentId": "3ae6e5b2-361c-43ed-af4e-782b1ea45ae6"
+            }
+    }
+]

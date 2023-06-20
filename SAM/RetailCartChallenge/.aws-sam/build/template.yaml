@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Create a bucket and  lambda function
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: ${AWS::StackName}-bucket-51568
+  KinesisDataStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-kinesis-stream-51568
+      ShardCount: 1
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${AWS::StackName}-dynamodb-table-51568
+      AttributeDefinitions:
+      - AttributeName: PK
+        AttributeType: S
+      - AttributeName: SK
+        AttributeType: S
+      KeySchema:
+      - AttributeName: PK
+        KeyType: HASH
+      - AttributeName: SK
+        KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 10
+        WriteCapacityUnits: 10
+      KinesisStreamSpecification:
+        StreamArn:
+          Fn::GetAtt:
+          - KinesisDataStream
+          - Arn
+  LambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.10
+      CodeUri: LambdaFunction
+      Description: Store data in S3 from DynamoDB stream
+      Layers:
+      - arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python310:3
+      MemorySize: 512
+      Timeout: 120
+      Role:
+        Fn::GetAtt:
+        - LambdaFunctionRole
+        - Arn
+      Environment:
+        Variables:
+          bucketName:
+            Ref: S3Bucket
+      Events:
+        KinesisEvent:
+          Type: Kinesis
+          Properties:
+            Stream:
+              Fn::GetAtt:
+              - KinesisDataStream
+              - Arn
+            StartingPosition: LATEST
+            BatchSize: 10
+    Metadata:
+      SamResourceId: LambdaFunction
+  LambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: ${AWS::StackName}-lambda-role-51568
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName:
+          Fn::Sub: ${AWS::StackName}-lambda-policy-51568
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            Resource:
+              Fn::Sub: arn:aws:s3:::${AWS::StackName}-bucket-51568/*
+          - Effect: Allow
+            Action:
+            - kinesis:DescribeStream
+            - kinesis:GetShardIterator
+            - kinesis:GetRecords
+            Resource:
+              Fn::Sub: arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${AWS::StackName}-kinesis-stream-51568
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource:
+              Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}*:*
+Outputs:
+  S3Bucket:
+    Description: S3 Bucket
+    Value:
+      Ref: S3Bucket
+  KinesisDataStream:
+    Description: Kinesis Data Stream
+    Value:
+      Fn::GetAtt:
+      - KinesisDataStream
+      - Arn
+  LambdaFunction:
+    Description: Lambda Function
+    Value:
+      Ref: LambdaFunction
+  LambdaFunctionRole:
+    Description: Lambda Function Role
+    Value:
+      Fn::GetAtt:
+      - LambdaFunctionRole
+      - Arn

@@ -19,6 +19,29 @@ Resources:
     Properties:
       Name: !Sub ${AWS::StackName}-kinesis-stream-51568
       ShardCount: 1
+
+  # =====================================================================
+  # DynamoDB Table
+  # =====================================================================
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-dynamodb-table-51568
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 10
+        WriteCapacityUnits: 10
+      KinesisStreamSpecification:
+        StreamArn: !GetAtt KinesisDataStream.Arn
   
   # =====================================================================
   # Lambda Function
@@ -31,6 +54,9 @@ Resources:
       Runtime: python3.10
       CodeUri: ./lambda
       Description: Store data in S3 from DynamoDB stream
+      Layers:
+        - arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python310:3
+        # https://aws-sdk-pandas.readthedocs.io/en/stable/layers.html
       MemorySize: 512
       Timeout: 120
       Role: !GetAtt LambdaFunctionRole.Arn
@@ -41,7 +67,7 @@ Resources:
         KinesisEvent:
           Type: Kinesis
           Properties:
-            Stream: !Ref KinesisDataStream
+            Stream: !GetAtt KinesisDataStream.Arn
             StartingPosition: LATEST
             BatchSize: 10
   
@@ -76,6 +102,12 @@ Resources:
                   - kinesis:GetShardIterator
                   - kinesis:GetRecords
                 Resource: !Sub arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${AWS::StackName}-kinesis-stream-51568
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}*:*
 
 Outputs:
   S3Bucket:
@@ -83,7 +115,7 @@ Outputs:
     Value: !Ref S3Bucket
   KinesisDataStream:
     Description: Kinesis Data Stream
-    Value: !Ref KinesisDataStream
+    Value: !GetAtt KinesisDataStream.Arn
   LambdaFunction:
     Description: Lambda Function
     Value: !Ref LambdaFunction

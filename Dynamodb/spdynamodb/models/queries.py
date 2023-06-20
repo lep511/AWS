@@ -119,6 +119,9 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
             value = sk_value.split("_")
             value_dec = [Decimal(x) for x in value]
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).between(*value_dec)
+        elif "_" in sk_value:
+            value = sk_value.split("_")
+            qry = Key(pk_name).eq(pk_value) & Key(sk_name).between(*value)
    
         else:
             qry = False
