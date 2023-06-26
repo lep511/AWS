@@ -16,7 +16,7 @@ class DecimalEncoder_(json.JSONEncoder):
                 return int(o)
         return super(DecimalEncoder, self).default(o)
 
-def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None):
+def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None, limit=None):
     """
     Gets item data from the table.
     :param table: The table object.
@@ -29,12 +29,12 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
     """
     if consumed_capacity is None or False: consumed_capacity = 'NONE'
     if consumed_capacity is True: consumed_capacity = 'TOTAL'
+    if limit is None: limit = 10000000000000
     pk_name = table.key_schema[0]['AttributeName']
     pk_type = table.attribute_definitions[0]["AttributeType"]
     map_type = {'S': str, 'N': int, 'B': bytes}
     index_exist = False
     sk_name = None
-    
     
     if index_name:
         if table.global_secondary_indexes:
@@ -71,15 +71,42 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
             Key={pk_name: pk_value},
             ConsistentRead=consistent_read,
             ReturnConsumedCapacity=consumed_capacity
-        )
-
+        )    
     else:
         # If the sort key exists
- 
         if sk_value is None:
-            handle_error(f"The sort key value cannot be empty.")
-            return
- 
+            if index_exist:
+                try:
+                    response = table.query(
+                        IndexName=index_name,
+                        KeyConditionExpression=Key(pk_name).eq(pk_value),
+                        ConsistentRead=consistent_read,
+                        ReturnConsumedCapacity=consumed_capacity,
+                        Limit=limit
+                    )
+                    data_items = check_result(response, consumed_capacity, pk_value, sk_value)
+                    return data_items
+                except ClientError as error:
+                    handle_error(error)
+                    return
+                except BaseException as error:
+                    print("Unknown error while querying: " + error.response['Error']['Message'])    
+            else:    
+                try:
+                    response = table.query(
+                        KeyConditionExpression=Key(pk_name).eq(pk_value),
+                        ConsistentRead=consistent_read,
+                        ReturnConsumedCapacity=consumed_capacity,
+                        Limit=limit
+                    )
+                    data_items = check_result(response, consumed_capacity, pk_value, sk_value)
+                    return data_items
+                except ClientError as error:
+                    handle_error(error)
+                    return
+                except BaseException as error:
+                    print("Unknown error while querying: " + error.response['Error']['Message'])    
+
         elif isinstance(sk_value, (int, float)):
             sk_value = Decimal(str(sk_value))
             qry = False
@@ -134,7 +161,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         IndexName=index_name,
                         KeyConditionExpression=qry,
                         ConsistentRead=consistent_read,
-                        ReturnConsumedCapacity=consumed_capacity
+                        ReturnConsumedCapacity=consumed_capacity,
+                        Limit=limit
                     )
                 except ClientError as error:
                     handle_error(error)
@@ -147,7 +175,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                     response = table.query(
                         KeyConditionExpression=qry,
                         ConsistentRead=consistent_read,
-                        ReturnConsumedCapacity=consumed_capacity
+                        ReturnConsumedCapacity=consumed_capacity,
+                        Limit=limit
                     )
                 except ClientError as error:
                     handle_error(error)
@@ -176,7 +205,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         IndexName=index_name,
                         KeyConditionExpression=Key(pk_name).eq(pk_value) & Key(sk_name).eq(sk_value),
                         ConsistentRead=consistent_read,
-                        ReturnConsumedCapacity=consumed_capacity
+                        ReturnConsumedCapacity=consumed_capacity,
+                        Limit=limit
                     )
                 except ClientError as error:
                     handle_error(error)
@@ -185,24 +215,35 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                     print("Unknown error while getting item: " + error.response['Error']['Message'])
                     return
                     
+    data_items = check_result(response, consumed_capacity, pk_value, sk_value)
+    return data_items
+
+
+def check_result(response, consumed_capacity, pk_value=None, sk_value=None):
     if response.get('Item'):
-        js_data = json.dumps(response['Item'], cls=DecimalEncoder_)
-        result = json.loads(js_data)
+        item_data = response.pop('Item')
+        js_data = json.dumps(item_data, cls=DecimalEncoder_)
+        response['Items'] = json.loads(js_data)
+        result = response
     elif response.get('Items'):
-        js_data = json.dumps(response['Items'], cls=DecimalEncoder_)
-        result = json.loads(js_data)
+        items_data = response.pop('Items')
+        js_data = json.dumps(items_data, cls=DecimalEncoder_)
+        response['Items'] = json.loads(js_data)
+        result = response
     else:
-        print(f"Item not found: {pk_value} - {sk_value}")
+        if sk_value:
+            print(f"Item not found: {pk_value} - {sk_value}")
+        else:
+            print(f"Item not found: {pk_value}")
         result = None
         
     if consumed_capacity != 'NONE':
         response_json = json.loads(json.dumps(response['ConsumedCapacity'], cls=DecimalEncoder_))
         consumed_capacity_count = response_json['CapacityUnits']
         print(f"Consumed Capacity: {consumed_capacity_count}")
-
     return result
-   
-    
+
+
 def query_partiql_main(query, parameters=None, consumed_capacity=None, dyn_table=None):
     if consumed_capacity is None: consumed_capacity = 'NONE'
     if consumed_capacity == True: consumed_capacity = 'TOTAL'

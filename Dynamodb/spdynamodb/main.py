@@ -170,7 +170,8 @@ class DynamoTable:
             self.table_arn = self.table.table_arn
     
     def batch_pandas(self, dataframe, compress=False):
-        json_df = dataframe.fillna("").to_json(orient="records")
+        shuffle_df = dataframe.sample(frac=1).reset_index(drop=True)
+        json_df = shuffle_df.fillna("").to_json(orient="records")
         parsed = json.loads(json_df, parse_float=Decimal)
         if compress:
             parsed = self.convert_binary(parsed)      
@@ -295,7 +296,7 @@ class DynamoTable:
             return response['Attributes']
     
     
-    def query(self, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None, to_pandas=False):
+    def query(self, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None, limit=None, to_pandas=False):
         """
         Queries an Amazon DynamoDB table and returns the matching items.
         :param pk_value: Primary key value.
@@ -306,13 +307,13 @@ class DynamoTable:
         :param to_pandas: If True, returns a pandas DataFrame. Default: True.
         :return: The item/items matching the query.
         """
-        response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity)
+        response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity, limit)
         
         if to_pandas:
-            if not isinstance(response, list):
+            if not isinstance(response['Items'], list):
                 return pd.DataFrame([response])
             else:
-                return pd.DataFrame(response)
+                return pd.DataFrame(response['Items'])
                 
         return response
     
