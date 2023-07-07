@@ -1,0 +1,11 @@
+{
+    "dynamodb": {
+      "NewImage": {
+        "PK": {
+          "S": [{
+            "prefix": "ORDER"
+          }]
+        }
+      }
+    }
+  }

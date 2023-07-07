@@ -1,0 +1,38 @@
+[
+    {
+        "ISBN": "978-1982121089",
+        "Author": "John Grisham",
+        "Title": "The Rainmaker",
+        "Category": "Suspense"
+    },
+    {
+        "ISBN": "978-1982121090",
+        "Author": "William Shakespeare",
+        "Title": "The Tempest",
+        "Category": "Romance"
+    },
+    {
+        "ISBN": "978-1982121091",
+        "Author": "Charles Dickens",
+        "Title": "Great Expectations",
+        "Category": "Romance"
+    },
+    {
+        "ISBN": "978-1982121092",
+        "Author": "James Patterson",
+        "Title": "Along Came a Spider",
+        "Category": "Suspense"
+    },
+    {
+        "ISBN": "978-1982121093",
+        "Author": "Dr. Seuss",
+        "Title": "Green Eggs and Ham",
+        "Category": "Children"
+    },
+    {
+        "ISBN": "978-1982121094",
+        "Author": "Julie Simon",
+        "Title": "Learn Amazon SageMaker",
+        "Category": "Technology"
+    }
+]

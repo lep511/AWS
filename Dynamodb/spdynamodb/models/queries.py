@@ -16,7 +16,7 @@ class DecimalEncoder_(json.JSONEncoder):
                 return int(o)
         return super(DecimalEncoder, self).default(o)
 
-def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None, limit=None):
+def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None, limit=None, scan_index_forward=True):
     """
     Gets item data from the table.
     :param table: The table object.
@@ -25,6 +25,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
     :param index_name: The name of the index to query. Default: None.
     :param consistent_read: If True, then a strongly consistent read is used.
     :param consumed_capacity: Return the consumed capacity. Valid values: None, "TOTAL", "INDEXES". Default: None.
+    :param limit: The maximum number of items to evaluate (not necessarily the number of matching items). Default: None.
+    :param scan_index_forward: If True, then the order of the index is ascending. If False, then the order of the index is descending. Default: True.
     :return: The data about the requested item.
     """
     if consumed_capacity is None or False: consumed_capacity = 'NONE'
@@ -82,7 +84,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         KeyConditionExpression=Key(pk_name).eq(pk_value),
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
-                        Limit=limit
+                        Limit=limit,
+                        ScanIndexForward=scan_index_forward
                     )
                     data_items = check_result(response, consumed_capacity, pk_value, sk_value)
                     return data_items
@@ -97,7 +100,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         KeyConditionExpression=Key(pk_name).eq(pk_value),
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
-                        Limit=limit
+                        Limit=limit,
+                        ScanIndexForward=scan_index_forward
                     )
                     data_items = check_result(response, consumed_capacity, pk_value, sk_value)
                     return data_items
@@ -162,7 +166,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         KeyConditionExpression=qry,
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
-                        Limit=limit
+                        Limit=limit,
+                        ScanIndexForward=scan_index_forward
                     )
                 except ClientError as error:
                     handle_error(error)
@@ -176,7 +181,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         KeyConditionExpression=qry,
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
-                        Limit=limit
+                        Limit=limit,
+                        ScanIndexForward=scan_index_forward
                     )
                 except ClientError as error:
                     handle_error(error)
@@ -206,7 +212,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         KeyConditionExpression=Key(pk_name).eq(pk_value) & Key(sk_name).eq(sk_value),
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
-                        Limit=limit
+                        Limit=limit,
+                        ScanIndexForward=scan_index_forward
                     )
                 except ClientError as error:
                     handle_error(error)

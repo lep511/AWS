@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Example of connecting a dynamoDB stream to SNS via eventbridge pipes
+
+Resources:
+  ExampleSQS:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ExampleSQS
+
+
+  # DynamoDB Table Creation with Stream Enabled
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: OMS
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+  # AWS SNS for Target
+  SNSTarget:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: Orders
+      Subscription:
+        - Endpoint: !GetAtt ExampleSQS.Arn
+          Protocol: sqs
+
+  # To allow you to actually publish messages from SNS to a Queue
+  SNSToSQSPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Allow SNS to publish messages to the queue"
+            Effect: Allow
+            Principal:
+              Service: "sns.amazonaws.com"
+            Resource: !GetAtt ExampleSQS.Arn
+            Action: SQS:SendMessage
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref SNSTarget
+      Queues:
+        - !Ref ExampleSQS
+
+  PipeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - pipes.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: SourcePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:DescribeStream"
+                  - "dynamodb:GetRecords"
+                  - "dynamodb:GetShardIterator"
+                  - "dynamodb:ListStreams"
+                Resource: !GetAtt DynamoDBTable.StreamArn
+        - PolicyName: TargetPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                 - "sns:Publish"
+                Resource: !Ref SNSTarget
+           
+  Pipe:
+    Type: AWS::Pipes::Pipe
+    Properties:
+      Name: dynamodb-eventbridge-pipes
+      Description: "Pipe to connect DynamoDB Stream to AWS SNS"
+      RoleArn: !GetAtt PipeRole.Arn
+      Source: !GetAtt DynamoDBTable.StreamArn
+      SourceParameters:
+        DynamoDBStreamParameters:
+          StartingPosition: LATEST
+          BatchSize: 1
+      Target: !Ref SNSTarget

@@ -296,7 +296,8 @@ class DynamoTable:
             return response['Attributes']
     
     
-    def query(self, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None, limit=None, to_pandas=False):
+    def query(self, pk_value, sk_value=None, index_name=None, consistent_read=False, 
+              consumed_capacity=None, limit=None, scan_index_forward=True, to_pandas=False):
         """
         Queries an Amazon DynamoDB table and returns the matching items.
         :param pk_value: Primary key value.
@@ -305,9 +306,11 @@ class DynamoTable:
         :param consistent_read: If True, then a strongly consistent read is used.
         :param consumed_capacity: Return the consumed capacity. Valid values: None, "TOTAL", "INDEXES". Default: None.
         :param to_pandas: If True, returns a pandas DataFrame. Default: True.
+        :param limit: The maximum number of items to return. Default: None.
+        :param scan_index_forward: If True, then the order of the index is ascending. If False, then the order of the index is descending. Default: True.
         :return: The item/items matching the query.
         """
-        response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity, limit)
+        response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity, limit, scan_index_forward)
         
         if to_pandas:
             if not isinstance(response['Items'], list):

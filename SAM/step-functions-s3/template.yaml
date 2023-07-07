@@ -1,0 +1,283 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: SFW-Module-14
+
+Globals:
+  Function:
+    CodeUri: functions/temps/
+    Runtime: python3.9
+    Timeout: 120
+    Architectures:
+      - arm64
+
+Resources:
+  # Resources for the state machine that copies data from the public NOAA bucket
+
+  DistributedMapWorkshopDataset:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  # Resources for the NOAA data state machine
+
+  DistributedMapResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  ResultsDynamoDBTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: pk
+        Type: String
+
+  TemperatureStateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              AWS: !Ref "AWS::AccountId"
+              Service:
+                - states.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchFullAccess
+        - arn:aws:iam::aws:policy/AWSXrayFullAccess
+      Policies:
+        - PolicyName: ReadDataPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - S3:GetObject
+                  - S3:ListBucket
+                Resource:
+                  - !GetAtt DistributedMapWorkshopDataset.Arn
+                  - !Join ["/", [!GetAtt DistributedMapWorkshopDataset.Arn, "*"]]
+        - PolicyName: WriteResultsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - S3:PutObject
+                Resource: !Join ["/", [!GetAtt DistributedMapResultsBucket.Arn, "*"]]
+        - PolicyName: StartExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:*"
+        - PolicyName: InvokeMapperReducerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !Join [":", [!GetAtt TemperaturesFunction.Arn, "*"]]
+                  - !Join [":", [!GetAtt ReducerFunction.Arn, "*"]]
+
+  TemperaturesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/temperatures/
+      Handler: lambda_function.lambda_handler
+      MemorySize: 2048
+      Environment:
+        Variables:
+          INPUT_BUCKET_NAME: !Ref DistributedMapWorkshopDataset
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DistributedMapWorkshopDataset
+
+  ReducerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/reducer/
+      Handler: lambda_function.lambda_handler
+      MemorySize: 2048
+      Environment:
+        Variables:
+          RESULTS_BUCKET_NAME: !Ref DistributedMapResultsBucket
+          RESULTS_DYNAMODB_TABLE_NAME: !Ref ResultsDynamoDBTable
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DistributedMapResultsBucket
+        - DynamoDBWritePolicy:
+            TableName: !Ref ResultsDynamoDBTable
+
+  FunctionS3Create:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      InlineCode: |
+          /*! Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+          *  SPDX-License-Identifier: MIT-0
+          */
+
+          // Lambda function used as CloudFormation custom resource to create an S3 object.
+          //const AWS = require("aws-sdk");
+          //const S3 = new AWS.S3();
+          // Get service clients module and commands using ES6 syntax.
+          const { S3Client, ListObjectsCommand, CopyObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+          const response = require("./cfn-response.js");
+          const sourceClient = new S3Client({region: "us-east-1"});
+          const targetClient = new S3Client({region: process.env.AWS_REGION});
+
+
+          function send(event, context, responseStatus, responseData, physicalResourceId, noEcho) {
+            try {
+              const https = require("https");
+              const { URL } = require("url");
+
+              const responseBody = {
+                Status: responseStatus,
+                Reason: "See the details in CloudWatch Log Stream: " + context.logStreamName,
+                PhysicalResourceId: context.logStreamName,
+                StackId: event.StackId,
+                RequestId: event.RequestId,
+                LogicalResourceId: event.LogicalResourceId,
+                NoEcho: false,
+                Data: responseData,
+              };
+              console.log("Response body:\n", JSON.stringify(responseBody));
+
+              const parsedUrl = new URL(event.ResponseURL);
+              const requestOptions = {
+                hostname: parsedUrl.hostname,
+                port: 443,
+                path: parsedUrl.pathname + parsedUrl.search,
+                method: "PUT",
+                headers: {
+                  "content-type": "",
+                  "content-length": JSON.stringify(responseBody).length,
+                },
+              };
+              console.log("Request options:\n", JSON.stringify(requestOptions));
+
+              // Send response back to CloudFormation
+              return new Promise((resolve, reject) => {
+                const request = https.request(requestOptions, function (response) {
+                  response.on("data", () => {});
+                  response.on("end", () => {
+                    console.log("Status code: ", response.statusCode);
+                    console.log("Status message: ", response.statusMessage);
+                    resolve("Success");
+                  });
+                });
+                request.on("error", (e) => {
+                  console.error(e);
+                  reject("Error");
+                });
+                request.write(JSON.stringify(responseBody));
+                request.end();
+              });
+            } catch (error) {
+              console.error("Error in cfn_response:\n", error);
+              return;
+            }
+          };
+
+          exports.handler = async (event, context) => {
+            console.log("Event:\n", JSON.stringify(event));
+            let responseData = {};
+            let responseStatus = response.FAILED;
+            // CloudFormation custom resource request types: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/crpg-ref-requesttypes.html
+            if (event.RequestType == "Delete") {
+              // If the CloudFormation stack is deleted:
+              try {
+                // To allow the CloudFormation process to continue regardless of the delete operation response,
+                // set the responseStatus to SUCCESS before the delete operation begins.
+                responseStatus = response.SUCCESS;
+                // Required resource properties to delete an S3 object:
+                const bucketParams = {
+                  Bucket: process.env.BUCKET_NAME
+                }
+                const s3Contents = await targetClient.send(new ListObjectsCommand(bucketParams));
+                for (let i = 0; i < s3Contents["Contents"].length; i += 1) {
+                  const params = {
+                    Bucket: process.env.BUCKET_NAME,
+                    CopySource: `${process.env.BUCKET_NAME}/${s3Contents["Contents"][i]["Key"]}`,
+                    Key: s3Contents["Contents"][i]["Key"]
+                  };
+                  const data = await targetClient.send(new DeleteObjectCommand(params));
+                  console.log(data)
+                }
+              } catch (error) {
+                console.error("Error during S3 delete:\n", error);
+              }
+            } else {
+              // If the CloudFormation stack is created or updated:
+              try {
+                // Required resource properties to list/copy an S3 object:
+                const bucketParams = {
+                  Bucket: "noaa-gsod-pds"
+                }
+                const s3Copy = await sourceClient.send(new ListObjectsCommand(bucketParams));
+                console.log(s3Copy)
+                for (let i = 0; i < s3Copy["Contents"].length; i += 1) {
+                  const params = {
+                    Bucket: process.env.BUCKET_NAME,
+                    CopySource: `noaa-gsod-pds/${s3Copy["Contents"][i]["Key"]}`,
+                    Key: s3Copy["Contents"][i]["Key"]
+                  };
+                  const data = await targetClient.send(new CopyObjectCommand(params));
+                  console.log(data)
+                }
+              // Response data that is sent back to CloudFormation:
+                responseData = {"Response": "Response"}
+                responseStatus = response.SUCCESS;
+              } catch (error) {
+                console.error("Error during S3 upload:\n", error);
+              }
+            }
+            await send(event, context, responseStatus, responseData);
+            return;
+          };
+      Runtime: nodejs18.x
+      MemorySize: 1024
+      Timeout: 600
+      Handler: index.handler
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref DistributedMapWorkshopDataset
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DistributedMapWorkshopDataset
+        - S3ReadPolicy:
+            BucketName: noaa-gsod-pds
+  CustomResourceS3Create:
+    Type: 'Custom::S3Create'
+    Properties:
+      ServiceToken: !GetAtt FunctionS3Create.Arn
+Outputs:
+  DynamoDBTableName:
+    Description: DynamoDB table name where final results are written
+    Value: !Ref ResultsDynamoDBTable
+  DistributedMapWorkshopDataset:
+    Description: Bucket where the NOAA data will be copied, and where the analysis will read
+    Value: !Ref DistributedMapWorkshopDataset
+  StateMachineResultsBucket:
+    Description: Bucket where the distributed map run will write results
+    Value: !Ref DistributedMapResultsBucket
