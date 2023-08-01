@@ -1,0 +1,74 @@
+{
+  "StartAt": "Format Items for DDB BatchWriteItems API",
+  "Comment": "Batch-Write items from HTTP API into a DynamoDB Table",
+  "States": {
+    "Format Items for DDB BatchWriteItems API": {
+      "Type": "Map",
+      "ItemProcessor": {
+        "StartAt": "JSON Formatter",
+        "States": {
+          "JSON Formatter": {
+            "Type": "Pass",
+            "End": true,
+            "Parameters": {
+              "PutRequest": {
+                "Item": {
+                  "id": {
+                    "S.$": "$.id"
+                  },
+                  "name": {
+                    "S.$": "$.name"
+                  },
+                  "rating": {
+                    "S.$": "$.rating"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        }
+      },
+      "Next": "Batch Items and Write to DDB",
+      "ItemsPath": "$.Items"
+    },
+    "Batch Items and Write to DDB": {
+      "Type": "Map",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "DISTRIBUTED",
+          "ExecutionType": "EXPRESS"
+        },
+        "StartAt": "Transform input with Parameters",
+        "States": {
+          "Transform input with Parameters": {
+            "Type": "Pass",
+            "Next": "BatchWriteItem",
+            "InputPath": "$.Items",
+            "Parameters": {
+              "RequestItems": {
+                "sam-app33-DataStoreTable-EP56RCJ5FRM5.$": "$"
+              }
+            }
+          },
+          "BatchWriteItem": {
+            "Type": "Task",
+            "End": true,
+            "Parameters": {
+              "RequestItems.$": "$.RequestItems"
+            },
+            "Resource": "arn:aws:states:::aws-sdk:dynamodb:batchWriteItem"
+          }
+        }
+      },
+      "End": true,
+      "Label": "Map",
+      "MaxConcurrency": 1000,
+      "ItemBatcher": {
+        "MaxItemsPerBatch": 25
+      }
+    }
+  }
+}

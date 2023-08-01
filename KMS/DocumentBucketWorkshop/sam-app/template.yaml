@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  The Busy Engineer's Document Bucket - https://document-bucket.awssecworkshops.com
+
+Parameters:
+  KeyAdmin:
+    Type: String
+    Description: The IAM user that will be the key administrator
+
+Resources:
+  LogsLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./lambda
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.9
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          DDB_TABLE: !Ref DynamoDBTable
+      Policies: 
+        - AWSLambdaExecute
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:ConditionCheckItem
+              Resource: !GetAtt DynamoDBTable.Arn
+            - Effect: Allow
+              Action:
+                - s3:Get*
+              Resource: !Sub arn:aws:s3:::${AWS::AccountId}-document-bucket
+      Events:
+        S3Event:
+          Type: CloudWatchEvent
+          Properties:
+            Enabled: true
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - Object Created
+              detail:
+                bucket:
+                  name:
+                    - !Ref DocumentBucket
+                object:
+                  key:
+                    - prefix: logs/metadata/
+    
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-logs-document
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-document-bucket
+
+  KmsCustomerManaged:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Customer managed key for Document Bucket
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-default-1
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow access for Key Administrators
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:user/${KeyAdmin}
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: '*'
+          - Sid: Allow use of the key
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:user/${KeyAdmin}
+            Action:
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlaintext
+            Resource: '*'
+          - Sid: Allow attachment of persistent resources
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:user/${KeyAdmin}
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: 'true'
+  
+  DocumentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-${AWS::AccountId}-document-bucket
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+  
+Outputs:
+  DocumentBucketName:
+    Description: Document Bucket Name
+    Value: !Ref DocumentBucket
+  KmsCustomerManaged:
+    Description: Customer Managed KMS Key ARN
+    Value: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${KmsCustomerManaged}'
+  TableArn:
+    Description: DynamoDB Table ARN
+    Value: !GetAtt DynamoDBTable.Arn
+  

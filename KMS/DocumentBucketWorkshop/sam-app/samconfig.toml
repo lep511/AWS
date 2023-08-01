@@ -1,0 +1,10 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "newapp-2"
+resolve_s3 = true
+s3_prefix = "newapp-2"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
+parameter_overrides = "KeyAdmin=\"cloud_user\""
