@@ -6,22 +6,6 @@ Parameters:
     Type: String
     Description: Incoming Webhook unique URL
 Resources:
-  SlackFunctionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: SlackFunctionRole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - lambda.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
   SlackFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -29,15 +13,13 @@ Resources:
       Handler: lambda_function.lambda_handler
       Runtime: python3.9
       MemorySize: 128
-      Role:
-        Fn::GetAtt:
-        - SlackFunctionRole
-        - Arn
       Timeout: 90
       Environment:
         Variables:
           SLACK_URL:
             Ref: SlackURL
+      Layers:
+      - Ref: Libs
       Events:
         SlackEvent:
           Type: EventBridgeRule
@@ -48,8 +30,6 @@ Resources:
               detail-type:
               - Config Rules Compliance Change
               detail:
-                configRuleName:
-                - SlackSample
                 newEvaluationResult:
                   complianceType:
                   - NON_COMPLIANT
