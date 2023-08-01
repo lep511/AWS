@@ -1,0 +1,39 @@
+{
+    "version":"0",
+    "id":"2ff82217-122d-ef3e-66d2-d4da1ca2a5b5",
+    "detail-type":"Config Rules Compliance Change",
+    "source":"aws.config",
+    "account":"981241700645",
+    "time":"2023-07-31T23:47:04Z",
+    "region":"us-east-1",
+    "resources":[
+       
+    ],
+    "detail":{
+       "resourceId":"981241700645",
+       "awsRegion":"us-east-1",
+       "awsAccountId":"981241700645",
+       "configRuleName":"s3-account-level-public-access-blocks-periodic-conformance-pack-dxgosl1qb",
+       "recordVersion":"1.0",
+       "configRuleARN":"arn:aws:config:us-east-1:981241700645:config-rule/aws-service-rule/config-conforms.amazonaws.com/config-rule-za0hxz",
+       "messageType":"ComplianceChangeNotification",
+       "newEvaluationResult":{
+          "evaluationResultIdentifier":{
+             "evaluationResultQualifier":{
+                "configRuleName":"s3-account-level-public-access-blocks-periodic-conformance-pack-dxgosl1qb",
+                "resourceType":"AWS::::Account",
+                "resourceId":"981241700645",
+                "evaluationMode":"DETECTIVE"
+             },
+             "orderingTimestamp":"2023-07-31T23:46:34.245Z"
+          },
+          "complianceType":"NON_COMPLIANT",
+          "resultRecordedTime":"2023-07-31T23:47:03.755Z",
+          "configRuleInvokedTime":"2023-07-31T23:47:03.308Z",
+          "annotation":"Amazon S3 Block Public Access '['IgnorePublicAcls', 'BlockPublicPolicy', 'BlockPublicAcls', 'RestrictPublicBuckets']' do not match with parameter values."
+       },
+       "notificationCreationTime":"2023-07-31T23:47:04.115Z",
+       "resourceType":"AWS::::Account"
+    }
+ }
+ 
