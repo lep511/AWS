@@ -1,0 +1,1196 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: AWS Backup Workshop - Module 1
+Metadata:
+  Version: '1.31'
+  Notes: >
+    This template deploys a webserver, EFS filesystem, IAM roles and AWS backup
+    resources for an AWS Backup focused loft workshop. Please contact
+    plevett@amazon.com if you need any assistance
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Basic configuration
+        Parameters:
+          - SidVPC
+          - SidSubnet
+
+    ParameterLabels:
+      SidSubnet:
+        default: 'Subnet:'
+      SidVPC:
+        default: 'VPC:'
+Parameters:
+  SidSubnet:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: Subnet that instances will be deployed into
+  SidVPC:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: VPC where instances and EFS will be accessible
+  SidSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup::Id'
+    Description: Security Group for SSH and HTTP access
+  amzn2ImageId:
+    Description: (DO NOT CHANGE)
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    AllowedValues:
+      - /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  sql2019ImageId:
+    Description: (DO NOT CHANGE)
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-windows-latest/Windows_Server-2019-English-Full-SQL_2019_Express'
+    AllowedValues:
+      - /aws/service/ami-windows-latest/Windows_Server-2019-English-Full-SQL_2019_Express
+Resources:
+  BackupBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Join
+      - "-"
+      - - "sid-backup"
+        - !Select
+          - 2
+          - !Split
+            - "/"
+            - !Ref "AWS::StackId"
+      VersioningConfiguration:
+        Status: Enabled
+  BackupAdminPolicy:
+    Type: 'AWS::IAM::Policy'
+    DeletionPolicy: Delete
+    Properties:
+      PolicyName: !Join 
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-Backup-Admin-Policy'
+      Roles:
+        - !Ref BackupAdminRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: 'iam:PassRole'
+            Effect: Allow
+            Resource: '*'
+          - Effect: Allow
+            Action: 'backup:*'
+            Resource: '*'
+          - Effect: Allow
+            Action: 'ec2:*'
+            Resource: '*'
+          - Effect: Allow
+            Action: 
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketVersions'
+              - 's3:DeleteObjectVersion'
+            Resource: '*'
+  BackupOperaterPolicy:
+    Type: 'AWS::IAM::Policy'
+    DeletionPolicy: Delete
+    Properties:
+      PolicyName: !Join 
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-Backup-Operater-Policy'
+      Roles:
+        - !Ref BackupOperatorRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 's3:List*'
+            Effect: Allow
+            Resource: 'arn:aws:s3:::aft-vbi-pds'
+          - Action: 'iam:PassRole'
+            Effect: Allow
+            Resource: '*'
+          - Effect: Allow
+            Action: 'backup:*'
+            Resource: '*'
+          - Action:
+              - 'ec2:Describe*'
+              - 'ec2:CreateTags'
+            Effect: Allow
+            Resource: '*'
+          - Action:
+              - 's3:Get*'
+              - 's3:List*'
+            Effect: Allow
+            Resource: 'arn:aws:s3:::aft-vbi-pds/*'
+  BackupAdminRole:
+    Type: 'AWS::IAM::Role'
+    DeletionPolicy: Delete
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  BackupOperatorRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  WebServerInstanceProfile:
+    Properties:
+      Path: /
+      Roles:
+        - !Ref BackupOperatorRole
+    Type: 'AWS::IAM::InstanceProfile'
+  AdminInstanceProfile:
+    Properties:
+      Path: /
+      Roles:
+        - !Ref BackupAdminRole
+    Type: 'AWS::IAM::InstanceProfile'
+  SnsTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: !Join 
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-sns-topic'
+      TopicName: !Join 
+        - ''
+        - - !Ref 'AWS::StackName'
+          - '-sns-topic'
+  SnsPolicy:
+    Type: 'AWS::SNS::TopicPolicy'
+    Properties:
+      PolicyDocument:
+        Id: backup-topic-policy
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: backup.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: !Ref SnsTopic
+      Topics:
+        - !Ref SnsTopic
+  SilverVault:
+    Type: 'AWS::Backup::BackupVault'
+    DeletionPolicy: Delete
+    Properties:
+      BackupVaultName: SID-SidBackupStack-silver-vault 
+      Notifications:
+        BackupVaultEvents:
+          - BACKUP_JOB_STARTED
+          - BACKUP_JOB_COMPLETED
+          - RESTORE_JOB_STARTED
+          - RESTORE_JOB_COMPLETED
+          - RECOVERY_POINT_MODIFIED
+          - BACKUP_PLAN_CREATED
+          - BACKUP_PLAN_MODIFIED
+        SNSTopicArn: !Ref SnsTopic
+  GoldVault:
+    Type: 'AWS::Backup::BackupVault'
+    DeletionPolicy: Delete
+    Properties:
+      BackupVaultName: SID-SidBackupStack-gold-vault
+      Notifications:
+        BackupVaultEvents:
+          - BACKUP_JOB_STARTED
+          - BACKUP_JOB_COMPLETED
+          - RESTORE_JOB_STARTED
+          - RESTORE_JOB_COMPLETED
+          - RECOVERY_POINT_MODIFIED
+          - BACKUP_PLAN_CREATED
+          - BACKUP_PLAN_MODIFIED
+        SNSTopicArn: !Ref SnsTopic
+      AccessPolicy:
+        Version: 2012-10-17
+        Statement:
+          - Sid: '1'
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - 'backup:DeleteRecoveryPoint'
+              - 'backup:DeleteBackupVault'
+              - 'backup:DeleteRecoveryPoint'
+              - 'backup:UpdateRecoveryPointLifecycle'
+            Resource: '*'
+            Condition:
+              StringNotLike:
+                'aws:PrincipalArn': !GetAtt
+                  - BackupAdminRole
+                  - Arn
+  SilverPlan:
+    # DependsOn: SilverVault
+    Type: 'AWS::Backup::BackupPlan'
+    Properties:
+      BackupPlan:
+        BackupPlanName: !Join 
+          - ''
+          - - !Ref 'AWS::StackName'
+            - '-silver-plan'
+        BackupPlanRule:
+          - CompletionWindowMinutes: 120
+            ScheduleExpression: cron(0 */4 ? * * *)
+            StartWindowMinutes: 60
+            RecoveryPointTags: {}
+            RuleName: !Join 
+              - ''
+              - - !Ref 'AWS::StackName'
+                - '-silver-backup-rule-1'
+            Lifecycle:
+              DeleteAfterDays: 120
+              MoveToColdStorageAfterDays: 30
+            TargetBackupVault: !Ref SilverVault
+  SilverSelection:
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref SilverPlan
+      BackupSelection:
+        IamRoleArn: !GetAtt 
+          - BackupRole
+          - Arn
+        ListOfTags:
+          - ConditionKey: backup
+            ConditionType: STRINGEQUALS
+            ConditionValue: silver
+        SelectionName: !Join 
+          - ''
+          - - !Ref 'AWS::StackName'
+            - '-silver-resources'
+  SilverSelectionS3:
+    Type: 'AWS::Backup::BackupSelection'
+    Properties:
+      BackupPlanId: !Ref SilverPlan
+      BackupSelection:
+        IamRoleArn: !GetAtt 
+          - BackupRole
+          - Arn
+        Resources:
+          - !GetAtt 
+            - BackupBucket
+            - Arn
+        SelectionName: !Join 
+          - ''
+          - - !Ref 'AWS::StackName'
+            - '-S3-silver-resources'
+  BackupRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: BackupLabRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - backup.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup
+        - arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores
+      Policies:
+        - PolicyName: BackupLabPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 's3:GetInventoryConfiguration'
+                  - 's3:PutInventoryConfiguration'
+                  - 's3:ListBucketVersions'
+                  - 's3:ListBucket'
+                  - 's3:GetBucketVersioning'
+                  - 's3:GetBucketNotification'
+                  - 's3:PutBucketNotification'
+                  - 's3:GetBucketLocation'
+                  - 's3:GetBucketTagging'
+                Effect: Allow
+                Resource:
+                  - 'arn:aws:s3:::*'
+              - Action: 
+                  - 's3:GetObjectAcl'
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersionTagging'
+                  - 's3:GetObjectVersionAcl'
+                  - 's3:GetObjectTagging'
+                  - 's3:GetObjectVersion'
+                Effect: Allow
+                Resource:
+                  - 'arn:aws:s3:::*/*'
+              - Action:
+                  - 's3:ListAllMyBuckets'
+                Effect: Allow
+                Resource: '*'
+              - Action: 
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                Effect: Allow
+                Resource: '*'
+                Condition:
+                  StringLike:
+                    'kms:ViaService': 's3.*.amazonaws.com'
+              - Action: 
+                  - 'events:DescribeRule'
+                  - 'events:EnableRule'
+                  - 'events:PutRule'
+                  - 'events:DeleteRule'
+                  - 'events:PutTargets'
+                  - 'events:RemoveTargets'
+                  - 'events:ListTargetsByRule'
+                  - 'events:DisableRule'
+                Effect: Allow
+                Resource: 'arn:aws:events:*:*:rule/AwsBackupManagedRule*'
+              - Action:
+                  - 'cloudwatch:GetMetricData'
+                  - 'events:ListRules'
+                Effect: Allow
+                Resource: '*'
+              - Action:
+                  - 's3:CreateBucket'
+                  - 's3:ListBucketVersions'
+                  - 's3:ListBucket'
+                  - 's3:GetBucketVersioning'
+                  - 's3:GetBucketLocation'
+                  - 's3:PutBucketVersioning'
+                Effect: Allow
+                Resource:
+                  - 'arn:aws:s3:::*'
+              - Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:DeleteObject'
+                  - 's3:PutObjectVersionAcl'
+                  - 's3:GetObjectVersionAcl'
+                  - 's3:GetObjectTagging'
+                  - 's3:PutObjectTagging'
+                  - 's3:GetObjectAcl'
+                  - 's3:PutObjectAcl'
+                  - 's3:PutObject'
+                  - 's3:ListMultipartUploadParts'
+                Effect: Allow
+                Resource:
+                  - 'arn:aws:s3:::*/*'
+              - Action:
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:GenerateDataKey'
+                Effect: Allow
+                Resource: '*'
+                Condition:
+                  StringLike:
+                    'kms:ViaService': 's3.*.amazonaws.com'
+  AdminInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t3.micro
+      Tags:
+        - Key: Name
+          Value: 'SID-backup-admin'
+      ImageId: !Ref amzn2ImageId
+      IamInstanceProfile: !Ref AdminInstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref SidSecurityGroup
+          SubnetId: !Ref SidSubnet
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash
+            - |
+              yum -y install jq
+            - |
+              shopt -s histappend
+            - region=
+            - !Ref 'AWS::Region'
+            - |+
+
+            - stackname=
+            - !Ref 'AWS::StackName'
+            - |+
+
+            - accountid=
+            - !Ref 'AWS::AccountId'
+            - |+
+
+            - bucket=
+            - !Ref BackupBucket
+            - |+
+
+            - |
+              backupvault=SID-SidBackupStack-silver-vault
+            - >
+              instance=$(curl
+              http://169.254.169.254/latest/meta-data/instance-id)
+            - >
+              aws ec2 create-tags --resources ${rootvolume} --tags
+              Key=Name,Value="Admin Console Root" --region ${region}
+            - |
+              yum update -y
+            - |
+              aws configure set default.region ${region}
+            - !Sub 'aws s3 sync s3://amazon-reviews-pds/parquet/product_category=Apparel/ s3://${BackupBucket}/parquet/product_category=Apparel/'
+            - |+
+
+            - !Sub 'aws s3 sync s3://amazon-reviews-pds/parquet/product_category=Baby/ s3://${BackupBucket}/parquet/product_category=Baby/'
+            - |+
+
+            - !Sub 'aws s3 sync s3://amazon-reviews-pds/parquet/product_category=Automotive/ s3://${BackupBucket}/parquet/product_category=Automotive/'
+            - |+
+
+            - |
+              echo function deletebackups { > /home/ec2-user/cleanup.sh
+            - |
+              echo  region=$region >> /home/ec2-user/cleanup.sh
+            - |
+              echo  attempts=0 >> /home/ec2-user/cleanup.sh
+            - |
+              echo  deleted=-1 >> /home/ec2-user/cleanup.sh
+            - >
+              echo  while [ \$attempts -le 60 -a \$deleted -ne 0 ]\; do >>
+              /home/ec2-user/cleanup.sh
+            - |
+              echo   \(\(attempts++\)\) >> /home/ec2-user/cleanup.sh
+            - |
+              echo   sleep 5 >> /home/ec2-user/cleanup.sh
+            - >
+              echo   for i in \$\(aws backup
+              list-recovery-points-by-backup-vault --backup-vault-name \${1}
+              --region ${region} --query RecoveryPoints[*].RecoveryPointArn
+              --output text\)\; do >> /home/ec2-user/cleanup.sh
+            - >
+              echo    aws backup delete-recovery-point --backup-vault-name \${1}
+              --recovery-point-arn \$i --region ${region} >>
+              /home/ec2-user/cleanup.sh
+            - >
+              echo   done >> /home/ec2-user/cleanup.sh >>
+              /home/ec2-user/cleanup.sh
+            - >
+              echo   aws backup delete-backup-vault --backup-vault-name \${1}
+              --region ${region} >> /home/ec2-user/cleanup.sh
+            - |
+              echo   deleted=\$? >> /home/ec2-user/cleanup.sh
+            - >
+              echo  done >> /home/ec2-user/cleanup.sh >>
+              /home/ec2-user/cleanup.sh
+            - |
+              echo } >> /home/ec2-user/cleanup.sh
+            - >
+              echo deletebackups SID-SidBackupStack-silver-vault >>
+              /home/ec2-user/cleanup.sh
+            - >
+              echo deletebackups SID-SidBackupStack-gold-vault >>
+              /home/ec2-user/cleanup.sh
+            - >
+              echo aws s3api put-bucket-versioning --bucket ${bucket} --versioning-configuration Status=Suspended >>
+              /home/ec2-user/cleanup.sh
+            - >
+              echo aws s3 rm s3://${bucket} --recursive >>
+              /home/ec2-user/cleanup.sh
+            - >
+              echo aws s3api delete-objects --bucket ${bucket} 
+              --delete '$(aws s3api list-object-versions --bucket '${bucket}' --output=json 
+              --query="{Objects: Versions[].{Key:Key,VersionId:VersionId}}")' >>
+              /home/ec2-user/cleanup.sh
+            - >
+              echo aws s3api list-object-versions --bucket ${bucket} --output json 
+              --query 'DeleteMarkers[?IsLatest==`true`].[Key, VersionId]' \| jq -r '.[] \| "--key '\''" + .[0] + "'\'' --version-id " + .[1]' 
+              \| xargs -L1 aws s3api delete-object --bucket ${bucket} >>
+              /home/ec2-user/cleanup.sh
+            - |
+              chmod 755 cleanup.sh
+  WebServer:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t3.micro
+      Tags:
+        - Key: Name
+          Value: 'SID-web-server'
+      ImageId: !Ref amzn2ImageId
+      IamInstanceProfile: !Ref WebServerInstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: true
+            VolumeSize: 8
+        - DeviceName: /dev/sdf
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: true
+            VolumeSize: 1
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref SidSecurityGroup
+          SubnetId: !Ref SidSubnet
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash
+            - |
+              shopt -s histappend
+            - region=
+            - !Ref 'AWS::Region'
+            - |+
+
+            - |
+              # name="Web Server (Backup Operator)"
+            - name=SID-web-server
+            - |+
+
+            - stackname=
+            - !Ref 'AWS::StackName'
+            - |+
+
+            - accountid=
+            - !Ref 'AWS::AccountId'
+            - |+
+
+            - efsfs=
+            - !Ref EfsFs
+            - |+
+
+            - |
+              backupvault=SID-SidBackupStack-silver-vault
+            - SignalURL="
+            - !Ref DeploymentCompleteHandle
+            - |
+              "
+            - >
+              instance=$(curl
+              http://169.254.169.254/latest/meta-data/instance-id)
+            - >
+              rootvolume=$(aws ec2 describe-instances --query
+              Reservations[].Instances[?InstanceId==\`${instance}\`].BlockDeviceMappings[0].Ebs.VolumeId
+              --region ${region} --output text)
+            - >
+              aws ec2 create-tags --resources ${rootvolume} --tags
+              Key=Name,Value="WebServer Root" --region ${region}
+            - >
+              datavolume=$(aws ec2 describe-instances --query
+              Reservations[].Instances[?InstanceId==\`${instance}\`].BlockDeviceMappings[1].Ebs.VolumeId
+              --region ${region} --output text)
+            - >
+              aws ec2 create-tags --resources ${datavolume} --tags
+              Key=Name,Value="WebServer Data Volume" --region ${region}
+            - >
+              aws ec2 create-tags --resources ${datavolume} --tags
+              Key=backup,Value="silver" --region ${region}
+            - |
+              yum update -y
+            - |
+              yum install httpd -y
+            - |
+              yum install amazon-efs-utils -y
+            - |
+              aws configure set default.region ${region}
+            - |
+              rm /etc/httpd/conf.d/welcome.conf
+            - >
+              aws ec2 create-tags --resources ${instance} --tags
+              "Key=Name,Value=${name} (Mounting EBS ...)"
+            - |
+              mkdir /var/www/html/EFS/
+            - |
+              mkdir /var/www/html/EBS
+            - |
+              mkfs.ext4 /dev/nvme1n1
+            - |
+              mount /dev/nvme1n1 /var/www/html/EBS/
+            - |
+              mounted=$?
+            - |
+              if [ $mounted -eq 0 ]; then
+            - |2
+               aws ec2 create-tags --resources ${instance} --tags "Key=Name,Value=${name} (Downloading content..)"
+            - |2
+               for i in {00001..0200}; do echo ${i}.jpg >> /tmp/objectlist ; done
+            - |2
+               cat /tmp/objectlist | xargs -n1 -P5 -I {} aws s3 cp s3://aft-vbi-pds/bin-images/{} /var/www/html/EBS/ 
+            - |2
+               downloaded=$? && sync
+            - |
+              fi
+            - |
+              if [ $downloaded -eq 0 ]; then
+            - |2
+               aws ec2 create-tags --resources ${instance} --tags "Key=Name,Value=${name} (Mounting EFS..)"
+            - |2
+               attempts=0
+            - |2
+               mounted=-1
+            - |2
+               while [ $attempts -le 60 -a $mounted -ne 0 ]; do
+            - |2
+                ((attempts++))
+            - |2
+                if [ $attempts -ne 0 ]; then
+            - |2
+                 echo wait 5 seconds and retry attempt ${attempts}...
+            - |2
+                 sleep 5
+            - |2
+                fi
+            - '  mount -t efs '
+            - !Ref EfsFs
+            - |
+              :/ /var/www/html/EFS/
+            - |2
+                mounted=$?
+            - |
+              done
+            - |
+              fi
+            - |
+              if [ $mounted -eq 0 ]; then
+            - |2
+               rsync -rtv /var/www/html/EBS/ /var/www/html/EFS/
+            - |2
+               copyefs=$?
+            - |2
+               aws ec2 create-tags --resources ${instance} --tags "Key=Name,Value=${name} (Moving data to EFS..)"
+            - |2
+               chown -R ec2-user /var/www/html/ && chgrp -R ec2-user /var/www/html/ && chmod -R 775 /var/www/html/ && sync
+            - |2
+               aws backup start-backup-job --backup-vault-name ${backupvault} --resource-arn arn:aws:elasticfilesystem:${region}:${accountid}:file-system/${efsfs} --iam-role-arn arn:aws:iam::${accountid}:role/backuplabrole --region ${region}
+            - |2
+               aws backup start-backup-job --backup-vault-name ${backupvault} --resource-arn arn:aws:ec2:${region}:${accountid}:volume/${datavolume} --iam-role-arn arn:aws:iam::${accountid}:role/backuplabrole --region ${region}
+            - |
+              fi
+            - |
+              if [ $copyefs -eq 0 ]; then
+            - |2
+               aws ec2 create-tags --resources ${instance} --tags "Key=Name,Value=${name} (Starting http..)"
+            - |2
+               sudo service httpd start
+            - |2
+               started=$?
+            - |
+              fi
+            - |
+              if [ $started -eq 0 ]; then
+            - |2
+               curl -X PUT -H 'Content-Type:' --data-binary '{"Status" : "SUCCESS","Reason" : "Configuration Complete","UniqueId" : "ID1234","Data" : "UserData Complete"}' "${SignalURL}"
+            - |2
+               status='(complete)'
+            - |
+              else
+            - |2
+               #curl -X PUT -H 'Content-Type:' --data-binary '{"Status" : "FAILURE","Reason" : "Configuration Failed","UniqueId" : "ID1234","Data" : "UserData Complete"}' "${SignalURL}"
+            - |2
+               status='(FAILED)'
+            - |
+              fi
+            - >
+              aws ec2 create-tags --resources ${instance} --tags
+              "Key=Name,Value=${name} ${status}"
+## SQL marker
+  SqlServer:
+    Type: 'AWS::EC2::Instance'
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT4H
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config:
+            - setupSQLServer
+        setupSQLServer:
+          commands:
+            01-create-desktop-shortcut:
+              command: !Join 
+                - ''
+                - - powershell $WshShell = New-Object -ComObject WScript.Shell;
+                  - >-
+                    $Shortcut =
+                    $WshShell.CreateShortcut('C:\Users\Public\Desktop\Microsoft
+                    SQL Server Management Studio 18.lnk');
+                  - >-
+                    $Shortcut.TargetPath = 'C:\Program Files (x86)\Microsoft SQL
+                    Server Management Studio 18\Common7\IDE\Ssms.exe';
+                  - $Shortcut.Save()
+              waitAfterCompletion: '0'
+            02-downloadcli:
+              command: >-
+                powershell -command [Net.ServicePointManager]::SecurityProtocol
+                = [Net.SecurityProtocolType]::Tls12; $client = new-object
+                System.Net.WebClient;
+                $client.DownloadFile('https://s3.amazonaws.com/aws-cli/AWSCLI64.msi','c:\AWSCLI64.msi')
+              waitAfterCompletion: '0'
+            03-install:
+              command: 'start /Wait c:\AWSCLI64.msi /qb'
+              waitAfterCompletion: '0'
+            04-downloadssm:
+              command: >-
+                powershell -command Invoke-WebRequest
+                https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgentSetup.exe
+                -OutFile $env:USERPROFILE\Desktop\SSMAgent_latest.exe
+              waitAfterCompletion: '0'
+            05-installssm:
+              command: >-
+                powershell -command Start-Process -FilePath
+                $env:USERPROFILE\Desktop\SSMAgent_latest.exe -ArgumentList "/S"
+              waitAfterCompletion: '0'
+            06-startssm:
+              command: powershell -command Restart-Service AmazonSSMAgent
+              waitAfterCompletion: '0'
+            07-installvss:
+              command: >-
+                powershell -command $instance=Get-EC2InstanceMetadata -Category
+                InstanceID; Send-SSMCommand -DocumentName
+                AWS-ConfigureAWSPackage -InstanceId "$instance" -Parameter
+                @{'action'='Install';'name'='AwsVssComponents'}
+              waitAfterCompletion: '0'
+            08-init-disks:
+              command: >-
+                powershell
+                c:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1
+              waitAfterCompletion: '0'
+            09-import-db:
+              command: !Join 
+                - ''
+                - - 'powershell New-Item -ItemType directory -Path d:\sql;'
+                  - '$Acl = Get-ACL d:\sql;'
+                  - >-
+                    $AccessRule= New-Object
+                    System.Security.AccessControl.FileSystemAccessRule('everyone','full','ContainerInherit,Objectinherit','none','Allow');
+                  - $Acl.AddAccessRule($AccessRule);
+                  - 'Set-Acl d:\sql $Acl;'
+                  - >-
+                    [Net.ServicePointManager]::SecurityProtocol =
+                    [Net.SecurityProtocolType]::Tls12;
+                  - $client = new-object System.Net.WebClient;
+                  - >-
+                    $client.DownloadFile('https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2019.bak','c:\\AdventureWorks2017.bak');
+                  - >-
+                    Invoke-Sqlcmd -HostName localhost -Database Master
+                    -InputFile C:\restoredb.sql
+              waitAfterCompletion: '0'
+            10-TagVolumes:
+              command: !Join 
+                - ''
+                - - 'powershell c:\tagdrive.ps1'
+              waitAfterCompletion: '0'
+            12-signal-complete:
+              command: 'c:\complete.cmd'
+              waitAfterCompletion: '0'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: SQL Server 2019 - Main
+      ImageId: !Ref sql2019ImageId
+      InstanceInitiatedShutdownBehavior: stop
+      IamInstanceProfile: !Ref sqlServerInstanceProfile
+      InstanceType: t2.xlarge
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet: 
+            - !Ref SidSecurityGroup
+          SubnetId: !Ref SidSubnet
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: true
+            VolumeSize: 50
+        - DeviceName: /dev/xvdf
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: true
+            VolumeSize: 10
+      UserData: !Base64
+        'Fn::Join':
+          - ''
+          - - |
+              <script>
+            - |
+              echo USE MASTER; >> C:\restoredb.sql
+            - |
+              echo GO >> C:\restoredb.sql
+            - |
+              echo RESTORE DATABASE AdventureWorks >> C:\restoredb.sql
+            - |
+              echo FROM DISK = 'c:\AdventureWorks2017.bak' >> C:\restoredb.sql
+            - >
+              echo WITH MOVE 'AdventureWorks2017' to
+              'd:\sql\AdventureWorksDB.mdf', >> C:\restoredb.sql
+            - >
+              echo MOVE 'AdventureWorks2017_log' to
+              'd:\sql\AdventureWorksDB.ldf'; >> C:\restoredb.sql
+            - >
+              echo $AWS_REGION=Get-EC2InstanceMetadata -Path "/placement/region"
+              >> c:\tagdrive.ps1
+            - >
+              echo $AWS_INSTANCE_ID=Get-EC2InstanceMetadata -Category InstanceID
+              >> c:\tagdrive.ps1
+            - >
+              echo $ROOT_VOLUME_IDS=((Get-EC2Instance -Region $AWS_REGION
+              -InstanceId
+              $AWS_INSTANCE_ID).Instances.BlockDeviceMappings[0]).Ebs.VolumeId 
+              >> c:\tagdrive.ps1
+            - >
+              echo $DATA_VOLUME_IDS=((Get-EC2Instance -Region $AWS_REGION
+              -InstanceId
+              $AWS_INSTANCE_ID).Instances.BlockDeviceMappings[1]).Ebs.VolumeId
+              >> c:\tagdrive.ps1
+            - |
+              echo $tag = New-Object Amazon.EC2.Model.Tag >> c:\tagdrive.ps1
+            - |
+              echo $tag.key = "Name" >> c:\tagdrive.ps1
+            - |
+              echo $tag.value = "SQL Server Root" >> c:\tagdrive.ps1
+            - >
+              echo New-EC2Tag -Resource $ROOT_VOLUME_IDS -Region $AWS_REGION
+              -Tag $tag >> c:\tagdrive.ps1
+            - |
+              echo $tag.value = "SQL Server Data Volume" >> c:\tagdrive.ps1
+            - >
+              echo New-EC2Tag -Resource $DATA_VOLUME_IDS -Region $AWS_REGION
+              -Tag $tag >> c:\tagdrive.ps1
+            - |
+              echo :retryloop >> c:\complete.cmd
+            - 'echo cfn-signal.exe -e 0 --stack '
+            - !Ref 'AWS::StackName'
+            - ' --resource SqlServer --region '
+            - !Ref 'AWS::Region'
+            - |2
+               >> c:\complete.cmd
+            - |
+              echo IF ERRORLEVEL 1 ( >> c:\complete.cmd
+            - |
+              echo timeout 5 ^&^& GOTO retryloop >> c:\complete.cmd
+            - |
+              echo ) >> c:\complete.cmd
+            - 'cfn-init.exe -v -c config -s '
+            - !Ref 'AWS::StackId'
+            - ' -r SqlServer --region '
+            - !Ref 'AWS::Region'
+            - |+
+
+            - |
+              </script>
+## sql restore marker
+  SqlServerRestore:
+    Type: "AWS::EC2::Instance"
+    CreationPolicy:
+        ResourceSignal:
+            Timeout: PT4H
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config:
+            - setupSQLServer
+        setupSQLServer:
+          commands:
+            01-create-desktop-shortcut:
+              command: !Join 
+                - ''
+                - - powershell $WshShell = New-Object -ComObject WScript.Shell;
+                  - >-
+                    $Shortcut =
+                    $WshShell.CreateShortcut('C:\Users\Public\Desktop\Microsoft
+                    SQL Server Management Studio 18.lnk');
+                  - >-
+                    $Shortcut.TargetPath = 'C:\Program Files (x86)\Microsoft SQL
+                    Server Management Studio 18\Common7\IDE\Ssms.exe';
+                  - $Shortcut.Save()
+              waitAfterCompletion: '0'
+            02-downloadcli:
+              command: >-
+                powershell -command [Net.ServicePointManager]::SecurityProtocol
+                = [Net.SecurityProtocolType]::Tls12; $client = new-object
+                System.Net.WebClient;
+                $client.DownloadFile('https://s3.amazonaws.com/aws-cli/AWSCLI64.msi','c:\AWSCLI64.msi')
+              waitAfterCompletion: '0'
+            03-install:
+              command: 'start /Wait c:\AWSCLI64.msi /qb'
+              waitAfterCompletion: '0'
+            04-downloadssm:
+              command: >-
+                powershell -command Invoke-WebRequest
+                https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgentSetup.exe
+                -OutFile $env:USERPROFILE\Desktop\SSMAgent_latest.exe
+              waitAfterCompletion: '0'
+            05-installssm:
+              command: >-
+                powershell -command Start-Process -FilePath
+                $env:USERPROFILE\Desktop\SSMAgent_latest.exe -ArgumentList "/S"
+              waitAfterCompletion: '0'
+            06-startssm:
+              command: powershell -command Restart-Service AmazonSSMAgent
+              waitAfterCompletion: '0'
+            07-installvss:
+              command: >-
+                powershell -command $instance=Get-EC2InstanceMetadata -Category
+                InstanceID; Send-SSMCommand -DocumentName
+                AWS-ConfigureAWSPackage -InstanceId "$instance" -Parameter
+                @{'action'='Install';'name'='AwsVssComponents'}
+              waitAfterCompletion: '0'
+            08-init-disks:
+              command: >-
+                powershell
+                c:\ProgramData\Amazon\EC2-Windows\Launch\Scripts\InitializeDisks.ps1
+              waitAfterCompletion: '0'
+            09-TagVolumes:
+              command: !Join 
+                - ''
+                - - 'powershell c:\tagdrive.ps1'
+              waitAfterCompletion: '0'
+            12-signal-complete:
+              command: 'c:\complete.cmd'
+              waitAfterCompletion: '0'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: SQL Server 2019 - Restore
+      ImageId: !Ref sql2019ImageId
+      InstanceInitiatedShutdownBehavior: stop
+      IamInstanceProfile: !Ref sqlServerInstanceProfile
+      InstanceType: t2.xlarge
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet: 
+            - !Ref SidSecurityGroup
+          SubnetId: !Ref SidSubnet
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: true
+            VolumeSize: 50
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              <script>
+            - >
+              echo $AWS_REGION=Get-EC2InstanceMetadata -Path "/placement/region"
+              >> c:\tagdrive.ps1
+            - >
+              echo $AWS_INSTANCE_ID=Get-EC2InstanceMetadata -Category InstanceID
+              >> c:\tagdrive.ps1
+            - >
+              echo $ROOT_VOLUME_IDS=((Get-EC2Instance -Region $AWS_REGION
+              -InstanceId
+              $AWS_INSTANCE_ID).Instances.BlockDeviceMappings[0]).Ebs.VolumeId 
+              >> c:\tagdrive.ps1
+            - |
+              echo $tag = New-Object Amazon.EC2.Model.Tag >> c:\tagdrive.ps1
+            - |
+              echo $tag.key = "Name" >> c:\tagdrive.ps1
+            - |
+              echo $tag.value = "SQL Server Restore Root" >> c:\tagdrive.ps1
+            - >
+              echo New-EC2Tag -Resource $ROOT_VOLUME_IDS -Region $AWS_REGION
+              -Tag $tag >> c:\tagdrive.ps1
+            - |
+              echo :retryloop >> c:\complete.cmd
+            - 'echo cfn-signal.exe -e 0 --stack '
+            - !Ref 'AWS::StackName'
+            - ' --resource SqlServerRestore --region '
+            - !Ref 'AWS::Region'
+            - |2
+               >> c:\complete.cmd
+            - |
+              echo IF ERRORLEVEL 1 ( >> c:\complete.cmd
+            - |
+              echo timeout 5 ^&^& GOTO retryloop >> c:\complete.cmd
+            - |
+              echo ) >> c:\complete.cmd
+            - 'cfn-init.exe -v -c config -s '
+            - !Ref 'AWS::StackId'
+            - ' -r SqlServerRestore --region '
+            - !Ref 'AWS::Region'
+            - |+
+
+            - |
+              </script>
+## sql instance profile
+  sqlServerInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: '/'
+      Roles: 
+        - !Ref sqlServerIamRole
+  sqlServerIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: Allow
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+                - "ssm.amazonaws.com"
+        Version: "2012-10-17"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  sqlServerRolePolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: "ec2:CreateTags"
+            Resource:
+              - "arn:aws:ec2:*::snapshot/*"
+              - "arn:aws:ec2:*::image/*"
+          - Action:
+              - "ec2:DescribeInstances"
+              - "ec2:CreateSnapshot"
+              - "ec2:CreateImage"
+              - "ec2:DescribeImages"
+              - "ec2:CreateTags"
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - "cloudformation:SignalResource"
+              - "cloudformation:Describe*"
+            Effect: Allow
+            Resource: "*"
+          - Action: "ec2:Describe*"
+            Effect: Allow
+            Resource: "*"
+          - Action: "sns:*"
+            Effect: Allow
+            Resource: "*"
+          - Effect: Allow
+            Action: "secretsmanager:*"
+            Resource: "*"
+          - Effect: Allow
+            Action: "ssm:*"
+            Resource: "*"
+      PolicyName: policy
+      Roles:
+          - !Ref sqlServerIamRole
+  
+  DeploymentCompleteHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+  DeploymentComplete:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    Properties:
+      Handle: !Ref DeploymentCompleteHandle
+      Timeout: '7200'
+  EfsAccess:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: EFS Access
+      VpcId: !Ref SidVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref SidSecurityGroup
+        - IpProtocol: udp
+          FromPort: 0
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref SidSecurityGroup
+  EfsFs:
+    Type: 'AWS::EFS::FileSystem'
+    Properties:
+      FileSystemTags:
+        - Key: Name
+          Value: !Join 
+            - ''
+            - - webserver-filesystem-
+              - !Ref 'AWS::StackName'
+        - Key: backup
+          Value: silver
+  MountTarget:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EfsFs
+      SubnetId: !Ref SidSubnet
+      SecurityGroups:
+        - !Ref EfsAccess
+  # Athena Queries for S3 lab
+  CreateReviewsTable:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: "default"
+      Description: "Create table amazon_reviews_parquet"
+      Name: "Athena_create_amazon_reviews_parquet"
+      QueryString: 
+        'Fn::Join':
+          - ''
+          - - |
+              CREATE EXTERNAL TABLE amazon_reviews_parquet(
+              marketplace string, 
+              customer_id string, 
+              review_id string, 
+              product_id string, 
+              product_parent string, 
+              product_title string, 
+              star_rating int, 
+              helpful_votes int, 
+              total_votes int, 
+              vine string, 
+              verified_purchase string, 
+              review_headline string, 
+              review_body string, 
+              review_date bigint, 
+              year int)
+              PARTITIONED BY (product_category string)
+              ROW FORMAT SERDE 
+              'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe' 
+              STORED AS INPUTFORMAT 
+              'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat' 
+              OUTPUTFORMAT 
+              'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+              LOCATION
+            - !Sub "'s3://${BackupBucket}/parquet/';"
+            - |+
+
+            - |
+              /* Next we will load the partitions for this table */
+              MSCK REPAIR TABLE amazon_reviews_parquet;
+
+              /* Check the partitions */
+              SHOW PARTITIONS amazon_reviews_parquet;
+  Top10ReviewsQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: "default"
+      Description: "Create View TopRatedProducts"
+      Name: "Athena_create_view_top_rated"
+      QueryString: |
+                    CREATE view topratedproducts AS
+                    SELECT product_category,
+                            product_id,
+                            product_title,
+                            count(*) count_reviews
+                    FROM amazon_reviews_parquet
+                    WHERE star_rating=5
+                    GROUP BY  1, 2, 3
+                    ORDER BY  4 desc;
+
+                    Select * from topratedproducts limit 10;

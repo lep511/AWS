@@ -1,0 +1,182 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Storage Immersion Day - S3 Security Lab resources
+    
+Parameters:
+  # userId:
+  #   Description: Name or alias to identify the IM Day participant
+  #   Type: String
+  SidBucket:
+    Description: Name of the S3 Bucket to use for the lab
+    Type: String
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9-]*'
+    ConstraintDescription: >
+      The bucket must begin with a letter and contain only alphanumeric characters or hyphens.
+    MinLength: 1
+    MaxLength: 64
+  SidSubnet:
+    Description: Subnet ID to use for the EC2 resources
+    Type: 'AWS::EC2::Subnet::Id'
+  SidSecurityGroup:
+    Description: Security Group ID to use for the EC2 resources
+    Type: String
+  LinuxAmi:
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+Resources:
+  SidFilesystem:
+    Type: 'AWS::EFS::FileSystem'
+    Properties:
+      PerformanceMode: generalPurpose
+      ThroughputMode: provisioned
+      ProvisionedThroughputInMibps: 300
+      FileSystemTags:
+        - Key: Name
+          Value: 'SID-efs'
+  SidMountTarget:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref SidFilesystem
+      SubnetId: !Ref SidSubnet
+      SecurityGroups:
+        - !Ref SidSecurityGroup 
+  SidPerfWorkshopInstance:
+    Type: 'AWS::EC2::Instance'
+    DependsOn: SidMountTarget
+    Properties:
+      ImageId: !Ref LinuxAmi
+      SubnetId: !Ref SidSubnet
+      InstanceType: c5.4xlarge
+      Tags:
+        - Key: Name
+          Value: 'SID-performance-instance'
+      SecurityGroupIds:
+        - !Ref SidSecurityGroup
+      IamInstanceProfile: !Ref SidInstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: true
+            VolumeSize: 40
+        - DeviceName: /dev/sdb
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: true
+            VolumeSize: 1
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              sudo yum update -y
+            - |
+              sudo yum install fio amazon-efs-utils git -y
+            - >
+              sudo yum install -y
+              https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+            - |
+              sudo yum install fpart -y
+            - >
+              sudo wget
+              https://ftpmirror.gnu.org/parallel/parallel-20191022.tar.bz2
+            - |
+              sudo bzip2 -dc parallel-20191022.tar.bz2 | tar xvf -
+            - |
+              cd parallel-20191022
+            - |
+              sudo ./configure && make && sudo make install
+            - |
+              sudo mkfs -t ext4 /dev/nvme1n1
+            - |
+              sudo mkdir /ebsperftest
+            - |
+              sudo mount /dev/nvme1n1 /ebsperftest
+            - >
+              echo '/dev/nvme1n1       /ebsperftest    ext4  
+              defaults,nofail        0   0' | sudo tee -a /etc/fstab
+            - >
+              screen -d -m -S fiotest fio --filename=/dev/nvme1n1 --rw=randread
+              --bs=16k --runtime=9600 --time_based=1   --iodepth=32
+              --ioengine=libaio --direct=1  --name=gp2-16kb-burst-bucket-test
+            - |
+              sudo mkdir /efs
+            - |
+              sudo chown ec2-user:ec2-user /efs
+            - !Join 
+              - ''
+              - - 'sudo mount -t efs '
+                - !Ref SidFilesystem
+                - |
+                  :/ /efs
+            - >
+              sudo mkdir -p
+              /efs/tutorial/{dd,touch,rsync,cp,parallelcp,parallelcpio}/
+            - |
+              sudo chown ec2-user:ec2-user /efs/tutorial/ -R
+            - |
+              cd /home/ec2-user/
+            - |
+              sudo git clone https://github.com/kevinschwarz/smallfile.git
+            - |
+              sudo mkdir -p /ebs/tutorial/{smallfile,data-1m}
+            - |
+              sudo chown ec2-user:ec2-user //ebs/tutorial/ -R
+            - |
+              echo '#!/bin/bash' > /etc/profile.d/script.sh
+            - !Join 
+              - ''
+              - - sudo echo export bucket=
+                - !Ref SidBucket
+                - |2
+                   >> /etc/profile.d/script.sh
+            - |
+              echo 'storage-workshop' | sudo tee -a  /proc/sys/kernel/hostname
+            - >
+              python /home/ec2-user/smallfile/smallfile_cli.py --operation
+              create --threads 10 --file-size 1024 --file-size-distribution
+              exponential --files 200 --same-dir N --dirs-per-dir 1024
+              --hash-into-dirs Y --files-per-dir 10240 --top
+              /ebs/tutorial/smallfile
+            - >
+              cp -R /ebs/tutorial/smallfile/file_srcdir/storage-workshop
+              /ebs/tutorial/data-1m/
+  # Instance role and profile
+  SidS3AccessRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+  SidS3AccessPolicies:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: admin
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ec2:TerminateInstances'
+              - 's3:*'
+            Resource: '*'
+      Roles:
+        - !Ref SidS3AccessRole
+  SidInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref SidS3AccessRole
+
+Outputs:
+  PerfLabInstance:
+    Value: !GetAtt SidPerfWorkshopInstance.PublicDnsName

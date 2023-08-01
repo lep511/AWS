@@ -1,0 +1,260 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Storage Immersion Day - foundational shared resources
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Lab Modules
+        Parameters: 
+            - includeSecurityLab
+            - includePerfLab
+            - includeDataSyncLab
+            - includeBackupLab
+    ParameterLabels:
+      includeSecurityLab:
+        default: Deploy S3 Security Lab?
+      includePerfLab:
+        default: Deploy Storage Performance Lab?
+      includeDataSyncLab:
+        default: Deploy Data Migration Lab?
+      includeBackupLab:
+        default: Deploy Backup Lab?
+
+Parameters:
+  includeSecurityLab:
+    Description: Deploys the resources for the S3 Security Best Practices Lab
+    Default: false
+    Type: String
+    AllowedValues: [true, false]
+  includePerfLab:
+    Description: Deploys the resources for the Storage Performance Lab
+    Default: false
+    Type: String
+    AllowedValues: [true, false]
+  includeDataSyncLab:
+    Description: Deploys the resources for the Migrating Data to AWS Lab
+    Default: false
+    Type: String
+    AllowedValues: [true, false]
+  includeBackupLab:
+    Description: Deploys the resources for the AWS Backup Lab
+    Default: false
+    Type: String
+    AllowedValues: [true, false]
+
+Conditions:
+  includeShared: !Or [!Equals [!Ref includeSecurityLab, true], !Equals [!Ref includePerfLab, true]]
+  includeSecurity: !Equals [!Ref includeSecurityLab, true]
+  includePerf: !Equals [!Ref includePerfLab, true]
+  includeDataSync: !Equals [!Ref includeDataSyncLab, true]
+  includeBackup: !Equals [!Ref includeBackupLab, true]
+
+Resources:
+  SidVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.11.12.0/24
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: 'SID-vpc'
+  SidSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref SidVPC
+      CidrBlock: 10.11.12.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      Tags:
+        - Key: Name
+          Value: 'SID-subnet1'
+  SidInternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: 'SID-igw'
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref SidVPC
+      InternetGatewayId: !Ref SidInternetGateway
+  SidRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref SidVPC
+      Tags:
+        - Key: Name
+          Value: 'SID-routes'
+  SidSubnetRouteAssociaton:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref SidSubnet
+      RouteTableId: !Ref SidRouteTable
+  RoutetoInternet:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref SidRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SidInternetGateway
+  SidSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: SSH Access
+      VpcId: !Ref SidVPC
+      Tags:
+        - Key: Name
+          Value: 'SID-ssh-sg'
+  SidSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    # DependsOn: SidSecurityGroup
+    Properties:
+      GroupId: !Ref SidSecurityGroup
+      IpProtocol: tcp
+      ToPort: 2049
+      FromPort: 2049
+      SourceSecurityGroupId: !Ref SidSecurityGroup
+
+  # Shared resources for security and performance labs
+  # We use the GUID from the ARN of the stack ID to generate
+  # a unique bucket name
+  SidBucket:
+    Type: 'AWS::S3::Bucket'
+    Condition: includeShared
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      BucketName: !Join
+      - "-"
+      - - "sid-security"
+        - !Select
+          - 2
+          - !Split
+            - "/"
+            - !Ref "AWS::StackId"
+
+  SidS3AccessRole:
+    Type: 'AWS::IAM::Role'
+    Condition: includeShared
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+  SidS3AccessPolicies:
+    Type: 'AWS::IAM::Policy'
+    Condition: includeShared
+    Properties:
+      PolicyName: admin
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ec2:TerminateInstances'
+              - 's3:*'
+            Resource: '*'
+      Roles:
+        - !Ref SidS3AccessRole
+  SidInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Condition: includeShared
+    Properties:
+      Path: /
+      Roles:
+        - !Ref SidS3AccessRole
+  
+  # S3 security lab resources
+  SidSecurityStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: includeSecurity
+    Properties:
+      TemplateURL: 'https://aws-storage-immersion-day.s3.us-west-2.amazonaws.com/sid/sid-s3-security-lab.yaml'
+      TimeoutInMinutes: 10
+      Parameters:
+        # userId: !Ref userId
+        SidBucket: !Ref SidBucket
+        SidSubnet: !Ref SidSubnet
+        SidSecurityGroup: !Ref SidSecurityGroup
+
+  # Storage performance lab resources
+  SidPerfStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: includePerf
+    Properties:
+      TemplateURL: 'https://aws-storage-immersion-day.s3.us-west-2.amazonaws.com/sid/sid-performance-lab.yaml'
+      TimeoutInMinutes: 10
+      Parameters:
+        # userId: !Ref userId
+        SidBucket: !Ref SidBucket
+        SidSubnet: !Ref SidSubnet
+        SidSecurityGroup: !Ref SidSecurityGroup
+  
+  # DataSync lab resources
+  SidDataMigraitonStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: includeDataSync
+    Properties:
+      TemplateURL: 'https://aws-storage-immersion-day.s3.us-west-2.amazonaws.com/sid/sid-datamigration-onprem.yaml'
+      TimeoutInMinutes: 10
+      Parameters:
+        # userId: !Ref userId
+        SidSubnet: !Ref SidSubnet
+        SidSecurityGroup: !Ref SidSecurityGroup
+
+  # Backup lab resources
+  SidBackupStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: includeBackup
+    Properties:
+      TemplateURL: 'https://aws-storage-immersion-day.s3.us-west-2.amazonaws.com/sid/sid-backup-lab.yaml'
+      TimeoutInMinutes: 60
+      Parameters:
+        SidSubnet: !Ref SidSubnet
+        SidVPC: !Ref SidVPC
+        SidSecurityGroup: !Ref SidSecurityGroup
+
+Outputs:
+  S3BucketName:
+    Condition: includeShared
+    Description: S3 Bucket Name
+    Value: !Ref SidBucket
+  SecurityLabInstance:
+    Condition: includeSecurity
+    Description: S3 Security Lab Instance Public DNS Name
+    Value: !GetAtt SidSecurityStack.Outputs.SecurityLabInstance
+  PerformanceLabInstance:
+    Condition: includePerf
+    Description: Performance Lab Instance Public DNS Name
+    Value: !GetAtt SidPerfStack.Outputs.PerfLabInstance
+  NfsServerPrivateIP:
+    Condition: includeDataSync
+    Description: NFS Server Private IP Address
+    Value: !GetAtt SidDataMigraitonStack.Outputs.NfsServerPrivateIP
+  AppServerPrivateIP:
+    Condition: includeDataSync
+    Description: Application Server Private IP Address
+    Value: !GetAtt SidDataMigraitonStack.Outputs.AppServerPrivateIP
+  DataSyncAgentPublicIP:
+    Condition: includeDataSync
+    Description: DataSync Agent Public IP Address
+    Value: !GetAtt SidDataMigraitonStack.Outputs.DataSyncAgentPublicIP
+  FileGatewayPublicIP:
+    Condition: includeDataSync
+    Description: File Gateway Public IP Address
+    Value: !GetAtt SidDataMigraitonStack.Outputs.FileGatewayPublicIP
+

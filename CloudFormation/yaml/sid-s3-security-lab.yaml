@@ -1,0 +1,205 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Storage Immersion Day - S3 Security Lab resources
+
+Parameters:
+  # userId:
+  #   Description: Name or alias to identify the IM Day participant
+  #   Type: String
+  SidBucket:
+    Description: Name of the S3 Bucket to use for the lab
+    Type: String
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9-]*'
+    ConstraintDescription: >
+      The bucket must begin with a letter and contain only alphanumeric characters or hyphens.
+    MinLength: 1
+    MaxLength: 64
+  SidSubnet:
+    Description: Subnet ID to use for the EC2 resources
+    Type: 'AWS::EC2::Subnet::Id'
+  SidSecurityGroup:
+    Description: Security Group ID to use for the EC2 resources
+    Type: String
+  LinuxAmi:
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+Resources:
+  SidSecurityS3Group:
+    Type: 'AWS::IAM::Group'
+    Properties:
+      GroupName: 'SID-s3-security'
+  AddUserToS3Group:
+    Type: 'AWS::IAM::UserToGroupAddition'
+    Properties:
+      GroupName: !Ref SidSecurityS3Group
+      Users:
+        - !Ref SidSecurityUser1
+        - !Ref SidSecurityUser2
+  SidSecurityS3Policy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: 'SID-s3-access'
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:*'
+            Resource: '*'
+      Groups:
+        - !Ref SidSecurityS3Group
+  SidSecurityUser1:
+    Type: 'AWS::IAM::User'
+    Properties:
+      UserName: 'SID-lab-user1'
+  SidSecurityUser2:
+    Type: 'AWS::IAM::User'
+    Properties:
+      UserName: 'SID-lab-user2'
+  SidSecAdminInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref LinuxAmi
+      InstanceType: m5.large
+      SubnetId: !Ref SidSubnet
+      Tags:
+        - Key: Name
+          Value: 'SID-security-admin'
+      SecurityGroupIds:
+        - !Ref SidSecurityGroup
+      IamInstanceProfile: !Ref SidInstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: true
+            VolumeSize: 10
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              sudo yum update -y
+            - >
+              AZ=`curl -s
+              http://169.254.169.254/latest/meta-data/placement/availability-zone`
+            - |
+              REGION=${AZ::-1}
+            - BUCKET01=
+            - !Ref SidBucket
+            - |+
+
+            - |
+              echo 'AdminInstance' | sudo tee -a  /proc/sys/kernel/hostname
+            - |
+              dd if=/dev/zero of=/tmp/output  bs=1M  count=1
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app1/file1 --body
+              /tmp/output
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app1/file2 --body
+              /tmp/output
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app1/file3 --body
+              /tmp/output
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app1/file4 --body
+              /tmp/output
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app1/file5 --body
+              /tmp/output
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app2/file1 --body
+              /tmp/output
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app2/file2 --body
+              /tmp/output
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app2/file3 --body
+              /tmp/output
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app2/file4 --body
+              /tmp/output
+            - >
+              aws s3api put-object --bucket $BUCKET01 --key app2/file5 --body
+              /tmp/output
+            - |
+              sleep 2
+            - >
+              aws ec2 terminate-instances --instance-ids $(curl -s
+              http://169.254.169.254/latest/meta-data/instance-id) --region
+              $REGION
+  SidSecWorkshopInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref LinuxAmi
+      InstanceType: m5.large
+      SubnetId: !Ref SidSubnet
+      Tags:
+        - Key: Name
+          Value: 'SID-security-instance'
+      SecurityGroupIds:
+        - !Ref SidSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            DeleteOnTermination: true
+            VolumeSize: 10
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              sudo yum update -y
+            - |
+              echo 'storage-workshop' | sudo tee -a  /proc/sys/kernel/hostname
+            - |
+              echo '#!/bin/bash' > /etc/profile.d/script.sh
+            - !Join 
+              - ''
+              - - echo export bucket=
+                - !Ref SidBucket
+                - |2
+                   >> /etc/profile.d/script.sh
+
+  # Instance role and profile
+  SidS3AccessRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+  SidS3AccessPolicies:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: admin
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ec2:TerminateInstances'
+              - 's3:*'
+            Resource: '*'
+      Roles:
+        - !Ref SidS3AccessRole
+  SidInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref SidS3AccessRole
+
+Outputs:
+  SecurityLabInstance:
+    Value: !GetAtt SidSecWorkshopInstance.PublicDnsName
