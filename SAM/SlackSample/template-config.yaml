@@ -28,16 +28,15 @@ Resources:
           Properties:
             Pattern:
               source:
-                - aws.securityhub
+                - aws.config
               detail-type:
-                - Security Hub Findings - Imported
+                - Config Rules Compliance Change
               detail:
-                findings:
-                  Severity:
-                    Label:
-                      - CRITICAL
-                      - HIGH
-
+                newEvaluationResult:
+                  complianceType:
+                    - NON_COMPLIANT
+  
+  Libs:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName: slack-layer

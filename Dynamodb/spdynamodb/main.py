@@ -321,15 +321,22 @@ class DynamoTable:
         return response
     
     
-    def query_partiql(self, query, consumed_capacity=None):
+    def query_partiql(self, query, consumed_capacity=None, to_pandas=False):
         """
         Query a table using PartiQL.
         :param query: The query to execute (statement).
         :param consumed_capacity: Return the consumed capacity. Valid values: None, "TOTAL", "INDEXES". Default: None.
         :return: The query results.
         """     
-        resp = query_partiql_main(query=query, consumed_capacity=consumed_capacity, dyn_table=self.table)
-        return resp
+        response = query_partiql_main(query=query, consumed_capacity=consumed_capacity, dyn_table=self.table)
+        
+        if to_pandas:
+            if not isinstance(response['Items'], list):
+                return pd.DataFrame([response])
+            else:
+                return pd.DataFrame(response['Items'])
+                
+        return response
                       
 
     def make_backup(self, backup_name=None):

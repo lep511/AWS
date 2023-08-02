@@ -7,35 +7,6 @@ Parameters:
     Description: Incoming Webhook unique URL
 Resources:
   SlackFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: SlackFunction
-      Handler: lambda_function.lambda_handler
-      Runtime: python3.9
-      MemorySize: 128
-      Timeout: 90
-      Environment:
-        Variables:
-          SLACK_URL:
-            Ref: SlackURL
-      Layers:
-      - Ref: Libs
-      Events:
-        SlackEvent:
-          Type: EventBridgeRule
-          Properties:
-            Pattern:
-              source:
-              - aws.config
-              detail-type:
-              - Config Rules Compliance Change
-              detail:
-                newEvaluationResult:
-                  complianceType:
-                  - NON_COMPLIANT
-    Metadata:
-      SamResourceId: SlackFunction
-  Libs:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName: slack-layer
