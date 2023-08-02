@@ -10,17 +10,26 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def lambda_handler(event, context):
+    print(event)
     url = os.environ['SLACK_URL']
     webhook = WebhookClient(url)
+    event_source = event.get('source')
+    
+    if event_source == 'aws.config':
+        event_response = config_event(event['detail'])
+    else:
+        return {
+            'statusCode': 401
+        }
     
     try:
         response = webhook.send(
             text="fallback",
-            blocks=large_sample(event['detail'])
+            blocks=event_response
         )
-
-        #assert response.status_code == 200
-        #assert response.body == "ok"
+        assert response.status_code == 200
+        assert response.body == "ok"
+    
     except:
         return {
             'statusCode': 400
@@ -74,11 +83,18 @@ def button():
 	]
 
 
-def large_sample(event):
-    region = event.get('awsRegion')
-    account = event.get('awsAccountId')
-    rule_name = event.get('configRuleName')
-    type_event = event.get('messageType')
+def config_event(event):
+    
+    region = event['awsRegion']
+    account = event['awsAccountId']
+    rule_name = event['configRuleName']
+    type_event = event['messageType']
+    new_eval_result = event['newEvaluationResult']
+    resource_type = event['newEvaluationResult']['evaluationResultIdentifier']['evaluationResultQualifier']['resourceType']
+    resource_id = event['newEvaluationResult']['evaluationResultIdentifier']['evaluationResultQualifier']['resourceId']
+    description = event['newEvaluationResult']['annotation']
+    main_txt = f"*Event type:* {type_event} \n*Account:* {account} \n*Region:* {region} \n*Resource Type:* {resource_type}"
+    main_txt += f"\n*Resource Id:* {resource_id} \n*Rule Name:* _{rule_name}_"
     
     web_rule = f'https://{region}.console.aws.amazon.com/config/home?region={region}#/rules/details?configRuleName={rule_name}'
     
@@ -87,7 +103,7 @@ def large_sample(event):
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": f"Event type: *{type_event}* \nAccount: {account} \nRegion: {region} \nRule Name: _{rule_name}_"
+				"text": main_txt
 			},
 			"accessory": {
 				"type": "image",
@@ -99,7 +115,7 @@ def large_sample(event):
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": event['newEvaluationResult']['annotation']
+				"text": f"*Description:* {description}"
 			}
 		},
 		{
