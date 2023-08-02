@@ -257,7 +257,6 @@ def query_partiql_main(query, parameters=None, consumed_capacity=None, dyn_table
     
     try:
         response = dyn_table.meta.client.execute_statement(Statement=query, ReturnConsumedCapacity=consumed_capacity)
-        print("ExecuteStatement executed successfully.")
     except ClientError as error:
         handle_error(error)
         return
@@ -274,7 +273,5 @@ def query_partiql_main(query, parameters=None, consumed_capacity=None, dyn_table
     if len(response.get('Items')) == 0:
         print("Not found any items")
         return None
-    
-    json_data = json.loads(json.dumps(response['Items'], cls=DecimalEncoder_))
-    
-    return json_data
+       
+    return response
