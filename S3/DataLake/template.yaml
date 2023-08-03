@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  DataLake
+  Sample SAM Template for DataLake
+
+Parameters:
+  CompanyName:
+    Type: String
+    Description: Company Name
+    Default: 'mycomp'
+  
+  EnvironmentName:
+    Type: String
+    Description: Environment Name
+    Default: 'dev'
+    AllowedValues:
+      - 'dev'
+      - 'test'
+      - 'prod'
+      
+Mappings:
+  RegionBucket:
+    us-east-1:
+      regionb: 'useast1'
+    us-east-2:
+      regionb: 'useast2'
+    us-west-1:
+      regionb: 'uswest1'
+    us-west-2:
+      regionb: 'uswest2'
+    eu-west-1:
+      regionb: 'euwest1'
+    eu-west-2:
+      regionb: 'euwest2'
+    eu-west-3:
+      regionb: 'euwest3'
+    eu-central-1:
+      regionb: 'eucentral1'
+    eu-north-1:
+      regionb: 'eunorth1'
+
+Resources:
+  ############################################################
+  # 1 - Landing Zone Bucket
+  ############################################################
+  LandingZoneBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join ['', [!Ref CompanyName, '-landingzone-', !FindInMap [RegionBucket, !Ref AWS::Region, regionb], '-', !Ref AWS::AccountId, '-', !Ref EnvironmentName]]
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: CompanyName
+          Value: !Ref CompanyName
+        - Key: EnvironmentName
+          Value: !Ref EnvironmentName
+
+
+  ############################################################
+  # 2 - Raw Data Bucket
+  ############################################################
+  RawDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join ['', [!Ref CompanyName, '-raw-', !FindInMap [RegionBucket, !Ref AWS::Region, regionb], '-', !Ref AWS::AccountId, '-', !Ref EnvironmentName]]
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: CompanyName
+          Value: !Ref CompanyName
+        - Key: EnvironmentName
+          Value: !Ref EnvironmentName
+
+
+  ############################################################
+  # 3 - Stage Data Bucket
+  ############################################################
+  StageDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join ['', [!Ref CompanyName, '-stage-', !FindInMap [RegionBucket, !Ref AWS::Region, regionb], '-', !Ref AWS::AccountId, '-', !Ref EnvironmentName]]
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: CompanyName
+          Value: !Ref CompanyName
+        - Key: EnvironmentName
+          Value: !Ref EnvironmentName
+
+
+  ############################################################
+  # 4 - Analytics Data Bucket
+  ############################################################
+  AnalyticDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join ['', [!Ref CompanyName, '-analytics-', !FindInMap [RegionBucket, !Ref AWS::Region, regionb], '-', !Ref AWS::AccountId, '-', !Ref EnvironmentName]]
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: CompanyName
+          Value: !Ref CompanyName
+        - Key: EnvironmentName
+          Value: !Ref EnvironmentName
+
+Outputs:
+  LandingZoneBucket:
+    Description: Landing Zone Bucket
+    Value: !Ref LandingZoneBucket
+    Export:
+      Name: !Join ['', [!Ref CompanyName, '-landingzone-', !FindInMap [RegionBucket, !Ref AWS::Region, regionb], '-', !Ref AWS::AccountId, '-', !Ref EnvironmentName]]
+  RawDataBucket:
+    Description: Raw Data Bucket
+    Value: !Ref RawDataBucket
+    Export:
+      Name: !Join ['', [!Ref CompanyName, '-raw-', !FindInMap [RegionBucket, !Ref AWS::Region, regionb], '-', !Ref AWS::AccountId, '-', !Ref EnvironmentName]]
+  StageDataBucket:
+    Description: Stage Data Bucket
+    Value: !Ref StageDataBucket
+    Export:
+      Name: !Join ['', [!Ref CompanyName, '-stage-', !FindInMap [RegionBucket, !Ref AWS::Region, regionb], '-', !Ref AWS::AccountId, '-', !Ref EnvironmentName]]
+  AnalyticDataBucket:
+    Description: Analytic Data Bucket
+    Value: !Ref AnalyticDataBucket
+    Export:
+      Name: !Join ['', [!Ref CompanyName, '-analytics-', !FindInMap [RegionBucket, !Ref AWS::Region, regionb], '-', !Ref AWS::AccountId, '-', !Ref EnvironmentName]]

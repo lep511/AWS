@@ -1,0 +1,9 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "data-lake4"
+resolve_s3 = true
+s3_prefix = "data-lake4"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "CompanyName=\"mycomp\" EnvironmentName=\"dev\""
+image_repositories = []

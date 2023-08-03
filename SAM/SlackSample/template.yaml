@@ -37,7 +37,8 @@ Resources:
                     Label:
                       - CRITICAL
                       - HIGH
-
+                      
+  Libs:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName: slack-layer

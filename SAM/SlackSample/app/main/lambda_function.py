@@ -14,56 +14,44 @@ security_hub_icon = "https://d2908q01vomqb2.cloudfront.net/22d200f8670dbdb3e253a
 
 def lambda_handler(event, context):
     print(event)
-    url = os.environ['SLACK_URL']
-    webhook = WebhookClient(url)
     event_source = event.get('source')
     
     # AWS Config
     if event_source == 'aws.config':
-        event_response = config_event(event['detail'])
+        config_event(event['detail'])
     # AWS Security Hub
     elif event_source == 'aws.securityhub':
-        event_response = security_hub(event['detail'])
+        security_hub(event['detail'])
     # If not recognized service
     else:
         return {
             'statusCode': 401
         }
-    
-    try:
-        response = webhook.send(
-            text="fallback",
-            blocks=event_response
-        )
-        assert response.status_code == 200
-        assert response.body == "ok"
-    
-    except Exception as e:
-        return {
-            'statusCode': response.status_code,
-            'body': json.dumps(response.body)
-        }
-    
-    else:
-        return {
-            'statusCode': 200
-        }
-
+    return {
+        'statusCode': 200
+    }
 
 def security_hub(event):
     # Findings
-    main_txt = None
-    if event.get('findings'):
-        main_txt = json.dumps(event['findings'])
-    # Insight
-    elif event.get('insightName'):
-        main_txt = json.dumps(event['insightName'])
+    for finding in event['findings']:
+        region = finding.get('Region')
+        account = finding.get('AwsAccountId')
+        resource_id = finding['Resources'][0]['Id']
 
-    description = None
-    web_rule = "https://console.aws.amazon.com/securityhub"
-    slack_main_text = response_slack(main_txt, description, web_rule, security_hub_icon)
-    return slack_main_text
-
+        main_txt = f"*Account:* {account} \n*Region:* {region}"
+        main_txt += f"\n*Resource Id:* {resource_id}"
+        
+        description = finding['Description']
+        try:
+            web_rule = finding['Remediation']['Recommendation']['Url']
+        except:
+            web_rule = 'https://www.google.com'
+        
+        button_text = "Link to remediation steps"
+        
+        response = response_slack(main_txt, description, web_rule, security_hub_icon, button_text)
+        send_to_slack(response)
+        
 
 def config_event(event):
     region = event.get('awsRegion')
@@ -78,12 +66,13 @@ def config_event(event):
     main_txt += f"\n*Resource Id:* {resource_id} \n*Rule Name:* _{rule_name}_"
 
     web_rule = f'https://{region}.console.aws.amazon.com/config/home?region={region}#/rules/details?configRuleName={rule_name}'
+    button_text = "Link to AWS Config Rule"
+    
+    response = response_slack(main_txt, description, web_rule, config_icon, button_text)
+    send_to_slack(response)
 
-    slack_main_text = response_slack(main_txt, description, web_rule, config_icon)
-    return slack_main_text
 
-
-def response_slack(main_txt, description, web_rule, icon):
+def response_slack(main_txt, description, web_rule, icon, button_text):
     return [
 		{
 			"type": "section",
@@ -111,7 +100,7 @@ def response_slack(main_txt, description, web_rule, icon):
 					"type": "button",
 					"text": {
 						"type": "plain_text",
-						"text": "Link to AWS Config Rule",
+						"text": button_text,
 						"emoji": True
 					},
 					"value": "click_me_123",
@@ -123,3 +112,20 @@ def response_slack(main_txt, description, web_rule, icon):
 			"type": "divider"
 		}
 	]
+
+
+def send_to_slack(event_response):
+    url = os.environ['SLACK_URL']
+    webhook = WebhookClient(url)
+    
+    try:
+        response_slack = webhook.send(
+            text="fallback",
+            blocks=event_response
+        )
+        assert response_slack.status_code == 200
+        assert response_slack.body == "ok"
+        print(f"[INFO] {response_slack.body}")
+    
+    except Exception as e:
+        print(f"[ERROR] {e}")
