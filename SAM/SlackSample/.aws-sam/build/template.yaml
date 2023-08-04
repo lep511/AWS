@@ -1,52 +1,47 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Sample Slack Template
-
 Parameters:
   SlackURL:
     Type: String
     Description: Incoming Webhook unique URL
-
 Resources:
   SlackFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: app/main/
+      CodeUri: SlackFunction
       Handler: lambda_function.lambda_handler
       Runtime: python3.9
       MemorySize: 128
       Timeout: 90
       Environment:
         Variables:
-          SLACK_URL: !Ref SlackURL
-      # Eventbridge event
+          SLACK_URL:
+            Ref: SlackURL
       Layers:
-        - !Ref Libs
+      - Ref: Libs
       Events:
         SlackEvent:
           Type: EventBridgeRule
           Properties:
             Pattern:
               source:
-                - aws.securityhub
+              - aws.securityhub
               detail-type:
-                - Security Hub Findings - Imported
+              - Security Hub Findings - Imported
               detail:
                 findings:
                   Severity:
                     Label:
-                      - CRITICAL
-                      - HIGH
-                  Workflow:
-                    Status:
-                      - NEW
-
+                    - CRITICAL
+                    - HIGH
+    Metadata:
+      SamResourceId: SlackFunction
   Libs:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName: slack-layer
       Description: Lambda layer with slack library
-      ContentUri: ./libs
+      ContentUri: ../../libs
       CompatibleRuntimes:
-        - python3.9
-    
+      - python3.9

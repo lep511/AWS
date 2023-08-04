@@ -5,5 +5,5 @@ resolve_s3 = true
 s3_prefix = "new-app"
 region = "us-east-1"
 capabilities = "CAPABILITY_NAMED_IAM"
-parameter_overrides = "SlackURL=\"https://hooks.slack.com/services/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\""
+parameter_overrides = "SlackURL=\"https://hooks.slack.com/services/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\""
 image_repositories = []

@@ -34,32 +34,22 @@ def lambda_handler(event, context):
 def security_hub(event):
     # Findings
     for finding in event['findings']:
-        title = finding['Title']
         region = finding.get('Region')
         account = finding.get('AwsAccountId')
         resource_id = finding['Resources'][0]['Id']
-        severity = finding['Severity']['Label']
 
-        main_txt = f"*{title}* \n\n*Account:* {account} \n*Region:* {region}"
-        main_txt += f"\n*Severity:* {severity} \n*Resource Id:* {resource_id}"
+        main_txt = f"*Account:* {account} \n*Region:* {region}"
+        main_txt += f"\n*Resource Id:* {resource_id}"
         
         description = finding['Description']
-        
-        if 'Remediation' in finding:
+        try:
             web_rule = finding['Remediation']['Recommendation']['Url']
-            button_text = "Link to remediation steps"
-        else:
+        except:
             web_rule = 'https://www.google.com'
-            button_text = "Google"
         
-        if finding['ProductName'] == 'Config':
-            image_icon = config_icon
-            icon_text = "AWS Config"
-        else:
-            image_icon = security_hub_icon
-            icon_text = "AWS Security Hub"
+        button_text = "Link to remediation steps"
         
-        response = response_slack(main_txt, description, web_rule, image_icon, button_text, icon_text)
+        response = response_slack(main_txt, description, web_rule, security_hub_icon, button_text)
         send_to_slack(response)
         
 
@@ -82,7 +72,7 @@ def config_event(event):
     send_to_slack(response)
 
 
-def response_slack(main_txt, description, web_rule, icon, button_text, icon_text="aws service"):
+def response_slack(main_txt, description, web_rule, icon, button_text):
     return [
 		{
 			"type": "section",
@@ -93,7 +83,7 @@ def response_slack(main_txt, description, web_rule, icon, button_text, icon_text
 			"accessory": {
 				"type": "image",
 				"image_url": icon,
-				"alt_text": icon_text
+				"alt_text": "icon"
 			},
 		},
   		{

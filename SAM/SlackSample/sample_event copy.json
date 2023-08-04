@@ -1,5 +1,6 @@
 {
    "version":"0",
+
    "id":"fe7a1ae1-e074-5d23-5f84-1e3a496f9cd3",
    "detail-type":"Security Hub Findings - Imported",
    "source":"aws.securityhub",
@@ -91,6 +92,85 @@
                }
             ],
             "ProcessedAt":"2023-08-01T16:05:27.635Z"
+         }
+      ]
+   }
+}
+
+
+
+
+
+
+
+
+{
+   "version":"0",
+   "id":"e376b648-9e6a-3b26-8790-b9296e0fac46",
+   "detail-type":"Security Hub Findings - Imported",
+   "source":"aws.securityhub",
+   "account":"233489832487",
+   "time":"2023-08-03T21:37:41Z",
+   "region":"us-east-1",
+   "resources":[
+      "arn:aws:securityhub:us-east-1::product/aws/config/arn:aws:config:us-east-1:233489832487:config-rule/config-rule-rxuo8a/finding/85ec80c34ef426a8cd8293130bcc7be14dfadeb6"
+   ],
+   "detail":{
+      "findings":[
+         {
+            "ProductArn":"arn:aws:securityhub:us-east-1::product/aws/config",
+            "Types":[
+               "Software and Configuration Checks"
+            ],
+            "Description":"This finding is created for a resource compliance change for config rule: ec2-instance-no-public-ip",
+            "ProductName":"Config",
+            "Compliance":{
+               "Status":"NOT_AVAILABLE"
+            },
+            "CreatedAt":"2023-08-03T20:54:24.665Z",
+            "CompanyName":"AWS",
+            "FindingProviderFields":{
+               "Types":[
+                  "Software and Configuration Checks"
+               ],
+               "Severity":{
+                  "Normalized":40,
+                  "Label":"MEDIUM"
+               }
+            },
+            "ProductFields":{
+               "aws/securityhub/ProductName":"Config",
+               "aws/securityhub/CompanyName":"AWS",
+               "aws/securityhub/FindingId":"arn:aws:securityhub:us-east-1::product/aws/config/arn:aws:config:us-east-1:233489832487:config-rule/config-rule-rxuo8a/finding/85ec80c34ef426a8cd8293130bcc7be14dfadeb6",
+               "aws/config/ConfigRuleArn":"arn:aws:config:us-east-1:233489832487:config-rule/config-rule-rxuo8a",
+               "aws/config/ConfigRuleName":"ec2-instance-no-public-ip",
+               "aws/config/ConfigComplianceType":"NOT_APPLICABLE"
+            },
+            "SchemaVersion":"2018-10-08",
+            "GeneratorId":"arn:aws:config:us-east-1:233489832487:config-rule/config-rule-rxuo8a",
+            "RecordState":"ACTIVE",
+            "Title":"ec2-instance-no-public-ip",
+            "Workflow":{
+               "Status":"NEW"
+            },
+            "Severity":{
+               "Normalized":40,
+               "Label":"MEDIUM"
+            },
+            "UpdatedAt":"2023-08-03T20:54:24.665Z",
+            "WorkflowState":"NEW",
+            "AwsAccountId":"233489832487",
+            "Region":"us-east-1",
+            "Id":"arn:aws:config:us-east-1:233489832487:config-rule/config-rule-rxuo8a/finding/85ec80c34ef426a8cd8293130bcc7be14dfadeb6",
+            "Resources":[
+               {
+                  "Partition":"aws",
+                  "Type":"AwsEc2Instance",
+                  "Region":"us-east-1",
+                  "Id":"arn:aws:ec2:us-east-1:233489832487:instance/i-07c5071479016501f"
+               }
+            ],
+            "ProcessedAt":"2023-08-03T21:37:37.294Z"
          }
       ]
    }
