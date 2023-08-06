@@ -1,8 +1,3 @@
-"""Lambda function handler."""
-
-# must be the first import in files with lambda function handlers
-import lambdainit  # noqa: F401
-
 import lambdalogging
 import boto3
 import config
@@ -12,7 +7,7 @@ LOG = lambdalogging.getLogger(__name__)
 SQS = boto3.client('sqs')
 
 
-def handler(event, context):
+def lambda_handler(event, context):
     """Lambda function handler."""
     LOG.info('Received event: %s', event)
     LOG.debug('Main SQS queue ARN: %s', config.SQS_MAIN_URL)
