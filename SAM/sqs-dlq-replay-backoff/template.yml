@@ -36,6 +36,7 @@ Resources:
     Properties:
       QueueName: !Join [ "-", [ !Ref AWS::StackName, "MainQueue" ] ]
       MessageRetentionPeriod: !Ref MessageRetentionPeriod
+      ReceiveMessageWaitTimeSeconds: 5
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt DLQ.Arn
         maxReceiveCount: 1

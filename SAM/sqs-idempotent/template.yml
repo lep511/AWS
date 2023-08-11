@@ -3,5 +3,78 @@ Transform: AWS::Serverless-2016-10-31
 Description: >-
   Using an Amazon SQS queue as an idempotent queue to ensure that a message is processed only once.
 
-Parameters:
+Resources:
+  DynamoDBTableProcessedRecords:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-DynamoDBTableProcessedRecords
+      AttributeDefinitions:
+        - AttributeName: Records
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Records
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+  
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-DynamoDBTable
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+  
+  MyQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-MyQueue
+      VisibilityTimeout: 150 # The SQS visibility timeout must be at least six times the total of the function timeout and the batch window timeout.
+      ReceiveMessageWaitTimeSeconds: 5 # The maximum amount of time in seconds that a ReceiveMessage action can wait for a message to arrive.
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3 # The maximum number of times that a message can be received before being sent to the dead-letter queue.
 
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-DeadLetterQueue
+
+  MyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-MyFunction
+      CodeUri: src/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.9
+      Timeout: 30
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoDBTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoDBTableProcessedRecords
+        - SQSSendMessagePolicy:
+            QueueName: !Sub "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/${AWS::StackName}-DeadLetterQueue"
+      Events:
+        MyQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt MyQueue.Arn
+            BatchSize: 20
+            MaximumBatchingWindowInSeconds: 5
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DynamoDBTable
+          PROCESSED_RECORDS: !Ref DynamoDBTableProcessedRecords
+          SQS_QUEUE_URL: !Sub "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/${AWS::StackName}-MyQueue"
+
+Outputs:
+  MyQueueUrl:
+    Description: "My Queue URL"
+    Value: !Sub "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/${AWS::StackName}-MyQueue"
+  MyFunctionArn:
+    Description: "My Function ARN"
+    Value: !GetAtt MyFunction.Arn
