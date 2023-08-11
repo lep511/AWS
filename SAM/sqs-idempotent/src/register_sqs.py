@@ -1,5 +1,6 @@
 import boto3
 import os
+from botocore.exceptions import ClientError
 
 def push_to_process_table(message_id):
     dynamo = boto3.client('dynamodb')

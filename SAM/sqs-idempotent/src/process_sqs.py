@@ -1,5 +1,6 @@
 import boto3
 import os
+from botocore.exceptions import ClientError
 
 def add_donation(item):
     dynamo = boto3.client('dynamodb')
