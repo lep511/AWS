@@ -1,24 +1,27 @@
 import json
 import boto3
+import os
 from botocore.exceptions import ClientError
+
 import os
 
 def lambda_handler(event, context):
     if event:
-        print(event)
         dynamo = boto3.client('dynamodb')
         sqs = boto3.client('sqs')
         sqs_queue_url = os.environ['SQS_QUEUE_URL']
+        sqs_queue_arn = os.environ['SQS_QUEUE_ARN']
+        dlq_arn = os.environ['DLQ_ARN']
         table = os.environ['DYNAMODB_TABLE']
         tot_items = len(event['Records'])
         sqs_batch_response = {}
         batch_item_failures = []
-        update_item = []
 
-        print(f"Total items in SQS: {tot_items}")
         # Write elements from SQS to Dynamo
         for record in event['Records']:
             body = json.loads(record['body'])
+            message_id = record["messageId"]
+            
             item = {
                 'id': {'S': body['email']},
                 'name': {'S': body['name']},
@@ -33,28 +36,54 @@ def lambda_handler(event, context):
                 )
             except ClientError as e:
                 if e.response['Error']['Code'] == "ConditionalCheckFailedException":
-                    response = add_donation(item)
-                    update_item.append({"updateReport": response})
+                    if is_duplicate_message(message_id):   
+                        print("Message duplicate: " + message_id)
+                        delete_sqs_message(record['receiptHandle'])
+                    else:
+                        # Sum donation to existing item
+                        check_item = add_donation(item, message_id)
+                        if not check_item:
+                            batch_item_failures.append({"itemIdentifier": message_id})
+                            print(f"[ERROR][A01] Cannot add donation to item {item['id']['S']}")
                 else:
-                    batch_item_failures.append({"itemIdentifier": record['messageId']})
-                    print("[ERROR]", e.response['Error']['Message'])
+                    batch_item_failures.append({"itemIdentifier": message_id})
+                    print("[ERROR][A02]", e.response['Error']['Message'])
 
             else:
                 # Delete message from SQS
-                sqs.delete_message(
-                    QueueUrl=sqs_queue_url,
-                    ReceiptHandle=record['receiptHandle']
-                )
+                delete_sqs_message(record['receiptHandle'])
+                # Add message to processed records table
+                push_to_process_table(message_id)
 
+        tot_items_fail = len(batch_item_failures)
+        if tot_items_fail > 0:
+            try:
+                sqs.start_message_move_task(
+                    SourceArn=sqs_queue_arn,
+                    QueueUrl=dlq_arn
+                )
+            except ClientError as e:
+                print("[ERROR][A07]", e.response['Error']['Message'])
+        
+        print(f"Total items in SQS: {tot_items} - Total items failed: {tot_items_fail}")
         sqs_batch_response["batchItemFailures"] = batch_item_failures
-        sqs_batch_response["updateItem"] = update_item
         return sqs_batch_response
 
-    return {
-        'statusCode': 200
-    }
 
-def add_donation(item):
+def is_duplicate_message(message_id):
+    dynamo = boto3.client('dynamodb')
+    table_name = os.environ['PROCESSED_RECORDS']
+    return dynamo.query(
+        TableName=table_name,
+        Select='COUNT',
+        KeyConditionExpression='Records = :Records',
+        ExpressionAttributeValues={
+            ':Records': {'S': message_id}
+        }
+    )["Count"] != 0
+    
+
+def add_donation(item, message_id):
     dynamo = boto3.client('dynamodb')
     table = os.environ['DYNAMODB_TABLE']
     try:
@@ -64,10 +93,42 @@ def add_donation(item):
             UpdateExpression="set donation = donation + :val",
             ExpressionAttributeValues={':val': {'N': item['donation']['N']}}
         )
-        if  response['ResponseMetadata']['HTTPStatusCode'] == 200:
-            message_code = "Success update item"
-    except  ClientError as e:
-        print("[ERROR]", e.response['Error']['Message'])
-        message_code = "Error update item"
+        if  response['ResponseMetadata']['HTTPStatusCode'] != 200:
+            return False
 
-    return message_code
+    except  ClientError as e:
+        print("[ERROR][A03]", e.response['Error']['Message'])
+        return False
+    
+    else:
+        push_to_process_table(message_id)
+
+    return True
+
+
+def push_to_process_table(message_id):
+    dynamo = boto3.client('dynamodb')
+    table_name = os.environ['PROCESSED_RECORDS']
+    try:
+        response = dynamo.put_item(
+                    TableName = table_name, 
+                    Item={ 'Records': {'S':message_id}
+                    }
+                )
+        if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+            print(f"[ERROR][A04] {response}")
+
+    except ClientError as e:
+        print("[ERROR][A05]", e.response['Error']['Message'])
+
+
+def delete_sqs_message(receipt_handle):
+    sqs = boto3.client('sqs')
+    sqs_queue_url = os.environ['SQS_QUEUE_URL']
+    try:
+        sqs.delete_message(
+            QueueUrl=sqs_queue_url,
+            ReceiptHandle=receipt_handle
+        )
+    except ClientError as e:
+        print("[ERROR][A06]", e.response['Error']['Message'])

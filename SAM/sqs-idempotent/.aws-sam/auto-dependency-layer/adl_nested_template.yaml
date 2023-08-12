@@ -16,7 +16,7 @@ Resources:
       - python3.9
       ContentUri: /home/lep511/agit/AWS/SAM/sqs-idempotent/.aws-sam/auto-dependency-layer/MyFunctionbf3066d1DepLayer
       Description: Auto created layer for dependencies of function MyFunction
-      LayerName: sam-app4d301d3b8-MyFunctionbf3066d1-DepLayer
+      LayerName: sam-app7427b055-MyFunctionbf3066d1-DepLayer
       RetentionPolicy: Delete
     Type: AWS::Serverless::LayerVersion
 Transform: AWS::Serverless-2016-10-31

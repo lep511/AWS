@@ -3,6 +3,18 @@ Transform: AWS::Serverless-2016-10-31
 Description: Using an Amazon SQS queue as an idempotent queue to ensure that a message
   is processed only once.
 Resources:
+  DynamoDBTableProcessedRecords:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${AWS::StackName}-DynamoDBTableProcessedRecords
+      AttributeDefinitions:
+      - AttributeName: Records
+        AttributeType: S
+      KeySchema:
+      - AttributeName: Records
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -20,6 +32,19 @@ Resources:
     Properties:
       QueueName:
         Fn::Sub: ${AWS::StackName}-MyQueue
+      VisibilityTimeout: 150
+      ReceiveMessageWaitTimeSeconds: 5
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - DeadLetterQueue
+          - Arn
+        maxReceiveCount: 3
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-DeadLetterQueue
   MyFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -33,6 +58,12 @@ Resources:
       - DynamoDBCrudPolicy:
           TableName:
             Ref: DynamoDBTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DynamoDBTableProcessedRecords
+      - SQSSendMessagePolicy:
+          QueueName:
+            Fn::Sub: https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/${AWS::StackName}-DeadLetterQueue
       Events:
         MyQueue:
           Type: SQS
@@ -42,13 +73,19 @@ Resources:
               - MyQueue
               - Arn
             BatchSize: 20
-            MaximumBatchingWindowInSeconds: 60
+            MaximumBatchingWindowInSeconds: 5
       Environment:
         Variables:
           DYNAMODB_TABLE:
             Ref: DynamoDBTable
+          PROCESSED_RECORDS:
+            Ref: DynamoDBTableProcessedRecords
           SQS_QUEUE_URL:
             Fn::Sub: https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/${AWS::StackName}-MyQueue
+          SQS_QUEUE_ARN:
+            Fn::Sub: arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-MyQueue
+          DLQ_ARN:
+            Fn::Sub: arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-DeadLetterQueue
       Layers:
       - Fn::GetAtt:
         - AwsSamAutoDependencyLayerNestedStack

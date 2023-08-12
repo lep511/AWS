@@ -1,107 +1,107 @@
 [
   {
-    "sname": "Harper Pierce",
-    "xmail": "harperpierce@thepenguinconsultingfirm.com",
-    "donation": 97.5
+    "name": "Harper Pierce",
+    "email": "harperpierce@thepenguinconsultingfirm.com",
+    "donation": "mmx"
   },
   {
-    "sname": "Lois Huber",
-    "xmail": "loishuber@thepenguinconsultingfirm.com",
-    "donation": 28.31
+    "name": "Lois Huber",
+    "email": "loishuber@thepenguinconsultingfirm.com",
+    "donation": "mmx"
   },
   {
-    "sname": "Cecile Hickman",
-    "xmail": "cecilehickman@thepenguinconsultingfirm.com",
-    "donation": 1.34
+    "name": "Cecile Hickman",
+    "email": "cecilehickman@thepenguinconsultingfirm.com",
+    "donation": "mmx"
   },
   {
-    "sname": "Shauna Brewer",
-    "xmail": "shaunabrewer@thepenguinconsultingfirm.com",
-    "donation": 82.54
+    "name": "Shauna Brewer",
+    "email": "shaunabrewer@thepenguinconsultingfirm.com",
+    "donation": "mmx"
   },
   {
-    "sname": "Ayala Camacho",
-    "xmail": "ayalacamacho@thepenguinconsultingfirm.com",
+    "name": "Ayala Camacho",
+    "email": "ayalacamacho@thepenguinconsultingfirm.com",
     "donation": 13.1
   },
   {
-    "sname": "Hicks Wallace",
-    "xmail": "hickswallace@thepenguinconsultingfirm.com",
+    "name": "Hicks Wallace",
+    "email": "hickswallace@thepenguinconsultingfirm.com",
     "donation": 87.34
   },
   {
-    "sname": "Concepcion Hoffman",
-    "xmail": "concepcionhoffman@thepenguinconsultingfirm.com",
+    "name": "Concepcion Hoffman",
+    "email": "concepcionhoffman@thepenguinconsultingfirm.com",
     "donation": 74.94
   },
   {
-    "sname": "Roberson Woodward",
-    "xmail": "robersonwoodward@thepenguinconsultingfirm.com",
+    "name": "Roberson Woodward",
+    "email": "robersonwoodward@thepenguinconsultingfirm.com",
     "donation": 46.19
   },
   {
-    "sname": "Mcgee Tanner",
-    "xmail": "mcgeetanner@thepenguinconsultingfirm.com",
+    "name": "Mcgee Tanner",
+    "email": "mcgeetanner@thepenguinconsultingfirm.com",
     "donation": 87.8
   },
   {
-    "sname": "Sullivan Reed",
-    "xmail": "sullivanreed@thepenguinconsultingfirm.com",
+    "name": "Sullivan Reed",
+    "email": "sullivanreed@thepenguinconsultingfirm.com",
     "donation": 78.14
   },
   {
-    "sname": "Patrick Vega",
-    "xmail": "patrickvega@thepenguinconsultingfirm.com",
+    "name": "Patrick Vega",
+    "email": "patrickvega@thepenguinconsultingfirm.com",
     "donation": 93.84
   },
   {
-    "sname": "Yang Cole",
-    "xmail": "yangcole@thepenguinconsultingfirm.com",
+    "name": "Yang Cole",
+    "email": "yangcole@thepenguinconsultingfirm.com",
     "donation": 32.25
   },
   {
-    "sname": "Lang James",
-    "xmail": "langjames@thepenguinconsultingfirm.com",
+    "name": "Lang James",
+    "email": "langjames@thepenguinconsultingfirm.com",
     "donation": 17.64
   },
   {
-    "sname": "Lauri Terry",
-    "xmail": "lauriterry@thepenguinconsultingfirm.com",
+    "name": "Lauri Terry",
+    "email": "lauriterry@thepenguinconsultingfirm.com",
     "donation": 27.53
   },
   {
-    "sname": "Velasquez Nolan",
-    "xmail": "velasqueznolan@thepenguinconsultingfirm.com",
+    "name": "Velasquez Nolan",
+    "email": "velasqueznolan@thepenguinconsultingfirm.com",
     "donation": 96.47
   },
   {
-    "sname": "Cochran Allison",
-    "xmail": "cochranallison@thepenguinconsultingfirm.com",
+    "name": "Cochran Allison",
+    "email": "cochranallison@thepenguinconsultingfirm.com",
     "donation": 90.35
   },
   {
-    "sname": "Carson Bullock",
-    "xmail": "carsonbullock@thepenguinconsultingfirm.com",
+    "name": "Carson Bullock",
+    "email": "carsonbullock@thepenguinconsultingfirm.com",
     "donation": 46.98
   },
   {
-    "sname": "Neal Rowland",
-    "xmail": "nealrowland@thepenguinconsultingfirm.com",
+    "name": "Neal Rowland",
+    "email": "nealrowland@thepenguinconsultingfirm.com",
     "donation": 91.69
   },
   {
-    "sname": "Wynn Austin",
-    "xmail": "wynnaustin@thepenguinconsultingfirm.com",
+    "name": "Wynn Austin",
+    "email": "wynnaustin@thepenguinconsultingfirm.com",
     "donation": 27.12
   },
   {
-    "sname": "Bray Meyers",
-    "xmail": "braymeyers@thepenguinconsultingfirm.com",
+    "name": "Bray Meyers",
+    "email": "braymeyers@thepenguinconsultingfirm.com",
     "donation": 78.85
   },
   {
-    "sname": "Holloway Gilbert",
-    "xmail": "hollowaygilbert@thepenguinconsultingfirm.com",
+    "name": "Holloway Gilbert",
+    "email": "hollowaygilbert@thepenguinconsultingfirm.com",
     "donation": 87.32
   }
 ]

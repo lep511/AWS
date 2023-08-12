@@ -82,6 +82,10 @@ Resources:
             Ref: DynamoDBTableProcessedRecords
           SQS_QUEUE_URL:
             Fn::Sub: https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/${AWS::StackName}-MyQueue
+          SQS_QUEUE_ARN:
+            Fn::Sub: arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-MyQueue
+          DLQ_ARN:
+            Fn::Sub: arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-DeadLetterQueue
     Metadata:
       SamResourceId: MyFunction
 Outputs:
