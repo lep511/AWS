@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Step Functions sample project demonstrating the Request Response pattern
+
+Resources:
+  SNSTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: 'RequestResponseTopic'
+
+  UtilityBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub 'utility-s3-${AWS::AccountId}'
+
+  FilesBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub 'files-s3-${AWS::AccountId}'
+
+  KmsS3Key:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: 'KMS Key for S3'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: 'key-default-1'
+        Statement:
+          - Sid: 'Enable IAM User Permissions'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: 'Allow administration of the key'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${KmsAdminUser}'
+            Action:
+              - 'kms:Create*'
+              - 'kms:Describe*'
+              - 'kms:Enable*'
+              - 'kms:List*'
+              - 'kms:Put*'
+              - 'kms:Update*'
+              - 'kms:Revoke*'
+              - 'kms:Disable*'
+              - 'kms:Get*'
+              - 'kms:Delete*'
+              - 'kms:TagResource'
+              - 'kms:UntagResource'
+              - 'kms:ScheduleKeyDeletion'
+              - 'kms:CancelKeyDeletion'
+            Resource: '*'
+          - Sid: 'Allow use of the key'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${KmsUser}'
+            Action:
+              - 'kms:DescribeKey'
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey'
+              - 'kms:GenerateDataKeyWithoutPlaintext'
+            Resource: '*'
+
+  FunctionCheckEncryption:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.10
+      CodeUri: src/
+      Description: 'Checks if the object is encrypted'
+      MemorySize: 256
+      Timeout: 120
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 's3:Get*'
+              Resource: !Sub 'arn:aws:s3:::${FilesBucket}/*'
+
+  StatesExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: states.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: StatesExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref SNSTopic
+
+  RequestResponseStateMachine:
+    Type: 'AWS::StepFunctions::StateMachine'
+    Properties:
+      DefinitionString: !Sub
+        - |-
+          {
+            "Comment": "An example of the Amazon States Language for scheduling a task.",
+            "StartAt": "Wait for Timestamp",
+            "States": {
+              "Wait for Timestamp": {
+                "Type": "Wait",
+                "SecondsPath": "$.timer_seconds",
+                "Next": "Send SNS Message"
+              },
+              "Send SNS Message": {
+                "Type": "Task",
+                "Resource": "arn:aws:states:::sns:publish",
+                "Parameters":{  
+                  "TopicArn": "${topicArn}",
+                  "Message.$":"$.message"
+                },
+                "End": true
+              }
+            }
+          }
+        - { topicArn: !Ref SNSTopic }
+      RoleArn: !GetAtt [StatesExecutionRole, Arn]
+
+Outputs:
+  StateMachineArn:
+    Value:
+      Ref: RequestResponseStateMachine
+  ExecutionInput:
+    Description: Sample input to StartExecution.
+    Value: !Sub
+      - |-
+        {
+          "topic": "${topicArn}",
+          "message": "Welcome to re:Invent!",
+          "timer_seconds": 5
+        }
+      - { topicArn: !Ref SNSTopic }
+

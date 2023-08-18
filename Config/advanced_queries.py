@@ -12,7 +12,7 @@ import boto3
 import json
 from botocore.exceptions import ClientError
 
-regionList = ['us-east-1', 'us-west-2', 'eu-west-1']
+regionList = ['us-east-1'] #, 'us-west-2', 'eu-west-1']
 
 def main():
 

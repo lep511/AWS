@@ -34,22 +34,32 @@ def lambda_handler(event, context):
 def security_hub(event):
     # Findings
     for finding in event['findings']:
+        title = finding['Title']
         region = finding.get('Region')
         account = finding.get('AwsAccountId')
         resource_id = finding['Resources'][0]['Id']
+        severity = finding['Severity']['Label']
 
-        main_txt = f"*Account:* {account} \n*Region:* {region}"
-        main_txt += f"\n*Resource Id:* {resource_id}"
+        main_txt = f"*{title}* \n\n*Account:* {account} \n*Region:* {region}"
+        main_txt += f"\n*Severity:* {severity} \n*Resource Id:* {resource_id}"
         
         description = finding['Description']
-        try:
+        
+        if 'Remediation' in finding:
             web_rule = finding['Remediation']['Recommendation']['Url']
-        except:
+            button_text = "Link to remediation steps"
+        else:
             web_rule = 'https://www.google.com'
+            button_text = "Google"
         
-        button_text = "Link to remediation steps"
+        if finding['ProductName'] == 'Config':
+            image_icon = config_icon
+            icon_text = "AWS Config"
+        else:
+            image_icon = security_hub_icon
+            icon_text = "AWS Security Hub"
         
-        response = response_slack(main_txt, description, web_rule, security_hub_icon, button_text)
+        response = response_slack(main_txt, description, web_rule, image_icon, button_text, icon_text)
         send_to_slack(response)
         
 
@@ -72,7 +82,7 @@ def config_event(event):
     send_to_slack(response)
 
 
-def response_slack(main_txt, description, web_rule, icon, button_text):
+def response_slack(main_txt, description, web_rule, icon, button_text, icon_text="aws service"):
     return [
 		{
 			"type": "section",
@@ -83,7 +93,7 @@ def response_slack(main_txt, description, web_rule, icon, button_text):
 			"accessory": {
 				"type": "image",
 				"image_url": icon,
-				"alt_text": "icon"
+				"alt_text": icon_text
 			},
 		},
   		{

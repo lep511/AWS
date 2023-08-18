@@ -1,0 +1,22 @@
+## Cambiar el cifrado de Amazon S3 de S3-Managed a AWS KMS
+
+Los clientes que utilizan Amazon Simple Storage Service (Amazon S3) a menudo aprovechan las claves de cifrado administradas por S3 (SSE-S3) para el cifrado de objetos del lado del servidor (SSE). Para muchos clientes, la decisión de utilizar SSE-S3 satisface sus requisitos de seguridad, ya que protege sus datos en reposo. Sin embargo, para algunos otros clientes, SSE-S3 puede haber cumplido sus requisitos inicialmente, pero sus requisitos pueden haber cambiado con el tiempo. Por ejemplo, un cliente puede estar ganando nuevos negocios que requieran el cumplimiento de un conjunto diferente de normas. Otro ejemplo: los clientes de análisis suelen empezar realizando pruebas de concepto con datos no confidenciales. A medida que obtienen valor de su plataforma analítica, añaden más datos de diferentes fuentes de datos y esta agregación de datos a menudo cambia la clasificación. Es posible que tengan que implantar controles adicionales para manejar las claves de cifrado, dándoles más control sobre quién puede acceder a ellas. También es posible que busquen separar el registro y la auditoría, o la capacidad de soportar los requisitos de cumplimiento de PCI-DSS para la autenticación separada del almacenamiento y la criptografía. Para obtener más detalles sobre la diferencia entre las claves administradas por AWS y las claves administradas por el cliente, puede leer esta publicación del blog.
+
+Para cumplir requisitos de seguridad y conformidad más estrictos, es posible que algunos clientes deseen cambiar su modelo de cifrado de SSE-S3 a SSE-KMS, que utiliza AWS Key Management Service (AWS KMS) para el cifrado. Hacerlo puede proporcionar algunos beneficios adicionales, incluida la protección frente a políticas que pueden ser demasiado permisivas. Por ejemplo, añadir una política de bucket que permita un acceso demasiado amplio a los datos en lugar de a usuarios o roles individuales. Al implementar el cifrado mediante claves KMS, el que accede a los recursos necesitaría acceso a la política de Amazon S3 y acceso a una clave KMS para descifrar los datos. Los clientes que eligen utilizar AWS KMS con claves administradas por el cliente también obtienen los siguientes beneficios, que pueden respaldar requisitos de conformidad adicionales:
+
+* Usted mantiene la propiedad de las claves con la capacidad de revocar el acceso, imposibilitando el acceso a los datos.
+* Puede crear, rotar y desactivar CMK auditables administradas por el cliente desde la consola de AWS KMS en línea con sus propios requisitos de conformidad.
+* Los controles de seguridad de AWS KMS pueden ayudarle a cumplir los requisitos de conformidad relacionados con el cifrado.
+
+Mientras que el método en este post puede proporcionar los beneficios o requisitos en la lista anterior, usted debe entender cuidadosamente algunas de las compensaciones que vienen con un mayor control sobre el cifrado. AWS KMS establece cuotas de solicitudes por segundo (RPS) para garantizar que puede proporcionar un servicio rápido y resistente. Por ejemplo, el número predeterminado de solicitudes a AWS KMS está limitado entre 5.500 y 30.000 RPS (dependiendo de la región de AWS). Para obtener más información sobre los límites de AWS KMS y cómo solicitar un aumento del límite, consulte Límites de AWS KMS. Las cuotas de solicitud de AWS KMS son ajustables, excepto la cuota del almacén de claves personalizado. Si debe superar una cuota, puede solicitar un aumento de cuota en Service Quotas. Utilice la consola Service Quotas o la operación RequestServiceQuotaIncrease. Para obtener más información, consulte Solicitud de aumento de cuota en la Guía del usuario de Service Quotas. Si Service Quotas para AWS KMS no está disponible en la región de AWS, visite el Centro de soporte de AWS y cree un caso.
+
+El uso de AWS KMS con claves administradas por el cliente también tiene consideraciones de coste. Para ayudar a comprender este impacto, supongamos que almacena 10 TB de objetos de 1 GB almacenados en S3 Standard en la región de Europa (Londres). A lo largo del mes, descarga los objetos 2.000.000 veces y sobrescribe 10.000 de ellos con versiones actualizadas, todo ello dentro de la misma región.
+
+Costes de S3 = 240,86 $ al mes
+Si utilizara SSE-S3, éste sería el coste total. Sin embargo, si cambiaste el cifrado a SSE-KMS, debes tener en cuenta 10.000 solicitudes de cifrado y 2.000.000 de solicitudes de descifrado a lo largo del mes.
+
+* Una CMK de AWS KMS = 1
+* Cifrado y descifrado = $6
+
+
+

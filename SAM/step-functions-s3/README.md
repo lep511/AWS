@@ -43,8 +43,6 @@ En el siguiente paso, construirá un flujo de trabajo con un estado de mapa dist
 
 Ejecutar el comando `bash deploy.sh` en una terminal para crear el flujo de trabajo de Step Functions.
 
-![Image.png](https://static.us-east-1.prod.workshops.aws/public/a021e5c2-befc-47d7-b74a-cb61e82106d8/static/img/en/module-distributed-map/DistributedMap.png)
-
 Hemos proporcionado código de procesamiento de datos en las siguientes funciones Lambda:
 
 * **TemperaturesFunction**: Esta función Lambda es ejecutada por cada ejecución de flujo de trabajo hijo del estado Mapa Distribuido y calcula las temperaturas medias más altas por ubicación y ciudad para un subconjunto de los datos.

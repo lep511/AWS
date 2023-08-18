@@ -4,4 +4,11 @@ if [ ! -d "./libs/python" ]; then
     pip3 install -r req.txt -t libs/python
 fi
 sam build
-sam deploy --template-file template.yaml --capabilities CAPABILITY_NAMED_IAM --guided
+if [ -z "$1" ]
+  then
+    sam deploy --template-file template.yaml --capabilities CAPABILITY_NAMED_IAM --guided
+    exit 1
+  else
+    sam deploy --template-file template.yaml --capabilities CAPABILITY_NAMED_IAM --guided --profile $1
+    exit 1
+fi

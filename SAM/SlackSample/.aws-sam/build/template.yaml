@@ -35,6 +35,9 @@ Resources:
                     Label:
                     - CRITICAL
                     - HIGH
+                  Workflow:
+                    Status:
+                    - NEW
     Metadata:
       SamResourceId: SlackFunction
   Libs:

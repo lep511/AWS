@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Step Functions sample project demonstrating the Request Response
+  pattern
+Resources:
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: RequestResponseTopic
+  UtilityBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: utility-s3-${AWS::AccountId}
+  FilesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: files-s3-${AWS::AccountId}
+  FunctionCheckEncryption:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.10
+      CodeUri: FunctionCheckEncryption
+      Description: Checks if the object is encrypted
+      MemorySize: 256
+      Timeout: 120
+      Policies:
+      - AWSLambdaBasicExecutionRole
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:Get*
+          Resource:
+            Fn::Sub: arn:aws:s3:::${FilesBucket}/*
+    Metadata:
+      SamResourceId: FunctionCheckEncryption
+  StatesExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: states.amazonaws.com
+          Action: sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: StatesExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sns:Publish
+            Resource:
+              Ref: SNSTopic
+  RequestResponseStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      DefinitionString:
+        Fn::Sub:
+        - "{\n  \"Comment\": \"An example of the Amazon States Language for scheduling\
+          \ a task.\",\n  \"StartAt\": \"S3 object keys\",\n  \"States\": {\n    \"\
+          S3 object keys\": {\n      \"Type\": \"Map\",\n      \"ItemProcessor\":\
+          \ {\n        \"ProcessorConfig\": {\n          \"Mode\": \"DISTRIBUTED\"\
+          ,\n          \"ExecutionType\": \"EXPRESS\"\n        },\n        \"StartAt\"\
+          : \"DistributedMap-EncryptionCheck\",\n        \"States\": {\n         \
+          \ \"DistributedMap-EncryptionCheck\": {\n            \"Type\": \"Task\"\
+          ,\n            \"Resource\": \"arn:aws:states:::lambda:invoke\",\n     \
+          \       \"OutputPath\": \"$.Payload\",\n            \"Parameters\": {\n\
+          \              \"Payload.$\": \"$\",\n              \"FunctionName\": \"\
+          ${functionArn}\"\n            },\n            \"Retry\": [\n           \
+          \   {\n                \"ErrorEquals\": [\n                  \"Lambda.ServiceException\"\
+          ,\n                  \"Lambda.AWSLambdaException\",\n                  \"\
+          Lambda.SdkClientException\",\n                  \"Lambda.TooManyRequestsException\"\
+          \n                ],\n                \"IntervalSeconds\": 2,\n        \
+          \        \"MaxAttempts\": 6,\n                \"BackoffRate\": 2\n     \
+          \         }\n            ],\n            \"End\": true\n          }\n  \
+          \      }\n      },\n      \"ItemReader\": {\n        \"Resource\": \"arn:aws:states:::s3:listObjectsV2\"\
+          ,\n        \"Parameters\": {\n          \"Bucket\": \"${filesBucket}\"\n\
+          \        }\n      },\n      \"MaxConcurrency\": 1000,\n      \"Label\":\
+          \ \"S3objectkeys\",\n      \"Next\": \"Wait for Timestamp\",\n      \"ItemBatcher\"\
+          : {\n        \"MaxItemsPerBatch\": 20\n      },\n      \"ToleratedFailurePercentage\"\
+          : 5,\n      \"ResultWriter\": {\n        \"Resource\": \"arn:aws:states:::s3:putObject\"\
+          ,\n        \"Parameters\": {\n          \"Bucket\": \"${utilityBucket}\"\
+          ,\n          \"Prefix\": \"results\"\n        }\n      }\n    },\n    \"\
+          Wait for Timestamp\": {\n      \"Type\": \"Wait\",\n      \"SecondsPath\"\
+          : \"$.timer_seconds\",\n      \"Next\": \"Send SNS Message\"\n    },\n \
+          \   \"Send SNS Message\": {\n      \"Type\": \"Task\",\n      \"Resource\"\
+          : \"arn:aws:states:::sns:publish\",\n      \"Parameters\": {\n        \"\
+          TopicArn\": \"${topicArn}\",\n        \"Message.$\": \"$.message\"\n   \
+          \   },\n      \"End\": true\n    }\n  }\n}"
+        - topicArn:
+            Ref: SNSTopic
+        - functionArn:
+            Fn::GetAtt:
+            - FunctionCheckEncryption
+            - Arn
+        - filesBucket:
+            Ref: FilesBucket
+        - utilityBucket:
+            Ref: UtilityBucket
+      RoleArn:
+        Fn::GetAtt:
+        - StatesExecutionRole
+        - Arn
+Outputs:
+  StateMachineArn:
+    Value:
+      Ref: RequestResponseStateMachine
+  ExecutionInput:
+    Description: Sample input to StartExecution.
+    Value:
+      Fn::Sub:
+      - "{\n  \"topic\": \"${topicArn}\",\n  \"message\": \"Welcome to re:Invent!\"\
+        ,\n  \"timer_seconds\": 5\n}"
+      - topicArn:
+          Ref: SNSTopic
