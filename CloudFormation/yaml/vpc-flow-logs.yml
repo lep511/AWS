@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: "This ClouDformation template will create rsources like EC2, IAM Roles, Log groups needed for VPCflow logs."
+Parameters:
+  InstanceType:
+    Description: Web Host EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+  MyVPC:
+    Description: Select Your VPC (this will be with name "VPC-Lab")
+    Type: 'AWS::EC2::VPC::Id'
+  PublicSubnet:
+    Description: Select a Public Subnet from your VPC that has access to the internet
+    Type: 'AWS::EC2::Subnet::Id'
+Mappings:
+  RegionMap:
+    eu-north-1:
+      AMI: ami-06077dff17d5cd454
+    ap-south-1:
+      AMI: ami-076754bea03bde973
+    eu-west-3:
+      AMI: ami-01d14e0ab732be0e4
+    eu-west-2:
+      AMI: ami-060c4f2d72966500a
+    eu-west-1:
+      AMI: ami-080af029940804103
+    ap-northeast-3:
+      AMI: ami-071355a48aa7de94e
+    ap-northeast-2:
+      AMI: ami-0029dbeb91e3b0f5f
+    ap-northeast-1:
+      AMI: ami-07b4f72c4c356c19d
+    sa-east-1:
+      AMI: ami-06a6cd930c86feb26
+    ca-central-1:
+      AMI: ami-0ba438e27012de9af
+    ap-southeast-1:
+      AMI: ami-0abb8f6b71e7614d5
+    ap-southeast-2:
+      AMI: ami-089e8a52c00cede0b
+    eu-central-1:
+      AMI: ami-00e76d391403fc721
+    us-east-1:
+      AMI: ami-0c293f3f676ec4f90
+    us-east-2:
+      AMI: ami-08b6f2a5c291246a0
+    us-west-1:
+      AMI: ami-051317f1184dd6e92
+    us-west-2:
+      AMI: ami-0b9f27b05e1de14e9
+Resources:
+  WebhostSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref MyVPC
+      GroupName: !Sub ${AWS::StackName} - Website Security Group
+      GroupDescription: Allow Access to the Webhost on Port 80
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} - Web Host Security Group
+  WebServerInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: 
+        Fn::FindInMap: 
+        - RegionMap
+        - Ref: AWS::Region
+        - AMI
+      InstanceType: !Ref InstanceType
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref WebhostSecurityGroup
+          AssociatePublicIpAddress: 'true'
+          DeviceIndex: '0'
+          DeleteOnTermination: 'true'
+          SubnetId: !Ref PublicSubnet
+      UserData: 
+        Fn::Base64:
+          !Sub |
+          #!/bin/sh
+          # Install a LAMP stack
+          amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+          yum -y install httpd php-mbstring
+          # Start the web server
+          chkconfig httpd on
+          systemctl start httpd
+          # Install the web pages for our lab
+          if [ ! -f /var/www/html/immersion-day-app-php7.tar.gz ]; then
+            cd /var/www/html
+            wget https://aws-joozero.s3.ap-northeast-2.amazonaws.com/immersion-day-app-php7.tar.gz  
+            tar xvfz immersion-day-app-php7.tar.gz
+          fi
+          # Install the AWS SDK for PHP
+          if [ ! -f /var/www/html/aws.zip ]; then
+            cd /var/www/html
+            mkdir vendor
+            cd vendor
+            wget https://docs.aws.amazon.com/aws-sdk-php/v3/download/aws.zip
+            unzip aws.zip
+          fi
+          # Update existing packages
+          yum -y update
+  RoleForVPCFlowLogs:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: RoleForVPCFlowLogs
+      Path: /
+      Description: Role to provide access to VPC Flow logs to Cloudwatch Logs
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - vpc-flow-logs.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: VPCCloudWatchLogsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Effect: Allow
+                Resource: '*'
+  VPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: VPCFlowLogGroup
+      RetentionInDays: 7
+Outputs:
+  PublicIP:
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - WebServerInstance
+          - PublicIp
+    Description: Newly created webhost Public IP
+  PublicDNS:
+    Value: !Join 
+      - ''
+      - - 'http://'
+        - !GetAtt 
+          - WebServerInstance
+          - PublicDnsName
+    Description: Newly created webhost Public DNS URL
