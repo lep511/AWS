@@ -1,0 +1,283 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  simple-app
+
+  Sample SAM Template for simple-app
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 128
+    Environment:
+      Variables:
+        INVENTORY_TABLE: !Ref Inventory
+        EVENT_BUS_NAME: !Ref StockAppBus
+
+Resources:
+  #############
+  # EVENT BUS 
+  #############
+  StockAppBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: "StockAppBus"
+
+
+  #############
+  # LOGGING
+  #############
+  LogGroupForEvents:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /application/StockApp
+
+  LogsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: !Ref StockAppBus
+      EventPattern:
+        source: 
+          - 'StockApp'
+        account:
+          - !Ref AWS::AccountId
+      Targets:
+        - Arn: !GetAtt LogGroupForEvents.Arn
+          Id: LogTarget
+
+  LogGroupForEventsPolicy:
+    Type: AWS::Logs::ResourcePolicy
+    Properties:
+      PolicyName: EventBridgeToCWLogsPolicy
+      PolicyDocument: !Sub >
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "EventBridgetoCWLogsCreateLogStreamPolicy",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "events.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "logs:CreateLogStream"
+              ],
+              "Resource": [
+                "${LogGroupForEvents.Arn}"
+              ]
+            },
+            {
+              "Sid": "EventBridgetoCWLogsPutLogEventsPolicy",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "events.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "logs:PutLogEvents"
+              ],
+              "Resource": [
+                "${LogGroupForEvents.Arn}"
+              ],
+              "Condition": {
+                "ArnEquals": {"AWS:SourceArn": "${LogsRule.Arn}"}
+              }
+            }
+          ]
+        }
+
+  #############
+  # API AND FUNCTIONS
+  #############
+  ApiGatewayApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: Prod
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - "*"
+        AllowMethods:
+          - POST
+        AllowCredentials: false
+
+  PurchaseFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: purchase/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Events:
+        AddImage:
+          Type: HttpApi
+          Properties:
+            Path: /purchase
+            Method: post
+            ApiId: !Ref ApiGatewayApi
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/PurchaseFunctionRole
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref StockAppBus
+
+  StockFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: stock/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/StockFunctionRole
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref Inventory
+      Events:
+        AddImage:
+          Type: HttpApi
+          Properties:
+            Path: /stock
+            Method: get
+            ApiId: !Ref ApiGatewayApi
+
+  InventoryFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: inventory/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Events:
+        DeliveryEvents:
+          Type: CloudWatchEvent
+          Properties:
+            EventBusName: !Ref StockAppBus
+            Pattern:
+              source: ["StockApp"]
+              detail-type:
+                - Purchase
+                - Replenish
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/InventoryFunctionRole
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Inventory
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref StockAppBus
+
+
+  ReplenishFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: replenish/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Events:
+        DeliveryEvents:
+          Type: CloudWatchEvent
+          Properties:
+            EventBusName: !Ref StockAppBus
+            Pattern:
+              source: ["StockApp"]
+              detail-type:
+                - StockLevel
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/ReplenishFunctionRole
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref StockAppBus
+        - DynamoDBReadPolicy:
+            TableName: !Ref Inventory
+
+  #############
+  # DYNAMO TABLE
+  #############
+  Inventory:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Inventory
+      AttributeDefinitions:
+        - AttributeName: Location
+          AttributeType: S
+        - AttributeName: SKU
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: Location
+          KeyType: HASH
+        - AttributeName: SKU
+          KeyType: RANGE  
+
+  # AddItemsCustomResource:
+  #   Type: Custom::AddDynamoDBItems
+  #   Properties:
+  #     ServiceToken: !GetAtt DynamoDBItemsLambdaFunction.Arn
+  #     TableName: !Ref Inventory
+
+  # DynamoDBItemsLambdaFunction:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     Handler: index.handler
+  #     Runtime: python3.9
+  #     Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LambdaApplicationRole
+  #     Timeout: 10
+  #     Code:
+  #       ZipFile: |
+  #         import boto3
+  #         import json
+
+  #         def send_response(event, context, response_status, response_data):
+  #             response_body = json.dumps({
+  #                 "Status": response_status,
+  #                 "Reason": "See the details in CloudWatch Log Stream: " + context.log_stream_name,
+  #                 "PhysicalResourceId": context.log_stream_name,
+  #                 "StackId": event['StackId'],
+  #                 "RequestId": event['RequestId'],
+  #                 "LogicalResourceId": event['LogicalResourceId'],
+  #                 "Data": response_data
+  #             })
+
+  #             headers = {
+  #                 "Content-Type": "",
+  #                 "Content-Length": str(len(response_body))
+  #             }
+
+  #             response = requests.put(event['ResponseURL'], data=response_body, headers=headers)
+  #             print(f"Status code: {response.status_code}, response text: {response.text}")
+          
+  #         def handler(event, context):
+  #             dynamodb = boto3.resource('dynamodb')
+  #             table = dynamodb.Table(event['ResourceProperties']['TableName'])
+
+  #             item = {
+  #                 "Location": "90210",
+  #                 "SKU": "ItemX",
+  #                 "StockLevel": 5,
+  #                 "ReplenishAmount": 10,
+  #                 "ReplenishBelow": 3
+  #             }
+
+  #             # Put the item into the table
+  #             table.put_item(Item=item)
+
+  #             return {
+  #               "statusCode": 200,
+  #               "body": "Item added to the table"
+  #               }
+
+
+Outputs:
+  ApiGatewayEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ApiGatewayApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+
+  TableName:
+    Description: "Dynamo table name"
+    Value: !Ref Inventory

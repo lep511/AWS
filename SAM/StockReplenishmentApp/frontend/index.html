@@ -1,0 +1,111 @@
+
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <title>Event App</title>
+
+    
+
+    
+
+<!-- CSS only -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-Zenh87qX5JnK2Jl0vWa8Ck2rdkQ2Bzep5IDxbcnCeuOxjzrPF/et3URy9Bv1WTRi" crossorigin="anonymous">
+
+
+    
+  </head>
+  <body style="background-color: #eee;">
+    
+
+    <main>
+      <section>
+        <div class="container py-5">
+    <div class="container py-5">
+
+      <h2 class="pb-2 border-bottom">Event App</h2>
+
+      <div class="row">
+        <div class="col-lg-4">
+          <div class="card mb-4">
+            <div class="card-body">
+              <h5 class="my-3">Inventory</h5>
+              <div class="d-flex justify-content-start rounded-3 p-2 mb-2"
+              style="background-color: #efefef;">
+              <div>
+                <p class="small text-muted mb-1">Location</p>
+                <p class="mb-0">90210</p>
+              </div>
+              <div class="px-3">
+                <p class="small text-muted mb-1">SKU</p>
+                <p class="mb-0">ItemX</p>
+              </div>
+              <div class="px-3">
+                <p class="small text-muted mb-1">Stock Level</p>
+                <p class="mb-0"><span id="stockLevel">-</span></p>
+              </div>
+            </div>
+
+              <div class="d-flex justify-content-center mb-2">
+                <button type="button" class="btn btn-primary ms-1" id="createPurchase">Create Purchase</button>
+                <button type="button" class="btn btn-primary ms-1" id="getStockLevel">Get Stock Level</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="feature col" id="buttonHolder"></div>
+      </div>
+    </div>
+  </section>
+
+
+
+
+</main>
+
+
+<!-- JavaScript Bundle with Popper -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-OERcA2EqjJCMA+/3y+gxIOqMEjwtxJY7qPCqsdltbNJuaOe923+mo//f6V8Qbsw3" crossorigin="anonymous"></script>
+      
+<script>
+
+// REPLACE THIS WITH THE CORRECT ENDPOINT IN BOOTSTRAPPING
+var baseUrl = "https://s9b1yi2k9c.execute-api.us-west-2.amazonaws.com/Prod";
+
+var makeSpinner = function () {
+  var spinner = document.createElement("div");
+  spinner.setAttribute("class", "spinner-border spinner-border-sm");
+  spinner.setAttribute("role", "status");
+  document.getElementById('buttonHolder').appendChild(spinner);
+  return spinner;
+}
+
+var createPurchaseHandler = function () {
+  var spinner = makeSpinner();
+  fetch(`${baseUrl}/purchase?Location=90210&SKU=ItemX&PurchaseCount=1`, {method: 'POST'})
+  .then((response) => response.json())
+  .then((data) => document.getElementById('buttonHolder').removeChild(spinner))
+}
+
+var getStockLevelHandler = function () {
+  var spinner = makeSpinner();
+  fetch(`${baseUrl}/stock?Location=90210&SKU=ItemX`)
+    .then((response) => response.json())
+    .then((data) => {
+      document.getElementById('stockLevel').innerText = data.StockLevel;
+      document.getElementById('buttonHolder').removeChild(spinner);
+    });
+
+}
+
+document.getElementById('createPurchase').addEventListener('click', createPurchaseHandler);
+document.getElementById('getStockLevel').addEventListener('click', getStockLevelHandler);
+
+
+</script>
+  </body>
+</html>
