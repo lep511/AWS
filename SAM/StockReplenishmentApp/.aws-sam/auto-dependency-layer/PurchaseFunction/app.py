@@ -5,11 +5,13 @@ import boto3
 EVENT_BUS_NAME = os.environ["EVENT_BUS_NAME"]
 
 def lambda_handler(event, context):
+    print(event)
     eventbridge = boto3.client('events')
     # write a purchase event to the eventbus
-    location = event["queryStringParameters"]["Location"]
-    sku = event["queryStringParameters"]["SKU"]
-    purchaseCount = event["queryStringParameters"]["PurchaseCount"]
+    body_data = json.loads(event["body"])
+    location = body_data["Location"]
+    sku = body_data["SKU"]
+    purchaseCount = body_data["PurchaseCount"]
 
     eventbridge.put_events(
         Entries=[
