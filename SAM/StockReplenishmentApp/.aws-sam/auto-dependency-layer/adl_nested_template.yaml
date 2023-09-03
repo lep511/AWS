@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS SAM CLI Nested Stack for Auto Dependency Layer Creation
+Metadata:
+  SamCliInfo: 1.94.0
+  key: AWS SAM CLI sync command
+Outputs:
+  DynamoDBItems10114e74DepLayer:
+    Value:
+      Ref: DynamoDBItems10114e74DepLayer
+  InventoryFunctionb67d8ea4DepLayer:
+    Value:
+      Ref: InventoryFunctionb67d8ea4DepLayer
+  PurchaseFunction96c9c9d7DepLayer:
+    Value:
+      Ref: PurchaseFunction96c9c9d7DepLayer
+  ReplenishFunction19aa3c10DepLayer:
+    Value:
+      Ref: ReplenishFunction19aa3c10DepLayer
+  StockFunction2c360e0bDepLayer:
+    Value:
+      Ref: StockFunction2c360e0bDepLayer
+Resources:
+  DynamoDBItems10114e74DepLayer:
+    Metadata:
+      CreatedBy: AWS SAM CLI sync command
+    Properties:
+      CompatibleRuntimes:
+      - python3.9
+      ContentUri: /home/lep511/agit/AWS/SAM/StockReplenishmentApp/.aws-sam/auto-dependency-layer/DynamoDBItems10114e74DepLayer
+      Description: Auto created layer for dependencies of function DynamoDBItems
+      LayerName: samapp8887346899-DynamoDBItems10114e74-DepLayer
+      RetentionPolicy: Delete
+    Type: AWS::Serverless::LayerVersion
+  InventoryFunctionb67d8ea4DepLayer:
+    Metadata:
+      CreatedBy: AWS SAM CLI sync command
+    Properties:
+      CompatibleRuntimes:
+      - python3.9
+      ContentUri: /home/lep511/agit/AWS/SAM/StockReplenishmentApp/.aws-sam/auto-dependency-layer/InventoryFunctionb67d8ea4DepLayer
+      Description: Auto created layer for dependencies of function InventoryFunction
+      LayerName: samapp8887346899-InventoryFunctionb67d8ea4-DepLayer
+      RetentionPolicy: Delete
+    Type: AWS::Serverless::LayerVersion
+  PurchaseFunction96c9c9d7DepLayer:
+    Metadata:
+      CreatedBy: AWS SAM CLI sync command
+    Properties:
+      CompatibleRuntimes:
+      - python3.9
+      ContentUri: /home/lep511/agit/AWS/SAM/StockReplenishmentApp/.aws-sam/auto-dependency-layer/PurchaseFunction96c9c9d7DepLayer
+      Description: Auto created layer for dependencies of function PurchaseFunction
+      LayerName: samapp8887346899-PurchaseFunction96c9c9d7-DepLayer
+      RetentionPolicy: Delete
+    Type: AWS::Serverless::LayerVersion
+  ReplenishFunction19aa3c10DepLayer:
+    Metadata:
+      CreatedBy: AWS SAM CLI sync command
+    Properties:
+      CompatibleRuntimes:
+      - python3.9
+      ContentUri: /home/lep511/agit/AWS/SAM/StockReplenishmentApp/.aws-sam/auto-dependency-layer/ReplenishFunction19aa3c10DepLayer
+      Description: Auto created layer for dependencies of function ReplenishFunction
+      LayerName: samapp8887346899-ReplenishFunction19aa3c10-DepLayer
+      RetentionPolicy: Delete
+    Type: AWS::Serverless::LayerVersion
+  StockFunction2c360e0bDepLayer:
+    Metadata:
+      CreatedBy: AWS SAM CLI sync command
+    Properties:
+      CompatibleRuntimes:
+      - python3.9
+      ContentUri: /home/lep511/agit/AWS/SAM/StockReplenishmentApp/.aws-sam/auto-dependency-layer/StockFunction2c360e0bDepLayer
+      Description: Auto created layer for dependencies of function StockFunction
+      LayerName: samapp8887346899-StockFunction2c360e0b-DepLayer
+      RetentionPolicy: Delete
+    Type: AWS::Serverless::LayerVersion
+Transform: AWS::Serverless-2016-10-31

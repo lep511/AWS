@@ -18,18 +18,12 @@ def lambda_handler(event, context):
             'SKU': { 'AttributeValueList' : [ { "S" : sku } ], 'ComparisonOperator': 'EQ' }
         },
     )
-    
-    if len(result["Items"]) > 0:
-        stock_level = result["Items"][0]["StockLevel"]['N']
-        return {
-            "statusCode": 200,
-            "headers": { "access-control-allow-origin": "*" },
-            "body": json.dumps({
-                "StockLevel": stock_level
-            })
-        }
-    else:
-        return {
-            "statusCode": 404,
-            "body": json.dumps("Item not found."),
-        }
+
+    stock_level = result["Items"][0]["StockLevel"]['N'] if len(result["Items"]) > 0 else None
+    return {
+        "statusCode": 200,
+        "headers": { "access-control-allow-origin": "*" },
+        "body": json.dumps({
+            "StockLevel": stock_level
+        }),
+    }
