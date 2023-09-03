@@ -1,22 +1,18 @@
 variables:
   SAM_TEMPLATE: template.yaml
   PERMISSIONS_PROVIDER: AWS IAM
-  PIPELINE_USER_ACCESS_KEY_ID: ${AKIATLA5JCZBFHGMOGSK}
-  PIPELINE_USER_SECRET_ACCESS_KEY: ${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}
+  PIPELINE_USER_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+  PIPELINE_USER_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
   TESTING_STACK_NAME: sam-app
   TESTING_REGION: us-east-1
-  TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::229842163266:role/aws-sam-cli-managed-dev-pipe-PipelineExecutionRole-15UZYETCB8HWY
-  TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::229842163266:role/aws-sam-cli-managed-dev-p-CloudFormationExecutionR-1ITNRY2GPHND
-  TESTING_ARTIFACTS_BUCKET: aws-sam-cli-managed-dev-pipeline-artifactsbucket-1vucmeuirkmgk
+  TESTING_ARTIFACTS_BUCKET: ${AWS_BUCKET}
   # If there are functions with "Image" PackageType in your template,
   # uncomment the line below and add "--image-repository ${TESTING_IMAGE_REPOSITORY}" to
   # testing "sam package" and "sam deploy" commands.'
   # TESTING_IMAGE_REPOSITORY = '0123456789.dkr.ecr.region.amazonaws.com/repository-name'
   PROD_STACK_NAME: sam-app-stg2
   PROD_REGION: us-east-1
-  PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::229842163266:role/aws-sam-cli-managed-dev-pipe-PipelineExecutionRole-15UZYETCB8HWY
-  PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::229842163266:role/aws-sam-cli-managed-dev-p-CloudFormationExecutionR-1ITNRY2GPHND
-  PROD_ARTIFACTS_BUCKET: aws-sam-cli-managed-dev-pipeline-artifactsbucket-1vucmeuirkmgk
+  PROD_ARTIFACTS_BUCKET: ${AWS_BUCKET}
   # If there are functions with "Image" PackageType in your template,
   # uncomment the line below and add "--image-repository ${PROD_IMAGE_REPOSITORY}" to
   # prod "sam package" and "sam deploy" commands.'
@@ -43,6 +39,9 @@ before_script:
   - apk add --update python3 py-pip python3-dev build-base libffi-dev
   - pip install --upgrade pip
   - pip install awscli aws-sam-cli
+  - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+  - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
+  - aws s3 mb s3://${TESTING_ARTIFACTS_BUCKET} --region ${TESTING_REGION}
 
 stages:
   - unit-test
@@ -66,14 +65,14 @@ build-and-deploy-feature:
   only:
     - /^feature-.*$/
   script:
-    - . assume-role.sh ${TESTING_PIPELINE_EXECUTION_ROLE} feature-deployment "${PERMISSIONS_PROVIDER}"
+    - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+    - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
     - sam build --template ${SAM_TEMPLATE} --use-container
     - sam deploy --stack-name $(echo ${CI_COMMIT_REF_NAME} | tr -cd '[a-zA-Z0-9-]')
                  --capabilities CAPABILITY_IAM
                  --region ${TESTING_REGION}
                  --s3-bucket ${TESTING_ARTIFACTS_BUCKET}
                  --no-fail-on-empty-changeset
-                 --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
 
 # This stage is triggered for main branch you set in the question,
 # which will build the stack, package the application, upload the
@@ -83,15 +82,13 @@ build-and-package:
   only:
     - main
   script:
+    - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+    - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
     - sam build --template ${SAM_TEMPLATE} --use-container
-
-    - . assume-role.sh ${TESTING_PIPELINE_EXECUTION_ROLE} testing-stage-packaging "${PERMISSIONS_PROVIDER}"
 
     - sam package --s3-bucket ${TESTING_ARTIFACTS_BUCKET}
                    --region ${TESTING_REGION}
                    --output-template-file packaged-testing.yaml
-
-    - . assume-role.sh ${PROD_PIPELINE_EXECUTION_ROLE} prod-stage-packaging "${PERMISSIONS_PROVIDER}"
 
     - sam package --s3-bucket ${PROD_ARTIFACTS_BUCKET}
                   --region ${PROD_REGION}
@@ -110,14 +107,16 @@ deploy-testing:
   only:
     - main
   script:
-    - . assume-role.sh ${TESTING_PIPELINE_EXECUTION_ROLE} testing-deployment "${PERMISSIONS_PROVIDER}"
+    - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+    - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
     - sam deploy --stack-name ${TESTING_STACK_NAME}
                  --template packaged-testing.yaml
                  --capabilities CAPABILITY_IAM
                  --region ${TESTING_REGION}
                  --s3-bucket ${TESTING_ARTIFACTS_BUCKET}
                  --no-fail-on-empty-changeset
-                 --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
+    - aws cloudformation describe-stacks --stack-name ${TESTING_STACK_NAME} --region ${TESTING_REGION} --query "Stacks[0].Outputs[?OutputKey=='DynamoDBFunction'].OutputValue" --output text > function_name
+    - aws lambda invoke --function-name $(cat function_name) --region ${TESTING_REGION} output.json
 
 # Uncomment and modify the following stage for integration tests
 #
@@ -131,18 +130,19 @@ deploy-testing:
 # This stage is triggered for main branch you set in the question,
 # which will deploy the prod stage SAM application using
 # the templated file generated.
-deploy-prod:
-  stage: prod
-  # uncomment this to have a manual approval step before deployment to production
-  # when: manual
-  only:
-    - main
-  script:
-    - . assume-role.sh ${PROD_PIPELINE_EXECUTION_ROLE} prod-deployment "${PERMISSIONS_PROVIDER}"
-    - sam deploy --stack-name ${PROD_STACK_NAME}
-                 --template packaged-prod.yaml
-                 --capabilities CAPABILITY_IAM
-                 --region ${PROD_REGION}
-                 --s3-bucket ${PROD_ARTIFACTS_BUCKET}
-                 --no-fail-on-empty-changeset
-                 --role-arn ${PROD_CLOUDFORMATION_EXECUTION_ROLE}
+#deploy-prod:
+#  stage: prod
+#  # uncomment this to have a manual approval step before deployment to production
+#  # when: manual
+#  only:
+#    - main
+#  script:
+#    - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+#    - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
+#    - sam deploy --stack-name ${PROD_STACK_NAME}
+#                 --template packaged-prod.yaml
+#                 --capabilities CAPABILITY_IAM
+#                 --region ${PROD_REGION}
+#                 --s3-bucket ${PROD_ARTIFACTS_BUCKET}
+#                 --no-fail-on-empty-changeset
+

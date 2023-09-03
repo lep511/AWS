@@ -1,6 +1,8 @@
 ## AWS SAM Pipelines
 ### Genere automáticamente canalizaciones de implementación para aplicaciones sin servidor
 
+#### [Link](https://aws.amazon.com/es/blogs/compute/introducing-aws-sam-pipelines-automatically-generate-deployment-pipelines-for-serverless-applications/)
+
 AWS SAM Pipelines facilita la creación de canalizaciones de integración e implementación continuas (CI/CD) seguras para el sistema de integración e implementación continuas (CI/CD) preferido de su organización.
 
 Canalizaciones de AWS SAM
