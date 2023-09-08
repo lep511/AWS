@@ -1,0 +1,152 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Template to demonstrate maximum concurrency for Lambda function when
+  using SQS queue as as event source.
+Globals:
+  Function:
+    Timeout: 15
+    CodeUri: src/
+    Runtime: python3.9
+Resources:
+  ReservedConcurrencyDeadLetterQueue:
+    Type: AWS::SQS::Queue
+  ReservedConcurrencyQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - ReservedConcurrencyDeadLetterQueue
+          - Arn
+        maxReceiveCount: 1
+      VisibilityTimeout: 20
+  MaxConcurrencyDeadLetterQueue:
+    Type: AWS::SQS::Queue
+  MaxConcurrencyQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - MaxConcurrencyDeadLetterQueue
+          - Arn
+        maxReceiveCount: 1
+      VisibilityTimeout: 20
+  MaxConcurrencyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Events:
+        SQSEventFromMax:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - MaxConcurrencyQueue
+              - Arn
+            BatchSize: 1
+            Enabled: true
+            ScalingConfig:
+              MaximumConcurrency: 15
+      CodeUri: MaxConcurrencyFunction
+    Metadata:
+      SamResourceId: MaxConcurrencyFunction
+  ReservedConcurrencyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      ReservedConcurrentExecutions: 5
+      Handler: app.lambda_handler
+      Events:
+        SQSEventFromReserved:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - ReservedConcurrencyQueue
+              - Arn
+            BatchSize: 1
+            Enabled: true
+      CodeUri: ReservedConcurrencyFunction
+    Metadata:
+      SamResourceId: ReservedConcurrencyFunction
+  CloudWatchDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: Lambda-SQS-concurrency-monitoring
+      DashboardBody:
+        Fn::Sub:
+        - "{\n  \"widgets\": [\n      {\n          \"height\": 4,\n          \"width\"\
+          : 16,\n          \"y\": 0,\n          \"x\": 0,\n          \"type\": \"\
+          metric\",\n          \"properties\": {\n              \"metrics\": [\n \
+          \                 [ \"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\"\
+          , \"QueueName\", \"${MaxConcurrencyDeadLetterQueue}\" ],\n             \
+          \     [ \"...\", \"${ReservedConcurrencyDeadLetterQueue}\" ]\n         \
+          \     ],\n              \"sparkline\": false,\n              \"view\": \"\
+          singleValue\",\n              \"region\": \"${Region}\",\n             \
+          \ \"period\": 900,\n              \"stat\": \"Maximum\",\n             \
+          \ \"title\": \"Approximate number of messages visible in the DLQ\"\n   \
+          \       }\n      },\n      {\n          \"height\": 7,\n          \"width\"\
+          : 8,\n          \"y\": 8,\n          \"x\": 0,\n          \"type\": \"metric\"\
+          ,\n          \"properties\": {\n              \"metrics\": [\n         \
+          \         [ \"AWS/Lambda\", \"ConcurrentExecutions\", \"FunctionName\",\
+          \ \"${MaxConcurrencyFunction}\" ],\n                  [ \".\", \"Throttles\"\
+          , \".\", \".\", { \"color\": \"#d62728\", \"stat\": \"Sum\" } ]\n      \
+          \        ],\n              \"view\": \"timeSeries\",\n              \"stacked\"\
+          : false,\n              \"region\": \"${Region}\",\n              \"period\"\
+          : 60,\n              \"stat\": \"Maximum\",\n              \"title\": \"\
+          Max Concurrency Lambda Function\"\n          }\n      },\n      {\n    \
+          \      \"height\": 7,\n          \"width\": 8,\n          \"y\": 8,\n  \
+          \        \"x\": 8,\n          \"type\": \"metric\",\n          \"properties\"\
+          : {\n              \"metrics\": [\n                  [ \"AWS/Lambda\", \"\
+          ConcurrentExecutions\", \"FunctionName\", \"${ReservedConcurrencyFunction}\"\
+          , { \"stat\": \"Maximum\" } ],\n                  [ \".\", \"Throttles\"\
+          , \".\", \".\", { \"color\": \"#d62728\" } ]\n              ],\n       \
+          \       \"view\": \"timeSeries\",\n              \"stacked\": false,\n \
+          \             \"region\": \"${Region}\",\n              \"title\": \"Reserved\
+          \ Concurrency Lambda Function\",\n              \"period\": 60,\n      \
+          \        \"stat\": \"Sum\"\n          }\n      },\n      {\n          \"\
+          type\": \"metric\",\n          \"x\": 0,\n          \"y\": 4,\n        \
+          \  \"width\": 16,\n          \"height\": 4,\n          \"properties\": {\n\
+          \              \"metrics\": [\n                  [ \"AWS/Lambda\", \"Invocations\"\
+          , \"FunctionName\", \"${MaxConcurrencyFunction}\", { \"color\": \"#ff7f0e\"\
+          \ } ],\n                  [ \"...\", \"${ReservedConcurrencyFunction}\"\
+          , { \"color\": \"#2ca02c\" } ]\n              ],\n              \"sparkline\"\
+          : false,\n              \"view\": \"singleValue\",\n              \"region\"\
+          : \"${Region}\",\n              \"period\": 900,\n              \"stat\"\
+          : \"Sum\",\n              \"title\": \"Total invocations in the last 15\
+          \ minutes\"\n          }\n      }\n  ]\n}\n"
+        - MaxConcurrencyDeadLetterQueue:
+            Fn::GetAtt:
+            - MaxConcurrencyDeadLetterQueue
+            - QueueName
+          ReservedConcurrencyDeadLetterQueue:
+            Fn::GetAtt:
+            - ReservedConcurrencyDeadLetterQueue
+            - QueueName
+          Region:
+            Ref: AWS::Region
+          MaxConcurrencyFunction:
+            Ref: MaxConcurrencyFunction
+          ReservedConcurrencyFunction:
+            Ref: ReservedConcurrencyFunction
+Outputs:
+  MaxConcurrencyQueueURL:
+    Description: URL of the SQS queue which sends messages to the Lambda function
+      with the max concurrency configured as 5
+    Value:
+      Ref: MaxConcurrencyQueue
+  ReservedConcurrencyQueueURL:
+    Description: URL of the SQS Queue which sends messages to the Lambda function
+      with max concurrency configured as 5
+    Value:
+      Ref: ReservedConcurrencyQueue
+  DashboardURL:
+    Description: Custom CloudWatch dashboard that highlight SQS and Lambda metrics
+      relevant to maximum and reserved concurrency
+    Value:
+      Fn::Sub:
+      - https://${Region}.console.aws.amazon.com/cloudwatch/home#dashboards:name=Lambda-SQS-concurrency-monitoring
+      - Region:
+          Ref: AWS::Region
