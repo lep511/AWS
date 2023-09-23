@@ -5,6 +5,7 @@ resolve_s3 = true
 s3_prefix = "new-app"
 region = "us-east-1"
 capabilities = "CAPABILITY_NAMED_IAM"
-parameter_overrides = "SlackURL=\"https://hooks.slack.com/services/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\""
+parameter_overrides = "SlackURL=\"https://hooks.slack.com/services/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\""
 image_repositories = []
-profile = "badbob"
+profile = "default"
+confirm_changeset = true
