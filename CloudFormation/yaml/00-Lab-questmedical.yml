@@ -1,0 +1,1542 @@
+Resources:
+  resourcebucket53DBCC9F:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Join:
+          - ""
+          - - resource-bucket-
+            - Ref: AWS::AccountId
+            - "-861"
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/resource-bucket/Resource
+  configbucketDF4EECDA:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Join:
+          - ""
+          - - config-bucket-
+            - Ref: AWS::AccountId
+            - "-861"
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/config-bucket/Resource
+  configbucketPolicyAB6E6830:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: configbucketDF4EECDA
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:GetBucketAcl
+              - s3:ListBucket
+            Condition:
+              StringEquals:
+                aws:SourceAccount:
+                  Ref: AWS::AccountId
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Resource:
+              Fn::GetAtt:
+                - configbucketDF4EECDA
+                - Arn
+          - Action: s3:PutObject
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+                aws:SourceAccount:
+                  Ref: AWS::AccountId
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Resource:
+              Fn::Join:
+                - ""
+                - - Fn::GetAtt:
+                      - configbucketDF4EECDA
+                      - Arn
+                  - /*
+        Version: "2012-10-17"
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/config-bucket/Policy/Resource
+  templatebucket36250E64:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Join:
+          - ""
+          - - gxp-templates-
+            - Ref: AWS::AccountId
+            - "-861"
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/template-bucket/Resource
+  LabVPC841D92ED:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/Resource
+  LabVPCPublicSubnetSubnet1Subnet321ED9D4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      CidrBlock: 10.0.0.0/26
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: PublicSubnet
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1/Subnet
+  LabVPCPublicSubnetSubnet1RouteTable002F0054:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1/RouteTable
+  LabVPCPublicSubnetSubnet1RouteTableAssociation53799F0B:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: LabVPCPublicSubnetSubnet1RouteTable002F0054
+      SubnetId:
+        Ref: LabVPCPublicSubnetSubnet1Subnet321ED9D4
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1/RouteTableAssociation
+  LabVPCPublicSubnetSubnet1DefaultRoute02E1122B:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: LabVPCPublicSubnetSubnet1RouteTable002F0054
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: LabVPCIGW420A2B26
+    DependsOn:
+      - LabVPCVPCGW4296DBEB
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1/DefaultRoute
+  LabVPCPublicSubnetSubnet1EIP27B26D1B:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1/EIP
+  LabVPCPublicSubnetSubnet1NATGateway941E75C4:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId:
+        Ref: LabVPCPublicSubnetSubnet1Subnet321ED9D4
+      AllocationId:
+        Fn::GetAtt:
+          - LabVPCPublicSubnetSubnet1EIP27B26D1B
+          - AllocationId
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1
+    DependsOn:
+      - LabVPCPublicSubnetSubnet1DefaultRoute02E1122B
+      - LabVPCPublicSubnetSubnet1RouteTableAssociation53799F0B
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet1/NATGateway
+  LabVPCPublicSubnetSubnet2Subnet5B76FA53:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      CidrBlock: 10.0.0.64/26
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: PublicSubnet
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2/Subnet
+  LabVPCPublicSubnetSubnet2RouteTable6113A614:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2/RouteTable
+  LabVPCPublicSubnetSubnet2RouteTableAssociationE73AEA69:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: LabVPCPublicSubnetSubnet2RouteTable6113A614
+      SubnetId:
+        Ref: LabVPCPublicSubnetSubnet2Subnet5B76FA53
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2/RouteTableAssociation
+  LabVPCPublicSubnetSubnet2DefaultRoute8359D926:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: LabVPCPublicSubnetSubnet2RouteTable6113A614
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: LabVPCIGW420A2B26
+    DependsOn:
+      - LabVPCVPCGW4296DBEB
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2/DefaultRoute
+  LabVPCPublicSubnetSubnet2EIP0C603F86:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2/EIP
+  LabVPCPublicSubnetSubnet2NATGateway0415F053:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId:
+        Ref: LabVPCPublicSubnetSubnet2Subnet5B76FA53
+      AllocationId:
+        Fn::GetAtt:
+          - LabVPCPublicSubnetSubnet2EIP0C603F86
+          - AllocationId
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2
+    DependsOn:
+      - LabVPCPublicSubnetSubnet2DefaultRoute8359D926
+      - LabVPCPublicSubnetSubnet2RouteTableAssociationE73AEA69
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PublicSubnetSubnet2/NATGateway
+  LabVPCPrivateSubnetSubnet1Subnet2545D8BD:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      CidrBlock: 10.0.0.128/26
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: PrivateSubnet
+        - Key: aws-cdk:subnet-type
+          Value: Private
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet1
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet1/Subnet
+  LabVPCPrivateSubnetSubnet1RouteTable613B053F:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet1
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet1/RouteTable
+  LabVPCPrivateSubnetSubnet1RouteTableAssociationE44C260D:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: LabVPCPrivateSubnetSubnet1RouteTable613B053F
+      SubnetId:
+        Ref: LabVPCPrivateSubnetSubnet1Subnet2545D8BD
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet1/RouteTableAssociation
+  LabVPCPrivateSubnetSubnet1DefaultRoute730E6FD7:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: LabVPCPrivateSubnetSubnet1RouteTable613B053F
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: LabVPCPublicSubnetSubnet1NATGateway941E75C4
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet1/DefaultRoute
+  LabVPCPrivateSubnetSubnet2Subnet17B81800:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      CidrBlock: 10.0.0.192/26
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: PrivateSubnet
+        - Key: aws-cdk:subnet-type
+          Value: Private
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet2
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet2/Subnet
+  LabVPCPrivateSubnetSubnet2RouteTable6686199D:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet2
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet2/RouteTable
+  LabVPCPrivateSubnetSubnet2RouteTableAssociationE230A2B3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: LabVPCPrivateSubnetSubnet2RouteTable6686199D
+      SubnetId:
+        Ref: LabVPCPrivateSubnetSubnet2Subnet17B81800
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet2/RouteTableAssociation
+  LabVPCPrivateSubnetSubnet2DefaultRouteDD24353C:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: LabVPCPrivateSubnetSubnet2RouteTable6686199D
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: LabVPCPublicSubnetSubnet2NATGateway0415F053
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/PrivateSubnetSubnet2/DefaultRoute
+  LabVPCIGW420A2B26:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: CdkLab328315a6Stack/LabVPC
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/IGW
+  LabVPCVPCGW4296DBEB:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: LabVPC841D92ED
+      InternetGatewayId:
+        Ref: LabVPCIGW420A2B26
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LabVPC/VPCGW
+  SecretA720EF05:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      GenerateSecretString: {}
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/Secret/Resource
+  configRole2A27D4AE:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/service-role/AWS_ConfigRole
+      RoleName:
+        Fn::Join:
+          - ""
+          - - Ref: AWS::AccountId
+            - -configRole
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/configRole/Resource
+  ConfigurationRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      RoleARN:
+        Fn::GetAtt:
+          - configRole2A27D4AE
+          - Arn
+      Name: configuration_recorder
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/ConfigurationRecorder
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      S3BucketName:
+        Fn::Join:
+          - ""
+          - - config-bucket-
+            - Ref: AWS::AccountId
+            - "-861"
+    DependsOn:
+      - configbucketPolicyAB6E6830
+      - configbucketDF4EECDA
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/ConfigDeliveryChannel
+  CatalogGroupF7861A14:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Catalog-Users
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/CatalogGroup/Resource
+  catalogUser38CE0001:
+    Type: AWS::IAM::User
+    Properties:
+      Groups:
+        - Ref: CatalogGroupF7861A14
+      LoginProfile:
+        Password:
+          Fn::Join:
+            - ""
+            - - "{{resolve:secretsmanager:"
+              - Ref: SecretA720EF05
+              - :SecretString:::}}
+        PasswordResetRequired: false
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/AWSServiceCatalogEndUserFullAccess
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/ReadOnlyAccess
+      UserName: catalogUser
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/catalogUser/Resource
+  catalogUserPolicyE9483595:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: support:DescribeTrustedAdvisorChecks
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - s3:DeleteObject
+              - s3:DeleteObjectVersion
+            Effect: Allow
+            Resource: arn:aws:s3:::cloudtrail-bucket-*/*
+          - Action: s3:DeleteBucket
+            Effect: Allow
+            Resource: arn:aws:s3:::cloudtrail-bucket-*
+          - Action: cloudformation:DeleteStack
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:aws:cloudformation:us-east-1:"
+                  - Ref: AWS::AccountId
+                  - :stack/SC-*
+        Version: "2012-10-17"
+      PolicyName: catalogUserPolicy
+      Roles: []
+      Users:
+        - Ref: catalogUser38CE0001
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/catalogUserPolicy/Resource
+  Portfolio856A4190:
+    Type: AWS::ServiceCatalog::Portfolio
+    Properties:
+      DisplayName: GxP Infrastructure
+      ProviderName: InfoSec
+      Description: Deploys infrastructure that follows GxP regulatory guidelines.
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/Portfolio/Resource
+  PortfolioPrincipalAssociation:
+    Type: AWS::ServiceCatalog::PortfolioPrincipalAssociation
+    Properties:
+      PortfolioId:
+        Ref: Portfolio856A4190
+      PrincipalARN:
+        Fn::GetAtt:
+          - CatalogGroupF7861A14
+          - Arn
+      PrincipalType: IAM
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/PortfolioPrincipalAssociation
+  LaunchRole2CFB2E44:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - servicecatalog.amazonaws.com
+        Version: "2012-10-17"
+      RoleName: launch_role
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LaunchRole/Resource
+  launchPolicy984ACCBD:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:CreateStack
+              - cloudformation:DeleteStack
+              - cloudformation:DescribeStackEvents
+              - cloudformation:DescribeStacks
+              - cloudformation:GetTemplateSummary
+              - cloudformation:ListStackResources
+              - cloudformation:ListStacks
+              - cloudformation:SetStackPolicy
+              - cloudformation:UpdateStack
+              - cloudformation:ValidateTemplate
+              - cloudtrail:CreateTrail
+              - cloudtrail:DeleteTrail
+              - cloudtrail:StartLogging
+              - cloudtrail:UpdateTrail
+              - config:DeleteConfigRule
+              - config:Describe*
+              - config:PutConfigRule
+              - ec2:Allocate*
+              - ec2:Associate*
+              - ec2:Attach*
+              - ec2:Authorize*
+              - ec2:Create*
+              - ec2:Delete*
+              - ec2:Deregister*
+              - ec2:Describe*
+              - ec2:Detach*
+              - ec2:Disassociate*
+              - ec2:Get*
+              - ec2:Modify*
+              - ec2:Register*
+              - ec2:ReleaseAddress
+              - ec2:ReplaceNetworkAclAssociation
+              - ec2:RevokeSecurityGroupEgress
+              - ec2:RevokeSecurityGroupIngress
+              - ec2:Update*
+              - ecs:CreateCluster
+              - ecs:CreateService
+              - ecs:DeleteCluster
+              - ecs:DeleteService
+              - ecs:DeregisterTaskDefinition
+              - ecs:Describe*
+              - ecs:RegisterTaskDefinition
+              - ecs:UpdateService
+              - elasticloadbalancing:CreateListener
+              - elasticloadbalancing:CreateLoadBalancer
+              - elasticloadbalancing:CreateTargetGroup
+              - elasticloadbalancing:DeleteListener
+              - elasticloadbalancing:DeleteLoadBalancer
+              - elasticloadbalancing:DeleteTargetGroup
+              - elasticloadbalancing:Describe*
+              - elasticloadbalancing:EnableAvailabilityZonesForLoadBalancer
+              - elasticloadbalancing:ModifyLoadBalancerAttributes
+              - elasticloadbalancing:ModifyTargetGroupAttributes
+              - elasticloadbalancing:RegisterInstancesWithLoadBalancer
+              - elasticloadbalancing:RegisterTargets
+              - iam:CreateServiceLinkedRole
+              - iam:DeleteRolePolicy
+              - iam:Get*
+              - iam:List*
+              - logs:*
+              - s3:CreateBucket
+              - s3:DeleteBucket
+              - s3:DeleteBucketPolicy
+              - s3:Describe*
+              - s3:Get*
+              - s3:List*
+              - s3:PutBucketACL
+              - s3:PutBucketPolicy
+              - s3:PutBucketWebsite
+              - s3:PutEncryptionConfiguration
+              - s3:PutObject
+              - s3:PutObjectAcl
+              - servicecatalog:AcceptPortfolioShare
+              - servicecatalog:Associate*
+              - servicecatalog:Batch*
+              - servicecatalog:CopyProduct
+              - servicecatalog:Create*
+              - servicecatalog:Delete*
+              - servicecatalog:Describe*
+              - servicecatalog:DisableAWSOrganizationsAccess
+              - servicecatalog:Disassociate*
+              - servicecatalog:EnableAWSOrganizationsAccess
+              - servicecatalog:Execute*
+              - servicecatalog:GetAWSOrganizationsAccessStatus
+              - servicecatalog:List*
+              - servicecatalog:ProvisionProduct
+              - servicecatalog:RejectPortfolioShare
+              - servicecatalog:ScanProvisionedProducts
+              - servicecatalog:Search*
+              - servicecatalog:TerminateProvisionedProduct
+              - servicecatalog:Update*
+              - ssm:GetParameters
+              - support:DescribeTrustedAdvisorChecks
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: launchPolicy
+      Roles:
+        - Ref: LaunchRole2CFB2E44
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/launchPolicy/Resource
+  launchPolicyRunInstancesD42024D3:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: ec2:RunInstances
+            Effect: Allow
+            Resource:
+              - arn:aws:ec2:*:*:instance/*
+              - arn:aws:ec2:*:*:network-interface/*
+              - arn:aws:ec2:*:*:security-group/*
+              - arn:aws:ec2:*:*:subnet/*
+              - arn:aws:ec2:*:*:volume/*
+        Version: "2012-10-17"
+      PolicyName: launchPolicyRunInstances
+      Roles:
+        - Ref: LaunchRole2CFB2E44
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/launchPolicyRunInstances/Resource
+  launchPolicyLimitInstanceType7514FFBB:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ec2:RunInstances
+              - ec2:StartInstances
+            Condition:
+              ForAnyValue:StringNotLike:
+                ec2:InstanceType:
+                  - "*.nano"
+                  - "*.small"
+                  - "*.micro"
+            Effect: Deny
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: launchPolicyLimitInstanceType
+      Roles:
+        - Ref: LaunchRole2CFB2E44
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/launchPolicyLimitInstanceType/Resource
+  launchPolicyPassRoleDE586201:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: iam:PassRole
+            Effect: Allow
+            Resource: arn:aws:iam::*:role/app_role
+          - Action: iam:PassRole
+            Condition:
+              StringEquals:
+                iam:PassedToService: ecs-tasks.amazonaws.com
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:aws:iam::"
+                  - Ref: AWS::AccountId
+                  - :role/
+                  - Ref: AWS::AccountId
+                  - -ecsRole
+          - Action: iam:PassRole
+            Condition:
+              StringEquals:
+                iam:PassedToService: cloudtrail.amazonaws.com
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:aws:iam::"
+                  - Ref: AWS::AccountId
+                  - :role/
+                  - Ref: AWS::AccountId
+                  - -CloudTrailLogsRole
+          - Action: iam:PassRole
+            Condition:
+              StringEquals:
+                iam:PassedToService: vpc-flow-logs.amazonaws.com
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:aws:iam::"
+                  - Ref: AWS::AccountId
+                  - :role/
+                  - Ref: AWS::AccountId
+                  - -FlowLogsRole
+        Version: "2012-10-17"
+      PolicyName: launchPolicyPassRole
+      Roles:
+        - Ref: LaunchRole2CFB2E44
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/launchPolicyPassRole/Resource
+  launchPolicyPutRolePolicy2EC98A99:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: iam:PutRolePolicy
+            Effect: Allow
+            Resource:
+              - Fn::Join:
+                  - ""
+                  - - "arn:aws:iam::"
+                    - Ref: AWS::AccountId
+                    - :role/
+                    - Ref: AWS::AccountId
+                    - -FlowLogsRole
+              - Fn::Join:
+                  - ""
+                  - - "arn:aws:iam::"
+                    - Ref: AWS::AccountId
+                    - :role/
+                    - Ref: AWS::AccountId
+                    - -ecsRole
+        Version: "2012-10-17"
+      PolicyName: launchPolicyPutRolePolicy
+      Roles:
+        - Ref: LaunchRole2CFB2E44
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/launchPolicyPutRolePolicy/Resource
+  launchPolicyDenySpotInstances27C7117B:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: ec2:*Spot*
+            Effect: Deny
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: launchPolicyDenySpotInstances
+      Roles:
+        - Ref: LaunchRole2CFB2E44
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/launchPolicyDenySpotInstances/Resource
+  launchPolicyDenyVolumesGreaterThan100GB947F0C75:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: ec2:RunInstances
+            Condition:
+              NumericGreaterThan:
+                ec2:VolumeSize: "100"
+            Effect: Deny
+            Resource: arn:aws:ec2:*:*:volume/*
+        Version: "2012-10-17"
+      PolicyName: launchPolicyDenyVolumesGreaterThan100GB
+      Roles:
+        - Ref: LaunchRole2CFB2E44
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/launchPolicyDenyVolumesGreaterThan100GB/Resource
+  launchPolicyLimitOwnerE5AA4B6F:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: ec2:RunInstances
+            Condition:
+              ForAnyValue:StringLike:
+                ec2:Owner:
+                  - amazon
+            Effect: Allow
+            Resource: arn:aws:ec2:*:*:image/*
+        Version: "2012-10-17"
+      PolicyName: launchPolicyLimitOwner
+      Roles:
+        - Ref: LaunchRole2CFB2E44
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/launchPolicyLimitOwner/Resource
+  launchPolicyLimitRDSInstanceTypeD6D2CF43:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - rds:CreateDBInstance
+              - rds:ModifyDBInstance
+            Effect: Deny
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: launchPolicyLimitRDSInstanceType
+      Roles:
+        - Ref: LaunchRole2CFB2E44
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/launchPolicyLimitRDSInstanceType/Resource
+  AppRoleDC883459:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+        Version: "2012-10-17"
+      RoleName: app_role
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/AppRole/Resource
+  appPolicy24384F22:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ec2:Describe*
+              - rds:Desc*
+              - s3:GetObject
+              - s3:List
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: appPolicy
+      Roles:
+        - Ref: AppRoleDC883459
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/appPolicy/Resource
+  AppInstProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - app_role
+      InstanceProfileName: app_instance_profile
+    DependsOn:
+      - AppRoleDC883459
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/AppInstProfile
+  copyDataRole85605A2D:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      RoleName: data_copy_role
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/copyDataRole/Resource
+  copyDataPolicy02B66F21:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:DeleteLogGroup
+              - logs:DeleteLogStream
+              - logs:PutLogEvents
+              - s3:*
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: copyDataAccessPolicy
+      Roles:
+        - Ref: copyDataRole85605A2D
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/copyDataPolicy/Resource
+  loaddata7BA80661:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: pu-base-buckets-v1-provision-lab
+        S3Key: support/data_copy_lambda.zip
+      Role:
+        Fn::GetAtt:
+          - copyDataRole85605A2D
+          - Arn
+      FunctionName: load_data_function
+      Handler: dataCopy.lambda_handler
+      MemorySize: 512
+      Runtime: python3.10
+      Timeout: 300
+    DependsOn:
+      - copyDataRole85605A2D
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/load_data/Resource
+  invokeCopyFunction:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+          - loaddata7BA80661
+          - Arn
+      sourceBucket: pu-base-buckets-v1-provision-lab
+      destinationBucket:
+        Fn::Join:
+          - ""
+          - - resource-bucket-
+            - Ref: AWS::AccountId
+            - "-861"
+      keyPrefix: 328315a6-b128-40f3-8af1-23502ee7f5dc
+      fileList:
+        - ordersList.json
+        - productDetails.json
+        - users.json
+        - gxp-app.zip
+        - gxp_stack.py
+        - cdk.json
+        - Cloud9_commands.txt
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/invokeCopyFunction
+  gxpapprepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: gxp-app-repo
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/gxp-app-repo
+  ecsRole157644C0:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+                - ecs.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/CloudWatchAgentServerPolicy
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      RoleName:
+        Fn::Join:
+          - ""
+          - - Ref: AWS::AccountId
+            - -ecsRole
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/ecsRole/Resource
+  ecsPolicyFA68B0CC:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - dax:Create*
+              - dax:Desc*
+              - dax:Get*
+              - dax:List*
+              - dax:Put*
+              - dax:Query
+              - dax:Scan
+              - dax:Update*
+              - dynamodb:Create*
+              - dynamodb:Desc*
+              - dynamodb:Get*
+              - dynamodb:List*
+              - dynamodb:PartiQL*
+              - dynamodb:Put*
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:Update*
+              - ecr:Get*
+              - ecs:DeregisterContainerInstance
+              - ecs:Desc*
+              - ecs:DiscoverPollEndpoint
+              - ecs:List*
+              - ecs:Poll
+              - ecs:Put*
+              - ecs:Register*
+              - ecs:RunTask
+              - ecs:Start*
+              - ecs:Submit*
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: ecsPolicy
+      Roles:
+        - Ref: ecsRole157644C0
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/ecsPolicy/Resource
+  CloudTrailLogsRoleF52E25E9:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+        Version: "2012-10-17"
+      RoleName:
+        Fn::Join:
+          - ""
+          - - Ref: AWS::AccountId
+            - -CloudTrailLogsRole
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/CloudTrailLogsRole/Resource
+  CloudTrailLogsPolicyF4AA3ADC:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:aws:logs:"
+                  - Ref: AWS::Region
+                  - ":"
+                  - Ref: AWS::AccountId
+                  - :log-group:/aws/cloudtrail/
+                  - Ref: AWS::Region
+                  - :*
+        Version: "2012-10-17"
+      PolicyName:
+        Fn::Join:
+          - ""
+          - - Ref: AWS::AccountId
+            - -CloudTrailLogsPolicy
+      Roles:
+        - Ref: CloudTrailLogsRoleF52E25E9
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/CloudTrailLogsPolicy/Resource
+  FlowLogsRoleA00E6A39:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+        Version: "2012-10-17"
+      RoleName:
+        Fn::Join:
+          - ""
+          - - Ref: AWS::AccountId
+            - -FlowLogsRole
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/FlowLogsRole/Resource
+  FlowLogsPolicy97EF201B:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              Fn::Join:
+                - ""
+                - - "arn:aws:logs:"
+                  - Ref: AWS::Region
+                  - ":"
+                  - Ref: AWS::AccountId
+                  - :log-group:*FlowLogLogGroup*:*
+          - Action: iam:PassRole
+            Effect: Allow
+            Resource:
+              Fn::GetAtt:
+                - FlowLogsRoleA00E6A39
+                - Arn
+        Version: "2012-10-17"
+      PolicyName:
+        Fn::Join:
+          - ""
+          - - Ref: AWS::AccountId
+            - -FlowLogsPolicy
+      Roles:
+        - Ref: FlowLogsRoleA00E6A39
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/FlowLogsPolicy/Resource
+  users9E3E6EF7:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      TableName: users
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/users/Resource
+  ordersList8ECD5AE6:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+        - AttributeName: order_id
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: order_id
+          AttributeType: "N"
+      BillingMode: PAY_PER_REQUEST
+      TableName: ordersList
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/ordersList/Resource
+  productDetails60991C59:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      KeySchema:
+        - AttributeName: product_id
+          KeyType: HASH
+      AttributeDefinitions:
+        - AttributeName: product_id
+          AttributeType: "N"
+      BillingMode: PAY_PER_REQUEST
+      TableName: productDetails
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/productDetails/Resource
+  InstanceSSMCBFA3CF0:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/AmazonSSMManagedInstanceCore
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/AmazonS3ReadOnlyAccess
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/InstanceSSM/Resource
+  instancePolicy39CFDF21:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ecr:Batch*
+              - ecr:Complete*
+              - ecr:Create*
+              - ecr:Describe*
+              - ecr:Get*
+              - ecr:Initiate*
+              - ecr:List*
+              - ecr:Put*
+              - ecr:Set*
+              - ecr:StartImageScan
+              - ecr:Tag*
+              - ecr:Upload*
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: instancePolicy
+      Roles:
+        - Ref: InstanceSSMCBFA3CF0
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/instancePolicy/Resource
+  ManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: createPolicy
+            Effect: Allow
+            Action:
+              - s3:Get*
+              - s3:Describe*
+              - s3:Put*
+              - s3:List*
+              - s3-object-lambda:Put*
+              - s3-object-lambda:Get*
+              - s3-object-lambda:List*
+            Resource: arn:aws:s3:::resource-*
+      ManagedPolicyName: s3bucketpolicy
+      Path: /
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/ManagedPolicy
+  dockerInstanceInstanceSecurityGroup67794FC4:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: CdkLab328315a6Stack/dockerInstance/InstanceSecurityGroup
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: DockerInstance
+      VpcId:
+        Ref: LabVPC841D92ED
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/dockerInstance/InstanceSecurityGroup/Resource
+  dockerInstanceInstanceProfile7B96A493:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - Ref: InstanceSSMCBFA3CF0
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/dockerInstance/InstanceProfile
+  dockerInstanceAABB89FC:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      IamInstanceProfile:
+        Ref: dockerInstanceInstanceProfile7B96A493
+      ImageId:
+        Ref: SsmParameterValueawsserviceamiamazonlinuxlatestamznamihvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter
+      InstanceType: t2.small
+      SecurityGroupIds:
+        - Fn::GetAtt:
+            - dockerInstanceInstanceSecurityGroup67794FC4
+            - GroupId
+      SubnetId:
+        Ref: LabVPCPrivateSubnetSubnet1Subnet2545D8BD
+      Tags:
+        - Key: Name
+          Value: DockerInstance
+      UserData:
+        Fn::Base64: |-
+          #!/bin/bash 
+          sudo yum update -y 
+          sudo yum -y install docker
+          sudo service docker start
+          REGION=$(curl http://169.254.169.254/latest/meta-data/placement/region)
+          ACCOUNTID=$(aws sts get-caller-identity --query Account --output text)
+          sudo mkdir flask_app
+          cd flask_app/
+          aws s3 cp s3://pu-base-buckets-v1-provision-lab/328315a6-b128-40f3-8af1-23502ee7f5dc/gxp-app.zip .
+          sudo unzip gxp-app
+          cd gxp-app
+          docker build -t gxp-app-repo .
+          aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNTID.dkr.ecr.$REGION.amazonaws.com
+          docker tag gxp-app-repo:latest $ACCOUNTID.dkr.ecr.$REGION.amazonaws.com/gxp-app-repo:latest
+          docker push $ACCOUNTID.dkr.ecr.$REGION.amazonaws.com/gxp-app-repo:latest
+    DependsOn:
+      - InstanceSSMCBFA3CF0
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/dockerInstance/Resource
+  LambdaDeploymentRole0276A201:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      RoleName: LambdaDeploymentRole
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LambdaDeploymentRole/Resource
+  LambdaDeploymentPolicy5EE4ED4E:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - dynamodb:BatchWriteItem
+              - dynamodb:DescribeTable
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - lambda:InvokeFunction
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - s3-object-lambda:Get*
+              - s3-object-lambda:List*
+              - s3:Describe*
+              - s3:Get*
+              - s3:List*
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: LambdaDeploymentPolicy
+      Roles:
+        - Ref: LambdaDeploymentRole0276A201
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/LambdaDeploymentPolicy/Resource
+  dynamoUploadB5D8EB4E:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: pu-base-buckets-v1-provision-lab
+        S3Key: 328315a6-b128-40f3-8af1-23502ee7f5dc/dynamoUploadLambdaFunction.zip
+      Role:
+        Fn::GetAtt:
+          - LambdaDeploymentRole0276A201
+          - Arn
+      Environment:
+        Variables:
+          BUCKET_NAME:
+            Fn::Join:
+              - ""
+              - - resource-bucket-
+                - Ref: AWS::AccountId
+                - "-861"
+      FunctionName: dynamoUpload
+      Handler: dynamoUpload.lambda_handler
+      MemorySize: 512
+      Runtime: python3.8
+      Timeout: 300
+    DependsOn:
+      - LambdaDeploymentRole0276A201
+      - loaddata7BA80661
+      - ordersList8ECD5AE6
+      - productDetails60991C59
+      - users9E3E6EF7
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/dynamoUpload/Resource
+  invokeDdbUploadFunction:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+          - dynamoUploadB5D8EB4E
+          - Arn
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/invokeDdbUploadFunction
+  C9CreateLambdaRoleC283DD51:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::Join:
+            - ""
+            - - "arn:"
+              - Ref: AWS::Partition
+              - :iam::aws:policy/AWSCloud9Administrator
+      RoleName: cloud9_create_function-role
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/C9CreateLambdaRole/Resource
+  C9CreateLambdaRoleDefaultPolicy9560BB62:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ec2:*
+              - logs:*
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: C9CreateLambdaRoleDefaultPolicy9560BB62
+      Roles:
+        - Ref: C9CreateLambdaRoleC283DD51
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/C9CreateLambdaRole/DefaultPolicy/Resource
+  labcreatecloud9CB8F484C:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: pu-base-buckets-v1-provision-lab
+        S3Key: support/support_lambda.zip
+      Role:
+        Fn::GetAtt:
+          - C9CreateLambdaRoleC283DD51
+          - Arn
+      Environment:
+        Variables:
+          C9_ENV_NAME: Automating GxP Compliance in the Cloud
+          C9_ENV_DESCRIPTION: Automating GxP Compliance in the Cloud IDE
+          C9_INSTANCE_TYPE: t2.small
+      FunctionName: lab-create-cloud9
+      Handler: create_c9.lambda_handler
+      MemorySize: 512
+      Runtime: python3.8
+      Timeout: 600
+    DependsOn:
+      - C9CreateLambdaRoleDefaultPolicy9560BB62
+      - C9CreateLambdaRoleC283DD51
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/lab-create-cloud9/Resource
+  StsCreateC9:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        detail-type:
+          - AWS Console Sign In via CloudTrail
+      Targets:
+        - Arn:
+            Fn::GetAtt:
+              - labcreatecloud9CB8F484C
+              - Arn
+          Id: CallLambda
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/StsCreateC9
+  callFromEventBridgePerm:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: labcreatecloud9CB8F484C
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+          - StsCreateC9
+          - Arn
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/callFromEventBridgePerm
+  CDKMetadata:
+    Type: AWS::CDK::Metadata
+    Properties:
+      Analytics: v2:deflate64:H4sIAAAAAAAA/21STW/bMAz9Lb0r2toegh5bdyty2Co4W68DLTONFks0JCqFYeS/T5biOCh24iP5xI9H3cn1Wn69gY+w0u1h1ZlGjlsGfRAp9GcM93J8ivqA/AQBRYGi2rkzKkZRZ/SwhIt/Eqjv5PjW6ynzpiqhYpMS29i4UmRBNUXGX9B0uMSX2GMIpA2wIXchT+DbRk3mJ/ALMH7AIJQ3xwSXwhvH6BOeCWWSs/fIadO9Rcdi4wKD0yi2qKM3PLx4in0e5nNgpp5EQO2RgwUH7+iTcNk/P0roJAxYOdZU1sr2UqaA3wH95GW76LiguZvytDOlzo/cr51V1uR25l2OKVNlGH2WqkZNvi3ln7EzR/RDtQfnsJtG90ejUQNDR+mxIs+7VJBK9/85SVunTQ/d1TlOogPbtCDH79Hp+UDXWKG3JoTMTaLISQfsKRgmP4h2cGCpTZ/ucvwMEveYzhIyPU5+jYGi15lSxcBkryMKPFjksuxr5D6Wb3X9iFxrysxq4D25L/fyQd6ub/4GY1Y+OjYWZV3sP+PTk68XAwAA
+    Metadata:
+      aws:cdk:path: CdkLab328315a6Stack/CDKMetadata/Default
+    Condition: CDKMetadataAvailable
+Parameters:
+  SsmParameterValueawsserviceamiamazonlinuxlatestamznamihvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2
+Outputs:
+  LoginURL:
+    Value:
+      Fn::Join:
+        - ""
+        - - https://
+          - Ref: AWS::AccountId
+          - .signin.aws.amazon.com/console
+    Export:
+      Name: Login-URL
+Conditions:
+  CDKMetadataAvailable:
+    Fn::Or:
+      - Fn::Or:
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - af-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-east-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-northeast-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-northeast-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-southeast-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ap-southeast-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - ca-central-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - cn-north-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - cn-northwest-1
+      - Fn::Or:
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-central-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-north-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-west-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-west-2
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - eu-west-3
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - me-south-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - sa-east-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-east-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-east-2
+      - Fn::Or:
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-west-1
+          - Fn::Equals:
+              - Ref: AWS::Region
+              - us-west-2
+
