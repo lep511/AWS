@@ -1,0 +1,148 @@
+variables:
+  SAM_TEMPLATE: template.yaml
+  PERMISSIONS_PROVIDER: AWS IAM
+  PIPELINE_USER_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+  PIPELINE_USER_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+  TESTING_STACK_NAME: sam-app
+  TESTING_REGION: us-east-1
+  TESTING_ARTIFACTS_BUCKET: ${AWS_BUCKET}
+  # If there are functions with "Image" PackageType in your template,
+  # uncomment the line below and add "--image-repository ${TESTING_IMAGE_REPOSITORY}" to
+  # testing "sam package" and "sam deploy" commands.'
+  # TESTING_IMAGE_REPOSITORY = '0123456789.dkr.ecr.region.amazonaws.com/repository-name'
+  PROD_STACK_NAME: sam-app-stg2
+  PROD_REGION: us-east-1
+  PROD_ARTIFACTS_BUCKET: ${AWS_BUCKET}
+  # If there are functions with "Image" PackageType in your template,
+  # uncomment the line below and add "--image-repository ${PROD_IMAGE_REPOSITORY}" to
+  # prod "sam package" and "sam deploy" commands.'
+  # PROD_IMAGE_REPOSITORY = '0123456789.dkr.ecr.region.amazonaws.com/repository-name'
+  # By default, when using docker:dind, Docker uses the vfs storage
+  # driver which copies the file system on every run.
+  # This is a disk-intensive operation which can be avoided if a different driver is used.
+  # For example overlay2
+  DOCKER_DRIVER: overlay2
+  # Create the certificates inside this directory for both the server
+  # and client. The certificates used by the client will be created in
+  # /certs/client so we only need to share this directory with the
+  # volume mount in `config.toml`.
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# Should always specify a specific version of the image. If using a tag like docker:stable,
+# there will be no control over which version is used. Unpredictable behavior can result.
+image: docker:19.03.15
+
+services:
+    - docker:19.03.15-dind
+
+before_script:
+  - apk add --update python3 py-pip python3-dev build-base libffi-dev
+  - pip install --upgrade pip
+  - pip install awscli aws-sam-cli
+  - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+  - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
+  - aws s3 mb s3://${TESTING_ARTIFACTS_BUCKET} --region ${TESTING_REGION}
+
+stages:
+  - unit-test
+  - build
+  - testing
+  - prod
+
+# uncomment and modify the following step for running the unit-tests
+#
+#unit-test:
+#  stage: unit-test
+#  only:
+#    - main
+#    - /^feature-.*$/
+#  script: |
+
+# This stage is triggered only for feature branches (feature*),
+# which will build the stack and deploy to a stack named with branch name.
+build-and-deploy-feature:
+  stage: build
+  only:
+    - /^feature-.*$/
+  script:
+    - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+    - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
+    - sam build --template ${SAM_TEMPLATE} --use-container
+    - sam deploy --stack-name $(echo ${CI_COMMIT_REF_NAME} | tr -cd '[a-zA-Z0-9-]')
+                 --capabilities CAPABILITY_IAM
+                 --region ${TESTING_REGION}
+                 --s3-bucket ${TESTING_ARTIFACTS_BUCKET}
+                 --no-fail-on-empty-changeset
+
+# This stage is triggered for main branch you set in the question,
+# which will build the stack, package the application, upload the
+# applications artifacts to Amazon S3 and output the SAM template file.
+build-and-package:
+  stage: build
+  only:
+    - main
+  script:
+    - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+    - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
+    - sam build --template ${SAM_TEMPLATE} --use-container
+
+    - sam package --s3-bucket ${TESTING_ARTIFACTS_BUCKET}
+                   --region ${TESTING_REGION}
+                   --output-template-file packaged-testing.yaml
+
+    - sam package --s3-bucket ${PROD_ARTIFACTS_BUCKET}
+                  --region ${PROD_REGION}
+                  --output-template-file packaged-prod.yaml
+
+  artifacts:
+    paths:
+      - packaged-testing.yaml
+      - packaged-prod.yaml
+
+# This stage is triggered for main branch you set in the question,
+# which will deploy the testing stage SAM application using
+# the templated file generated.
+deploy-testing:
+  stage: testing
+  only:
+    - main
+  script:
+    - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+    - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
+    - sam deploy --stack-name ${TESTING_STACK_NAME}
+                 --template packaged-testing.yaml
+                 --capabilities CAPABILITY_IAM
+                 --region ${TESTING_REGION}
+                 --s3-bucket ${TESTING_ARTIFACTS_BUCKET}
+                 --no-fail-on-empty-changeset
+    - aws cloudformation describe-stacks --stack-name ${TESTING_STACK_NAME} --region ${TESTING_REGION} --query "Stacks[0].Outputs[?OutputKey=='DynamoDBFunction'].OutputValue" --output text > function_name
+    - aws lambda invoke --function-name $(cat function_name) --region ${TESTING_REGION} output.json
+
+# Uncomment and modify the following stage for integration tests
+#
+#integration-test:
+#  stage: testing
+#  only:
+#    - main
+#  script: |
+#    #trigger the integration tests here
+
+# This stage is triggered for main branch you set in the question,
+# which will deploy the prod stage SAM application using
+# the templated file generated.
+#deploy-prod:
+#  stage: prod
+#  # uncomment this to have a manual approval step before deployment to production
+#  # when: manual
+#  only:
+#    - main
+#  script:
+#    - export AWS_ACCESS_KEY_ID=$PIPELINE_USER_ACCESS_KEY_ID
+#    - export AWS_SECRET_ACCESS_KEY=$PIPELINE_USER_SECRET_ACCESS_KEY
+#    - sam deploy --stack-name ${PROD_STACK_NAME}
+#                 --template packaged-prod.yaml
+#                 --capabilities CAPABILITY_IAM
+#                 --region ${PROD_REGION}
+#                 --s3-bucket ${PROD_ARTIFACTS_BUCKET}
+#                 --no-fail-on-empty-changeset
+

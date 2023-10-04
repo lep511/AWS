@@ -7,14 +7,10 @@ Globals:
   Function:
     Timeout: 30
     MemorySize: 128
-    Tracing: Active
     Environment:
       Variables:
         INVENTORY_TABLE: !Ref Inventory
         EVENT_BUS_NAME: !Ref StockAppBus
-    Layers:
-      - !Sub arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:42
-    
 
 Resources:
   #############
@@ -47,7 +43,7 @@ Resources:
     Properties:
       CodeUri: purchase/
       Handler: app.lambda_handler
-      Runtime: python3.10
+      Runtime: python3.9
       Architectures:
         - x86_64
       Policies:
@@ -67,7 +63,7 @@ Resources:
     Properties:
       CodeUri: stock/
       Handler: app.lambda_handler
-      Runtime: python3.10
+      Runtime: python3.9
       Architectures:
         - x86_64
       Policies:
@@ -86,7 +82,7 @@ Resources:
     Properties:
       CodeUri: inventory/
       Handler: app.lambda_handler
-      Runtime: python3.10
+      Runtime: python3.9
       Architectures:
         - x86_64
       Policies:
@@ -110,7 +106,7 @@ Resources:
     Properties:
       CodeUri: replenish/
       Handler: app.lambda_handler
-      Runtime: python3.10
+      Runtime: python3.9
       Architectures:
         - x86_64
       Policies:
@@ -153,7 +149,7 @@ Resources:
     Properties:
       CodeUri: dynamoitems/
       Handler: app.lambda_handler
-      Runtime: python3.10
+      Runtime: python3.9
       Architectures:
         - x86_64
       Policies:
@@ -167,3 +163,7 @@ Outputs:
   TableName:
     Description: "Dynamo table name"
     Value: !Ref Inventory
+
+  DynamoDBFunction:
+    Description: "DynamoDB function name"
+    Value: !Ref DynamoDBItems
