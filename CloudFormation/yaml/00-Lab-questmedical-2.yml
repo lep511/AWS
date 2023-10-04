@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  LabUserRoleName:
+    Type: String
+
+Resources:
+  AttachPolicies:
+    Type: Custom::AttachPolicies
+    Properties:
+      ServiceToken: !GetAtt AttachPoliciesFunction.Arn
+      RoleName: !Ref LabUserRoleName
+      PolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+
+  AttachPoliciesFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: AttachPolicies
+      Handler: index.handler
+      Runtime: python3.9
+      MemorySize: 128
+      Timeout: 300
+      Role: !GetAtt AttachPoliciesRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import time
+          from botocore.config import Config
+
+          MAX_ATTEMPTS = 5
+          WAIT_SECONDS = 5
+
+          BOTO3_CONFIG = Config(connect_timeout=1, read_timeout=5, retries={"mode": "standard", "total_max_attempts": 3})
+
+          iam_client = boto3.client("iam", config=BOTO3_CONFIG)
+          lambda_client = boto3.client("lambda", config=BOTO3_CONFIG)
+
+          def execute_retryable_call(fn):
+              last_exception = None
+              for _ in range(MAX_ATTEMPTS):
+                  try:
+                      return fn()
+                  except Exception as e:
+                      last_exception = e
+                      time.sleep(WAIT_SECONDS)
+              raise last_exception
+
+          def attach_policies(role_name, policy_arns):
+              for policy_arn in policy_arns:
+                  execute_retryable_call(lambda: iam_client.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn))
+
+          def delete_attach_policies_policy():
+              iam_client.delete_role_policy(RoleName="AttachPolicies", PolicyName="AttachPolicies")
+
+          def delete_function_and_role():
+              lambda_client.delete_function(FunctionName="AttachPolicies")
+              iam_client.delete_role_policy(RoleName="AttachPolicies", PolicyName="DeleteResources")
+              iam_client.delete_role(RoleName="AttachPolicies")
+
+          def handler(event, context):
+              properties = event["ResourceProperties"]
+              try:
+                  if event["RequestType"] == "Create":
+                      attach_policies(properties["RoleName"], properties["PolicyArns"])
+                      time.sleep(WAIT_SECONDS)
+                      delete_attach_policies_policy()
+                      reason = "Policies Attached"
+                  else:
+                      reason = "No Action Performed"
+                  status = cfnresponse.SUCCESS
+              except Exception as e:
+                  status = cfnresponse.FAILED
+                  reason = str(e)[:500]
+              finally:
+                  cfnresponse.send(event, context, status, {}, reason=reason)
+                  delete_function_and_role()
+
+  AttachPoliciesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AttachPolicies
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+      Policies:
+        - PolicyName: AttachPolicies
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - iam:AttachRolePolicy
+                Effect: Allow
+                Resource:
+                  - "*"
+        - PolicyName: DeleteResources
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                Effect: Allow
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/AttachPolicies
+              - Action:
+                  - lambda:DeleteFunction
+                Effect: Allow
+                Resource:
+                  - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:AttachPolicies
