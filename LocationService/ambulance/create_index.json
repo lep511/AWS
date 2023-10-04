@@ -1,0 +1,43 @@
+PUT ambulance-index
+{
+  "mappings": {
+    "properties": {
+      "id": {
+        "type": "text" 
+      },
+      "date_time": {
+        "type": "date"
+      },
+      "ambulance_location": {
+        "type": "geo_point"
+      },
+      "hospital_location": { 
+        "type": "geo_point"
+      },
+      "route": {
+        "type" : "geo_shape"
+      },
+      "eta": {
+        "type": "integer" 
+      },
+      "ambulance_id": {
+        "type": "integer" 
+      },
+      "heart_rate": {
+        "type": "integer" 
+      },
+      "systolic_blood_pressure": {
+        "type": "integer" 
+      },
+      "diastolic_blood_pressure": {
+        "type": "integer" 
+      },
+      "blood_oxygen_level": {
+        "type": "integer" 
+      },
+      "body_temperature": {
+        "type": "float" 
+      }
+    }
+  }
+}
