@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Cognito user pool with hosted domain
+Parameters:
+  ClientDomain:
+    Type: String
+    Description: Domain allowed to use this UserPool
+  Postman:
+    Type: String
+Conditions:
+  UsePostman:
+    Fn::Equals:
+    - Ref: Postman
+    - 'true'
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+      AutoVerifiedAttributes:
+      - email
+      UsernameAttributes:
+      - email
+      Schema:
+      - AttributeDataType: String
+        Name: email
+        Required: false
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId:
+        Ref: UserPool
+      GenerateSecret: false
+      SupportedIdentityProviders:
+      - COGNITO
+      CallbackURLs:
+      - Ref: ClientDomain
+      - Fn::If:
+        - UsePostman
+        - https://oauth.pstmn.io/v1/callback
+        - Ref: AWS::NoValue
+      LogoutURLs:
+      - Ref: ClientDomain
+      - Fn::If:
+        - UsePostman
+        - https://oauth.pstmn.io/v1/callback
+        - Ref: AWS::NoValue
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+      - code
+      - Fn::If:
+        - UsePostman
+        - implicit
+        - Ref: AWS::NoValue
+      AllowedOAuthScopes:
+      - email
+      - openid
+      - profile
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain:
+        Fn::Sub: myauth${AWS::AccountId}
+      UserPoolId:
+        Ref: UserPool
+Outputs:
+  UserPoolId:
+    Description: User pool ID
+    Value:
+      Ref: UserPool
+  UserPoolClientId:
+    Description: Application client ID
+    Value:
+      Ref: UserPoolClient
+  AuthUrl:
+    Description: URL used for authentication
+    Value:
+      Fn::Sub: https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/login
+  Issuer:
+    Description: Url used for issuer on HTTP API JWT tokens
+    Value:
+      Fn::Sub: https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}

@@ -1,0 +1,10 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "cognito-http"
+resolve_s3 = true
+s3_prefix = "cognito-http"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_AUTO_EXPAND CAPABILITY_IAM"
+parameter_overrides = "Client=\"https://myapp.com\" TestWithPostman=\"true\""
+image_repositories = []
