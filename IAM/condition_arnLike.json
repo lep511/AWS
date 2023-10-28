@@ -1,0 +1,20 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+        "Effect": "Allow",
+        "Principal": {
+            "Service": "greengrass.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole",
+        "Condition": {
+            "ArnLike": {
+            "aws:SourceArn": "arn:aws:greengrass:us-east-1:607696856846:*"
+            },
+            "StringEquals": {
+            "aws:SourceAccount": "607696856846"
+            }
+        }
+        }
+    ]
+}

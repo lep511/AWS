@@ -13,6 +13,7 @@ security_hub_icon = "https://d2908q01vomqb2.cloudfront.net/22d200f8670dbdb3e253a
 inspector_icon = "https://help.sumologic.com/img/integrations/amazon-aws/inspector-classic.png"
 guardduty_icon = "https://awsvideocatalog.com/images/aws/png/PNG%20Light/Security,%20Identity,%20&%20Compliance/Amazon-GuardDuty.png"
 iam_analyzer_icon = "https://www.checkpoint.com/wp-content/uploads/amazon-aws-security-iam-analyzer-icon.png"
+macie_icon = "https://awsvideocatalog.com/images/aws/png/PNG%20Light/Security,%20Identity,%20&%20Compliance/Amazon-Macie.png"
 
 
 def lambda_handler(event, context):
@@ -82,6 +83,12 @@ def security_hub(event):
         elif finding['ProductName'] == 'IAM Access Analyzer':
             image_icon = iam_analyzer_icon
             icon_text = "AWS IAM Access Analyzer"
+        elif finding['ProductName'] == 'Macie':
+            image_icon = macie_icon
+            icon_text = "AWS Macie"
+            bucket_name = resource_id.split(':')[-1]
+            web_rule = f"https://s3.console.aws.amazon.com/s3/buckets/{bucket_name}?region={region}"
+            button_text = "Link to S3 Bucket"
         else:
             image_icon = security_hub_icon
             icon_text = "AWS Security Hub"

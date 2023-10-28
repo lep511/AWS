@@ -116,7 +116,8 @@ class DynamoTable:
                      sort_key_type=None,
                      provisioned=True, # or 'PAY_PER_REQUEST'
                      rcu=5, 
-                     wcu=5
+                     wcu=5,
+                     infrequent_access=False
                     ):
         """
         Creates an Amazon DynamoDB table.
@@ -130,15 +131,17 @@ class DynamoTable:
                     consumed per second before DynamoDB returns a ThrottlingException. Default: 5.
         :param wcu: (WriteCapacityUnits) Default: 10. The maximum number of writes consumed per second 
                     before DynamoDB returns a ThrottlingException. Default: 5.
+        :param infrequent_access: False = Table STANDARD, True = Table STANDARD_INFREQUENT_ACCESS. Default False.
         """           
         
+        infrequent_access = "STANDARD_INFREQUENT_ACCESS" if infrequent_access else "STANDARD"
         key_schema = [{'AttributeName': partition_key, 'KeyType': 'HASH'}]
         att_definition=[{'AttributeName': partition_key, 'AttributeType': partition_key_type}]
-              
+        
         if sort_key != None:
             key_schema.append({'AttributeName': sort_key, 'KeyType': 'RANGE'})
             att_definition.append({'AttributeName': sort_key, 'AttributeType': sort_key_type})
-
+            
         try:
             if provisioned:
                 self.bill_mode = 'PROVISIONED'
@@ -148,7 +151,8 @@ class DynamoTable:
                     AttributeDefinitions = att_definition,
                     ProvisionedThroughput={'ReadCapacityUnits': rcu,
                                            'WriteCapacityUnits': wcu
-                                          }
+                                          },
+                    TableClass = infrequent_access
                 )
             else:
                 self.bill_mode = 'PAY_PER_REQUEST'
@@ -156,7 +160,9 @@ class DynamoTable:
                     TableName=table_name, 
                     KeySchema = key_schema, 
                     AttributeDefinitions = att_definition,
-                    BillingMode="PAY_PER_REQUEST")
+                    BillingMode="PAY_PER_REQUEST",
+                    TableClass = infrequent_access
+                )
             self.table.wait_until_exists()
             self.table_name = table_name
 

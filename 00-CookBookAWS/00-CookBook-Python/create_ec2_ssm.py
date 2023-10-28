@@ -85,9 +85,13 @@ def create_ec2_ssm(vpc_id, subnet_id=None, tag_instance='SSM-Instance'):
         )
 
         # Create an instance profile
-        instance_profile = iam.create_instance_profile(
-            InstanceProfileName=instance_profile_name
-        )
+        try:
+            instance_profile = iam.create_instance_profile(
+                InstanceProfileName=instance_profile_name
+            )
+        except:
+            print(f"Instance profile already exists: {instance_profile_name}")
+        
         # Add the role that you created to the instance profile:
         response = iam.add_role_to_instance_profile(
             InstanceProfileName=instance_profile_name,
@@ -216,6 +220,10 @@ def create_ec2_ssm(vpc_id, subnet_id=None, tag_instance='SSM-Instance'):
         print("VPC endpoints are available")
 
 
+    print("\nIn the terminal execute the following command to connect to the instance:")
+    print("   aws ssm start-session --target " + resource_id)
+    print("\nInstnace profile name: " + instance_profile_name)
+    
     wait_instance_ssm = len(ssm.describe_instance_information()['InstanceInformationList'])
     print("Waiting for EC2-SSM connection to be available...")
     print("This can take 5 minutes sometimes. Press Ctrl-C to stop waiting...")
@@ -224,10 +232,7 @@ def create_ec2_ssm(vpc_id, subnet_id=None, tag_instance='SSM-Instance'):
         ec2_client.reboot_instances(InstanceIds=[resource_id])
         time.sleep(30)
         wait_instance_ssm = len(ssm.describe_instance_information()['InstanceInformationList'])
-
-    print("\nIn the terminal execute the following command to connect to the instance:")
-    print("   aws ssm start-session --target " + resource_id)
-    print("\nInstnace profile name: " + instance_profile_name)
+    
     print("EC2 instance created successfully!")
 
 def vpc_endpoint_status(vpc_endpoint_id):

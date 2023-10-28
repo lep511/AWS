@@ -1,0 +1,28 @@
+import re
+
+# Create a function to verefy email
+def check_mail(mail):
+    # Create a regex to check email
+    regex = re.compile(r'''
+        ^([a-zA-Z0-9_\-\.]+)    # username
+        @                       # @ symbol
+        ([a-zA-Z0-9_\-\.]+)     # domain name
+        \.                      # dot
+        ([a-zA-Z]{2,5})$        # top level domain
+    ''', re.VERBOSE)
+
+    # Check if the email is valid
+    if regex.search(mail):
+        return True
+    else:
+        return False
+    
+if __name__ == "__main__":
+    # Ask for an email
+    mail = input('Enter an email: ')
+
+    # Check if the email is valid
+    if check_mail(mail):
+        print('The email is valid')
+    else:
+        print('The email is not valid')
