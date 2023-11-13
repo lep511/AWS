@@ -1,0 +1,11 @@
+--2023-11-05 08:35:02--  https://i0.wp.com/www.binaryheap.com/wp-content/uploads/2023/08/serverless_observability.jpg?w=1180
+Resolving i0.wp.com (i0.wp.com)... 192.0.77.2
+Connecting to i0.wp.com (i0.wp.com)|192.0.77.2|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 41378 (40K) [image/jpeg]
+Saving to: ‘serverless_observability.jpg?w=1180’
+
+serverless_observability.jpg?w=1180                          0%[                                                                                                                                         ]       0  --.-KB/s               serverless_observability.jpg?w=1180                        100%[========================================================================================================================================>]  40.41K  --.-KB/s    in 0.05s   
+
+2023-11-05 08:35:03 (824 KB/s) - ‘serverless_observability.jpg?w=1180’ saved [41378/41378]
+

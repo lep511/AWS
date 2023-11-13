@@ -1,0 +1,33 @@
+{
+  "LaunchTemplate": {
+    "LaunchTemplateSpecification": {
+      "LaunchTemplateId": "lt-0284eca0503a93ba3",
+      "Version": "1"
+    },
+    "Overrides": [
+      {
+        "InstanceType": "m5.large"
+      },
+      {
+        "InstanceType": "c5.large"
+      },
+      {
+        "InstanceType": "r5.large"
+      },
+      {
+        "InstanceType": "m4.large"
+      },
+      {
+        "InstanceType": "c4.large"
+      },
+      {
+        "InstanceType": "r4.large"
+      }
+    ]
+  },
+  "InstancesDistribution": {
+    "OnDemandBaseCapacity": 1,
+    "OnDemandPercentageAboveBaseCapacity": 25,
+    "SpotAllocationStrategy": "price-capacity-optimized"
+  }
+}

@@ -1,0 +1,9 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "sam-app"
+resolve_s3 = true
+s3_prefix = "sam-app"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "AmazonLinux2LatestAmiId=\"/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2\" EnvironmentName=\"DefaultASGTemplate\" SpotInstanceType1=\"r7i.2xlarge\" SpotInstanceType2=\"c6i.2xlarge\" SpotInstanceType3=\"m2.4xlarge\" SpotInstanceType4=\"g5g.4xlarge\""
+image_repositories = []

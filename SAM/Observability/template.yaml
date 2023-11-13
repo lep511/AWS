@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  SAM template for SAM/Observability
+
+  This template demonstrates the minimum required resources to enable
+  observability features in SAM.
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: The name of the S3 bucket to create
+    Default: observability-bucket-40394
+  TableName:
+    Type: String
+    Description: The name of the DynamoDB table to create
+    Default: ObservabilityTable
+
+Resources:
+  ObservabilityFumction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/observability/
+      Handler: app.lambda_handler
+      Runtime: python3.10
+      Tracing: Active
+      Timeout: 120
+      Layers:
+        - arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:46
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref BucketName
+          TABLE_NAME: !Ref TableName
+      Events:
+        GetAllItems:
+          Type: HttpApi
+          Properties:
+            Path: /items
+            Method: GET
+        GetAnItem:
+          Type: HttpApi
+          Properties:
+            Path: /items/{id}
+            Method: GET
+        CreateOrUpdateItem:
+          Type: HttpApi
+          Properties:
+            Path: /items
+            Method: PUT
+      Role: !GetAtt LambdaExecutionRole.Arn
+  
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-LambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-LambdaExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${BucketName}
+                  - !Sub arn:aws:s3:::${BucketName}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}/*
+
+  
+  BucketObservability:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      AccessControl: Private
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldObjects
+            Status: Enabled
+            ExpirationInDays: 1
+  
+  DynamoTableObservability:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Ref TableName
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+    Metadata:
+      'AWS::ServerlessRepo::Application':
+        Parameters:
+          TracingEnabled: true
+
+Outputs:
+  ObservabilityApi:
+    Description: "API Gateway endpoint URL for Prod stage for Observability function"
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/items"
+  ObservabilityFunctionIamRole:
+    Description: "Implicit IAM Role created for Observability function"
+    Value: !GetAtt LambdaExecutionRole.Arn
+  ObservabilityBucket:
+    Description: "Observability Bucket"
+    Value: !Ref BucketName
+  ObservabilityTable:
+    Description: "Observability Table"
+    Value: !Ref TableName

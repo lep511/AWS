@@ -1,0 +1,36 @@
+{
+  "LaunchTemplate": {
+    "LaunchTemplateSpecification": {
+      "LaunchTemplateId": "lt-0284eca0503a93ba3",
+      "Version": "1"
+    },
+    "Overrides": [
+      {
+        "InstanceRequirements": {
+          "VCpuCount": {
+            "Min": 2,
+            "Max": 2
+          },
+          "MemoryMiB": {
+            "Min": 0
+          },
+          "CpuManufacturers": [
+            "intel",
+            "amd"
+          ],
+          "InstanceGenerations": [
+            "current"
+          ],
+          "AcceleratorCount": {
+            "Max": 0
+          }
+        }
+      }
+    ]
+  },
+  "InstancesDistribution": {
+    "OnDemandBaseCapacity": 1,
+    "OnDemandPercentageAboveBaseCapacity": 25,
+    "SpotAllocationStrategy": "capacity-optimized"
+  }
+}

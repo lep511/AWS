@@ -1,0 +1,10 @@
+{
+    "id": "39489",
+    "event": "buy",
+    "timestamp": "2023-11-06T14:30:00",
+    "user_id": "123456",
+    "product_id": "7890",
+    "quantity": 3,
+    "total_price": 150.00,
+    "payment_method": "credit_card"
+}
