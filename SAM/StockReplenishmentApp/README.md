@@ -40,3 +40,20 @@ La columna "ReplenishBelow" en una tabla de stock generalmente se refiere a un u
 Cuando las existencias de un producto caen por debajo del valor establecido en la columna "ReplenishBelow", esto indica que es hora de iniciar un proceso de reabastecimiento para evitar quedarse sin stock y poder satisfacer la demanda de los clientes de manera continua. En otras palabras, "ReplenishBelow" es el punto de referencia que activa el proceso de reorden y reposición de inventario.
 
 Este enfoque ayuda a evitar situaciones de escasez, lo que podría resultar en pérdida de ventas o insatisfacción del cliente. La columna "ReplenishBelow" se utiliza en combinación con otras métricas y datos, como la velocidad de venta, el tiempo de entrega de los proveedores y la demanda prevista, para determinar cuándo y cuánto se debe reponer un producto en el inventario.
+
+### Ejemplos:
+
+#### Crear elementos de ejemplos
+    
+    python start.py
+
+#### Crear un pedido:
+
+    curl --location 'https://xxxxxxxx.execute-api.us-east-1.amazonaws.com/Prod/purchase' \
+    --header 'Content-Type: application/json' \
+    --data '{
+        "Location": "90210",
+        "SKU": "ItemX",
+        "PurchaseCount": 3
+    }'
+

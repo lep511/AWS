@@ -5,12 +5,15 @@ Globals:
   Function:
     Timeout: 30
     MemorySize: 128
+    Tracing: Active
     Environment:
       Variables:
         INVENTORY_TABLE:
           Ref: Inventory
         EVENT_BUS_NAME:
           Ref: StockAppBus
+    Layers:
+    - Fn::Sub: arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:42
 Resources:
   StockAppBus:
     Type: AWS::Events::EventBus
@@ -33,7 +36,7 @@ Resources:
     Properties:
       CodeUri: PurchaseFunction
       Handler: app.lambda_handler
-      Runtime: python3.9
+      Runtime: python3.10
       Architectures:
       - x86_64
       Policies:
@@ -56,7 +59,7 @@ Resources:
     Properties:
       CodeUri: StockFunction
       Handler: app.lambda_handler
-      Runtime: python3.9
+      Runtime: python3.10
       Architectures:
       - x86_64
       Policies:
@@ -78,7 +81,7 @@ Resources:
     Properties:
       CodeUri: InventoryFunction
       Handler: app.lambda_handler
-      Runtime: python3.9
+      Runtime: python3.10
       Architectures:
       - x86_64
       Policies:
@@ -107,7 +110,7 @@ Resources:
     Properties:
       CodeUri: ReplenishFunction
       Handler: app.lambda_handler
-      Runtime: python3.9
+      Runtime: python3.10
       Architectures:
       - x86_64
       Policies:
@@ -150,7 +153,7 @@ Resources:
     Properties:
       CodeUri: DynamoDBItems
       Handler: app.lambda_handler
-      Runtime: python3.9
+      Runtime: python3.10
       Architectures:
       - x86_64
       Policies:
