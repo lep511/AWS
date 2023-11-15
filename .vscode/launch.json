@@ -3,6 +3,20 @@
         {
             "type": "aws-sam",
             "request": "direct-invoke",
+            "name": "StockReplenishmentApp:ReplenishFunction",
+            "invokeTarget": {
+                "target": "template",
+                "templatePath": "${workspaceFolder}/SAM/StockReplenishmentApp/template.yaml",
+                "logicalId": "ReplenishFunction"
+            },
+            "lambda": {
+                "payload": {},
+                "environmentVariables": {}
+            }
+        },
+        {
+            "type": "aws-sam",
+            "request": "direct-invoke",
             "name": "StockReplenishmentApp:DynamoDBItemsLambdaFunction",
             "invokeTarget": {
                 "target": "template",

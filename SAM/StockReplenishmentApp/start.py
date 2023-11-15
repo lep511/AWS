@@ -13,7 +13,9 @@ def main(total_items):
             Item={
                 'Location': str(random.randint(10000, 99999)),
                 'SKU': random.choice(['ItemX', 'ItemY', 'ItemZ', 'ItemA', 'ItemB', 'ItemC']),
-                'StockLevel': random.randint(5, 100)
+                'StockLevel': random.randint(5, 100),
+                'ReplenishAmount': random.randint(30, 50),
+                'ReplenishBelow': random.randint(5, 20)
             }
         )
     print('Added {} items to table {}'.format(total_items, table_name))

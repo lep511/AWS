@@ -41,15 +41,25 @@ Cuando las existencias de un producto caen por debajo del valor establecido en l
 
 Este enfoque ayuda a evitar situaciones de escasez, lo que podría resultar en pérdida de ventas o insatisfacción del cliente. La columna "ReplenishBelow" se utiliza en combinación con otras métricas y datos, como la velocidad de venta, el tiempo de entrega de los proveedores y la demanda prevista, para determinar cuándo y cuánto se debe reponer un producto en el inventario.
 
-### Ejemplos:
+### Ejemplos
 
-#### Crear elementos de ejemplos
+#### Crear elementos de ejemplos:
     
     python start.py
 
+
+#### Ver total en stock de un producto:
+
+    curl --location --request GET 'https://xxxxxxxxx.execute-api.us-east-1.amazonaws.com/Prod/stock' \
+    --header 'Content-Type: application/json' \
+    --data '{
+        "Location": "57812",
+        "SKU": "ItemZ"
+    }'
+
 #### Crear un pedido:
 
-    curl --location 'https://xxxxxxxx.execute-api.us-east-1.amazonaws.com/Prod/purchase' \
+    curl --location 'https://xxxxxxxxx.execute-api.us-east-1.amazonaws.com/Prod/purchase' \
     --header 'Content-Type: application/json' \
     --data '{
         "Location": "90210",

@@ -13,10 +13,76 @@ Globals:
         INVENTORY_TABLE: !Ref Inventory
         EVENT_BUS_NAME: !Ref StockAppBus
     Layers:
-      - !Sub arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:42
-    
+      - !Sub arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:47 
 
 Resources:
+  ##################################################################
+  # AWS WAF 
+  # Access Control List limits each IP to 100 requestes per second
+  ##################################################################
+  MyWAFACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      CustomResponseBodies: # Define a response from WAF
+        CountryNotValid:
+          Content: Country not allowed
+          ContentType: TEXT_PLAIN
+      DefaultAction:
+        Block: 
+          CustomResponse: # Choose a defined template to respond when blocked
+            ResponseCode: "403"
+            CustomResponseBodyKey: CountryNotValid
+      Description: Application WAF
+      Scope: REGIONAL
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: AppRules
+        SampledRequestsEnabled: true
+      Rules:
+        - Action:
+            Allow: {} # Allow if conditions are met
+          Name: AllowCountryList
+          Priority: 0
+          Statement:
+            GeoMatchStatement:
+              CountryCodes: # Requests from following countries are allowed
+                - US
+                - UY
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AllowCountryList
+            SampledRequestsEnabled: true
+        #TODO: Chek this rule
+        - Action:
+            Block: {} # Block if conditions are met
+          Name: BlockIpReputationList
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              Name: AWSManagedRulesAmazonIpReputationList
+              VendorName: AWS
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: BlockIpReputationList
+            SampledRequestsEnabled: true
+
+  ####################
+  # API AND FUNCTIONS
+  ####################
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties: 
+      StageName: Prod
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+
+  # Associate the WebACL with the API gateway
+  MyWAFAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties: 
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGatewayApi}/stages/Prod
+      WebACLArn: !GetAtt MyWAFACL.Arn
+
   #############
   # EVENT BUS 
   #############
@@ -24,23 +90,6 @@ Resources:
     Type: AWS::Events::EventBus
     Properties:
       Name: "StockAppBus"
-
-
-  #############
-  # API AND FUNCTIONS
-  #############
-  ApiGatewayApi:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      StageName: Prod
-      CorsConfiguration:
-        AllowOrigins:
-          - "*"
-        AllowHeaders:
-          - "*"
-        AllowMethods:
-          - POST
-        AllowCredentials: false
 
   PurchaseFunction:
     Type: AWS::Serverless::Function 
@@ -56,11 +105,11 @@ Resources:
             EventBusName: !Ref StockAppBus
       Events:
         AddImage:
-          Type: HttpApi
+          Type: Api
           Properties:
             Path: /purchase
             Method: post
-            ApiId: !Ref ApiGatewayApi
+            RestApiId: !Ref ApiGatewayApi
 
   StockFunction:
     Type: AWS::Serverless::Function 
@@ -75,11 +124,11 @@ Resources:
             TableName: !Ref Inventory
       Events:
         AddImage:
-          Type: HttpApi
+          Type: Api
           Properties:
             Path: /stock
             Method: get
-            ApiId: !Ref ApiGatewayApi
+            RestApiId: !Ref ApiGatewayApi
 
   InventoryFunction:
     Type: AWS::Serverless::Function 

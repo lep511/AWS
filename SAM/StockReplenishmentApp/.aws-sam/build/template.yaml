@@ -15,22 +15,57 @@ Globals:
     Layers:
     - Fn::Sub: arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:42
 Resources:
+  MyWAFACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      CustomResponseBodies:
+        CountryNotValid:
+          Content: Country not allowed
+          ContentType: TEXT_PLAIN
+      DefaultAction:
+        Block:
+          CustomResponse:
+            ResponseCode: '403'
+            CustomResponseBodyKey: CountryNotValid
+      Description: Application WAF
+      Scope: REGIONAL
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: AppRules
+        SampledRequestsEnabled: true
+      Rules:
+      - Action:
+          Allow: {}
+        Name: AllowCountryList
+        Priority: 0
+        Statement:
+          GeoMatchStatement:
+            CountryCodes:
+            - US
+            - UY
+        VisibilityConfig:
+          CloudWatchMetricsEnabled: true
+          MetricName: AllowCountryList
+          SampledRequestsEnabled: true
+  ApiGatewayApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+  MyWAFAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGatewayApi}/stages/Prod
+      WebACLArn:
+        Fn::GetAtt:
+        - MyWAFACL
+        - Arn
   StockAppBus:
     Type: AWS::Events::EventBus
     Properties:
       Name: StockAppBus
-  ApiGatewayApi:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      StageName: Prod
-      CorsConfiguration:
-        AllowOrigins:
-        - '*'
-        AllowHeaders:
-        - '*'
-        AllowMethods:
-        - POST
-        AllowCredentials: false
   PurchaseFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -46,11 +81,11 @@ Resources:
             Ref: StockAppBus
       Events:
         AddImage:
-          Type: HttpApi
+          Type: Api
           Properties:
             Path: /purchase
             Method: post
-            ApiId:
+            RestApiId:
               Ref: ApiGatewayApi
     Metadata:
       SamResourceId: PurchaseFunction
@@ -68,11 +103,11 @@ Resources:
             Ref: Inventory
       Events:
         AddImage:
-          Type: HttpApi
+          Type: Api
           Properties:
             Path: /stock
             Method: get
-            ApiId:
+            RestApiId:
               Ref: ApiGatewayApi
     Metadata:
       SamResourceId: StockFunction
