@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: >
+  SAM template for AI-GoogleGemini
+
+  This template demonstrates the minimal set of features needed to define a
+  serverless application.
+  
+Parameters:
+  ApiKey:
+    Type: String
+    Description: Google API Key
+    Default: '<YOUR_GoogleAPIKey_HERE>'
+  Prompt:
+    Type: String
+    Description: Prompt
+    Default: 'Extract the text from this image'
+  BucketNamePrefix:
+    Type: String
+    Default: ai-gemini-app
+  TableName:
+    Type: String
+    Description: DynamoDB table name
+    Default: RegBICTable
+
+Resources:
+  GoogleGeminiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 120
+      MemorySize: 512
+      Environment:
+        Variables:
+          API_KEY: !Ref ApiKey
+          PROMPT: !Ref Prompt
+          TABLE_NAME: !Ref TableName
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Sub "${BucketNamePrefix}-${AWS::AccountId}"
+        - DynamoDBCrudPolicy:
+            TableName: RegBICTable
+      Events:
+        Trigger:
+          Type: EventBridgeRule
+          Properties:
+            InputPath: $.detail
+            Pattern:
+              source:
+                - "aws.s3"
+              detail-type:
+                - "Object Created"
+              detail:
+                bucket:
+                  name:
+                    - !Sub "${BucketNamePrefix}-${AWS::AccountId}"
+  
+  GoogleGeminiS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${BucketNamePrefix}-${AWS::AccountId}"
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: True        
+
+  # Enforce HTTPS only access to S3 bucket #
+  BucketForImagePolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref GoogleGeminiS3Bucket
+      PolicyDocument:
+        Statement:
+        - Action: s3:*
+          Effect: Deny
+          Principal: "*"
+          Resource:
+          - !Sub "arn:aws:s3:::${GoogleGeminiS3Bucket}/*"
+          - !Sub "arn:aws:s3:::${GoogleGeminiS3Bucket}"
+          Condition:
+            Bool:
+              aws:SecureTransport: false
+
+  DynamoDBRegTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref TableName
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+Outputs:
+  LambdaGeminiFunction:
+    Value: !GetAtt GoogleGeminiFunction.Arn
+  BucketGoogleGemini:
+    Value: !Ref GoogleGeminiS3Bucket
+  DynamoDBTable:
+    Value: !Ref DynamoDBRegTable
