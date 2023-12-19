@@ -4,7 +4,7 @@
 .aws-sam
 
 samconfig.toml
-
+token
 ### Linux ###
 *~
 

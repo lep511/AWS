@@ -1,50 +1,120 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Sample Slack Template
+Description: CloudFormation template for EventBridge rule 'SlackConfigRule'
 Parameters:
-  SlackURL:
+  SlackAuthToken:
     Type: String
-    Description: Incoming Webhook unique URL
+    Description: Token from slack. Example> Bearer xoxb-.......
+    NoEcho: true
+    MinLength: '1'
+    MaxLength: '512'
 Resources:
-  SlackFunction:
-    Type: AWS::Serverless::Function
+  SlackConnection:
+    Type: AWS::Events::Connection
     Properties:
-      CodeUri: SlackFunction
-      Handler: lambda_function.lambda_handler
-      Runtime: python3.9
-      MemorySize: 128
-      Timeout: 90
-      Environment:
-        Variables:
-          SLACK_URL:
-            Ref: SlackURL
-      Layers:
-      - Ref: Libs
-      Events:
-        SlackEvent:
-          Type: EventBridgeRule
-          Properties:
-            Pattern:
-              source:
-              - aws.securityhub
-              detail-type:
-              - Security Hub Findings - Imported
-              detail:
-                findings:
-                  Severity:
-                    Label:
-                    - CRITICAL
-                    - HIGH
-                  Workflow:
-                    Status:
-                    - NEW
-    Metadata:
-      SamResourceId: SlackFunction
-  Libs:
-    Type: AWS::Serverless::LayerVersion
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: Authorization
+          ApiKeyValue:
+            Ref: SlackAuthToken
+      Name: Slack-sam-auth
+  SlackDestination:
+    Type: AWS::Events::ApiDestination
     Properties:
-      LayerName: slack-layer
-      Description: Lambda layer with slack library
-      ContentUri: ../../libs
-      CompatibleRuntimes:
-      - python3.9
+      ConnectionArn:
+        Fn::GetAtt:
+        - SlackConnection
+        - Arn
+      HttpMethod: POST
+      InvocationEndpoint: https://slack.com/api/chat.postMessage
+      InvocationRateLimitPerSecond: 10
+      Name: Slack
+  SlackPermission:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - events.amazonaws.com
+          Action: sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: SlackPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - events:InvokeApiDestination
+            Resource:
+            - Fn::GetAtt:
+              - SlackDestination
+              - Arn
+  EventRule0:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: default
+      EventPattern:
+        source:
+        - aws.securityhub
+        detail-type:
+        - Security Hub Findings - Imported
+        detail:
+          findings:
+            ProductName:
+            - Config
+            Severity:
+              Label:
+              - MEDIUM
+              - CRITICAL
+              - HIGH
+            Workflow:
+              Status:
+              - NEW
+      Name: Slack-Config-rule
+      State: ENABLED
+      Targets:
+      - Id: Slack
+        Arn:
+          Fn::GetAtt:
+          - SlackDestination
+          - Arn
+        RoleArn:
+          Fn::GetAtt:
+          - SlackPermission
+          - Arn
+        InputTransformer:
+          InputPathsMap:
+            account: $.detail.findings[0].AwsAccountId
+            description: $.detail.findings[0].Description
+            region: $.detail.findings[0].Region
+            resource_id: $.detail.findings[0].Resources[0].Id
+            resource_type: $.detail.findings[0].Resources[0].Type
+            rule_name: $.detail.findings[0].Title
+            severity: $.detail.findings[0].Severity.Label
+            title: $.detail.findings[0].Title
+          InputTemplate: "{\n   \"channel\":\"general\",\n   \"blocks\":[\n      {\n\
+            \         \"type\":\"section\",\n         \"text\":{\n            \"type\"\
+            :\"mrkdwn\",\n            \"text\":\"*<title>*\"\n         }\n      },\n\
+            \      {\n         \"type\":\"section\",\n         \"text\":{\n      \
+            \      \"type\":\"mrkdwn\",\n            \"text\":\"\u2022 *Product Name:*\
+            \ AWS Config \\n \u2022 *Description:* <description> \\n \u2022 *Account:*\
+            \ <account> \\n \u2022 *Region:* <region> \\n \u2022 *Severity:* <severity>\
+            \ \\n \u2022 *Resource Type:* <resource_type> \\n \u2022 *Resource Id:*\
+            \ <resource_id> \\n \u2022 *Rule Name:* _<rule_name>_\"\n         },\n\
+            \         \"accessory\":{\n            \"type\":\"image\",\n         \
+            \   \"image_url\":\"https://awsvideocatalog.com/images/aws/png/PNG Light/Management\
+            \ & Governance/AWS-Config.png\",\n            \"alt_text\":\"config icon\"\
+            \n         }\n      },\n      {\n         \"type\":\"section\",\n    \
+            \     \"text\":{\n            \"type\":\"mrkdwn\",\n            \"text\"\
+            :\">Link to rule:\"\n         },\n         \"accessory\":{\n         \
+            \   \"type\":\"button\",\n            \"text\":{\n               \"type\"\
+            :\"plain_text\",\n               \"text\":\"Config rule\",\n         \
+            \      \"emoji\":true\n            },\n            \"value\":\"click_me_123\"\
+            ,\n            \"url\":\"https://<region>.console.aws.amazon.com/config/home?region=<region>#/rules/details?configRuleName=<rule_name>\"\
+            \n         }\n      },\n      {\n         \"type\":\"divider\"\n     \
+            \ }\n   ]\n}\n"
