@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Callback Pattern Example (Amazon SQS, Amazon SNS, Lambda)
+Parameters:
+  QueueName:
+    Type: String
+    Default: callback-queue
+    Description: Name of the SQS queue to create for the callback pattern
+  TopicName:
+    Type: String
+    Default: callback-topic
+    Description: Name of the SNS topic to create for the callback pattern
+Resources:
+  CallBackQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Ref: QueueName
+  CallBackTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Ref: TopicName
+  LambdaCallbackFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaCallbackFunctionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: LambdaCallbackFunctionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sqs:ChangeMessageVisibility
+            - sqs:ChangeMessageVisibilityBatch
+            - sqs:DeleteMessage
+            - sqs:DeleteMessageBatch
+            - sqs:GetQueueAttributes
+            - sqs:ReceiveMessage
+            Resource:
+              Fn::Sub: arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${QueueName}
+          - Effect: Allow
+            Action:
+            - states:SendTaskSuccess
+            Resource:
+              Fn::Sub: arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:CallBackStateMachine
+  CallbackFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      CodeUri: CallbackFunction
+      Description: Function for the callback pattern
+      MemorySize: 128
+      Timeout: 10
+      Role:
+        Fn::GetAtt:
+        - LambdaCallbackFunctionRole
+        - Arn
+      Events:
+        MySQSEvent:
+          Type: SQS
+          Properties:
+            Queue:
+              Fn::GetAtt:
+              - CallBackQueue
+              - Arn
+            BatchSize: 10
+    Metadata:
+      SamResourceId: CallbackFunction
+  CallbackStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: CallBackStateMachine
+      DefinitionUri: ../../statemachine/statemachine_callbacksample.json
+      DefinitionSubstitutions:
+        QueueUrl:
+          Fn::Sub: https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/${QueueName}
+        TopicArn:
+          Fn::Sub: arn:aws:sns:${AWS::Region}:${AWS::AccountId}:${TopicName}
+      Policies:
+      - SQSSendMessagePolicy:
+          QueueName:
+            Ref: QueueName
+      - SNSPublishMessagePolicy:
+          TopicName:
+            Ref: TopicName
