@@ -52,6 +52,7 @@ Resources:
           - Effect: Allow
             Action:
             - states:SendTaskSuccess
+            - states:SendTaskFailure
             Resource:
               Fn::Sub: arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:CallBackStateMachine
   CallbackFunction:

@@ -1,0 +1,313 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CFN for Task 1 of "Help! My CloudFormation template is broken"
+
+# Parameters enable you to input custom values to your template each time you create or update a stack.
+Parameters:
+  # There is no need to change this parameter CloudFormation allows the use of special parameters that pull data from Systems Manager parameter store
+  # AWS maintains a number of special parameters to provide information like AMI image names
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+# The required Resources section declares the AWS resources that you want to include in the application stack
+Resources:
+
+  # Create a log group in CloudWatch that we can use to send all our logs to, the first line of a resource declaration is the name we are giving the resource in our stack
+  LogGroup: 
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      # !Sub is a special function in CloudFormation that lets us substitute parameter values into the code
+      LogGroupName: !Sub /${AWS::StackName}
+      RetentionInDays: 30
+
+  # Here we are creating an IAM role that our web servers will use, it allows them to write their logs to CloudWatch
+  WebServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Role used by EC2 web servers
+      RoleName: !Sub ${AWS::StackName}-WebServerRole
+      Path: /
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-logs-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:Describe*
+                  - logs:List*
+                  - logs:Get*
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*
+
+  # This next section we create all the necessary components to set up the networking environment, a VPC with public and private subnets in multiple availability zones
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC
+
+  # The !Select in the AvailabilityZone line is letting us select the first (0) element of list returned by the GetAZ call effectively giving us a valid AZ reference
+  # We then use the same line again for the second subnet but use the second (1) index in the list to make sure we get a different AZ
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      # !Ref is another special function that allow us to refer to a previously declared resource in the stack
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, Fn::GetAZs: '']
+      MapPublicIpOnLaunch: true
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, Fn::GetAZs: '']
+      MapPublicIpOnLaunch: true
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.3.0/24'
+      AvailabilityZone: !Select [0, Fn::GetAZs: '']
+      MapPublicIpOnLaunch: false
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: '10.0.4.0/24'
+      AvailabilityZone: !Select [1, Fn::GetAZs: '']
+      MapPublicIpOnLaunch: false
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+
+  PublicRouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties: 
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      # !GetAtt is a special function that allows us to reference a specific property of a previously declared resource in the stack
+      AllocationId: !GetAtt ElasticIP.AllocationId
+      ConnectivityType: public
+      SubnetId: !Ref PublicSubnetA
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-A
+  
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-B
+
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+
+  PrivateRouteTableAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
+
+  PrivateRouteTableBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+  # This is the end of the network setup
+
+  # Now we define 2 security groups one for the load balancer to accept traffic from the internet, and one for our web servers to accept traffic from the load balancer
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB Security Group
+      GroupName: !Sub ${AWS::StackName}-ALB-SG
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: Security Group for EC2 
+      GroupName: !Sub ${AWS::StackName}-EC2-SG
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId:
+          Fn::GetAtt:
+          - ALBSecurityGroup
+          - GroupId
+
+  # Create a Target group for the load balancer to send traffic to, this is what we will put our EC2 instances in
+  EC2TargetGroup:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        HealthCheckIntervalSeconds: 5
+        HealthCheckProtocol: HTTP
+        HealthCheckTimeoutSeconds: 4
+        HealthyThresholdCount: 2
+        UnhealthyThresholdCount: 3
+        Matcher:
+          HttpCode: '200'
+        Name: !Sub ${AWS::StackName}-EC2TargetGroup
+        Port: 80
+        Protocol: HTTP
+        TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '20'
+        VpcId: !Ref MyVPC
+
+  # Create our actual load balancer and associate it with our public subnets and the security group we created for it
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${AWS::StackName}-LB
+      Type: application
+      Scheme: internet-facing
+      Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
+      SecurityGroups:
+        - !GetAtt ALBSecurityGroup.GroupId
+  
+  # Create a listener on the load balancer to listen for traffic on port 80 and forward it to our target group
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref EC2TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # As we are using an autoscaling group with a launch template we need an Instance Profile to link the role to the instances that are created
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+        Path: "/"
+        Roles: 
+          - 
+            Ref: WebServerRole
+
+  # The launch template is used to set up each EC2 instance that is deployed, we add some userdata that installs our http server and forwards out logs to CloudWatch
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties: 
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: t3.micro
+        KeyName: jam-fix-my-cfn
+        SecurityGroupIds: 
+          - !Ref EC2SecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt Ec2InstanceProfile.Arn
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            sudo yum update -y
+            sudo yum install -y httpd
+            sudo yum install -y awslogs
+            sudo systemctl start httpd
+            sudo systemctl enable httpd
+            echo "<h1>Congratulations - Task 1 is Complete!</h1>" > /var/www/html/index.html
+            sudo echo "region = ${AWS::Region}" >> /etc/awslogs/awslogs.conf
+            sudo sed -i "s/log_group_name = \/var\/log\/messages/log_group_name = \/${AWS::StackName}/" /etc/awslogs/awslogs.conf
+            sudo sed -i "s/\[\/var\/log\/messages\]/\[\/${AWS::StackName}\]/" /etc/awslogs/awslogs.conf
+            sudo sed -i "s/region =.*/region = ${AWS::Region}/" /etc/awslogs/awscli.conf
+            sudo systemctl start awslogsd
+            sudo systemctl enable awslogsd.service
+
+  # The Autoscaling group links our launch template to our target group and specifies the subnets to deploy them to
+  WebServerGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MaxSize: '4'
+      MinSize: '2'
+      TargetGroupARNs:
+        - !Ref EC2TargetGroup
+      VPCZoneIdentifier: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+
+# The outputs section declares output values that you can import into other stacks or view information about any of the created resources
+Outputs:
+  AlbUrl:
+    Description: URL of web server cluster
+    Value: !GetAtt ApplicationLoadBalancer.DNSName

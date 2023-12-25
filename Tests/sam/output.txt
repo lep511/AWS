@@ -1,0 +1,1 @@
+/home/lep511/agit/AWS/Tests/sam/template.yaml is a valid SAM Template

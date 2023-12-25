@@ -1,0 +1,13 @@
+{
+  "doctor": {
+    "name": "Dr. Smith",
+    "specialty": "Cardiology",
+    "doctor_id": "949323"
+  },
+  "patient": {
+    "name": "John Doe",
+    "dob": "1985-05-20",
+    "patient_id": "4993000"
+  },
+  "appointmentDateTime": "2023-05-10T14:00:00.000Z"
+}

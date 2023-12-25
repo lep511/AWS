@@ -1,7 +1,10 @@
 {
     "yaml.schemas": {
         "https://raw.githubusercontent.com/awslabs/goformation/master/schema/sam.schema.json": "file:///home/lep511/AWS/SAM/ArchSolution/Ejercicio02/api-rest/api-rest-template.yaml",
-        "https://raw.githubusercontent.com/awslabs/goformation/master/schema/cloudformation.schema.json": "file:///h%3A/Documentos/GitHub/AWS/AWS/Dynamodb/template.yml"
+        "https://raw.githubusercontent.com/awslabs/goformation/master/schema/cloudformation.schema.json": [
+            "file:///h%3A/Documentos/GitHub/AWS/AWS/Dynamodb/template.yml",
+            "untitled:Untitled-1"
+        ]
     },
     "serverlessConsole.services": [
         {
