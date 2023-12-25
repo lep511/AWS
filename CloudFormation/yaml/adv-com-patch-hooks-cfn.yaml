@@ -1,0 +1,501 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for the COM advanced workshop for AWS-RunPatchBaslineWithHooks.
+Resources:
+# Create a VPC
+  AdvCOMWorkshopVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: 'true'
+      EnableDnsSupport: 'true'
+      Tags:
+      - Key: Name
+        Value: VPC for ADV COM WS
+# Create and attach InternetGateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: AdvCOMWorkshopVpc
+  AttachIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref AdvCOMWorkshopVpc
+      InternetGatewayId: !Ref InternetGateway
+# Create First Subnet
+  FirstSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AdvCOMWorkshopVpc
+      CidrBlock: 10.0.10.0/24
+      Tags:
+      - Key: Name
+        Value: Public Subnet A for ADV COM WS
+# Creating additional subnet
+  SecondSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AdvCOMWorkshopVpc
+      CidrBlock: 10.0.20.0/24
+      Tags:
+      - Key: Name
+        Value: Public Subnet C for ADV COM WS
+# Create and Set Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  !Ref AdvCOMWorkshopVpc
+      Tags:
+      - Key: Name
+        Value: Public Route Table for ADV COM WS
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachIGW
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+# Associate Public Subnets to Public Route Table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref FirstSubnet
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecondSubnet
+      RouteTableId: !Ref PublicRouteTable
+# Create Security Group for the following:
+  MainSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for Web Server in ADV COM WS
+      VpcId: !Ref AdvCOMWorkshopVpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: Web Host SG for ADV COM WS
+
+# Create Custom Role with required permission for this lab
+  EC2ManagedInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+      - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore
+                
+# Create SSM InstanceProfile
+  EC2ManagedInstanceProfile: 
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Roles: 
+        - !Ref EC2ManagedInstanceRole
+
+#-------------------------------------------------
+# Lambda function to get old AWS provided Windows 2019 AMI 
+#-------------------------------------------------
+  GetOldAMILambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - lambda.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Path: "/"
+      Tags:
+        - Key: Workload
+          Value: com-workshop
+      Policies:
+      - PolicyName: LambdaFunctionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - ec2:Describe*
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - ssm:Describe*
+              - ssm:PutParameter
+              - ssm:DeleteParameter
+              - ssm:DeleteParameters
+              - ssm:GetParameter
+              - ssm:GetParameters
+            Resource: '*'
+  GetOldAMILambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: getOldWindowsAMI-Hooks
+      Role: !GetAtt GetOldAMILambdaFunctionRole.Arn
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      Timeout: 15
+      Tags:
+        - Key: Workload
+          Value: com-workshop
+      Code:
+        ZipFile: |
+      
+          import boto3
+          import os
+          import cfnresponse
+          from operator import attrgetter
+
+          def lambda_handler(event, context):
+            
+            response_data = {}
+            physical_resource_id = event['PhysicalResourceId'] if 'PhysicalResourceId' in event else None
+            request_type = event['RequestType']
+            
+            if request_type == 'Delete':
+              response_data['Message'] = 'SSM Parameter will be deleted by CFN'
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physical_resource_id)
+              return
+
+            if request_type == 'Create' or request_type == 'Update':
+              try:
+                # Define the region and AMI Name
+                aws_region = aws_region = os.environ['AWS_REGION']
+                ami_name = "Windows_Server-2019-English-Full-Base*"
+    
+                # Create a Boto3 resource for EC2 service and filter based on AMI name
+                ec2_resource = boto3.resource('ec2', region_name = aws_region)
+                response = ec2_resource.images.filter(
+                  Filters=[
+                    {
+                      'Name': 'name',
+                      'Values': [ami_name]
+                    },
+                    {
+                      'Name': 'owner-alias',
+                      'Values': ['amazon']
+                    }
+                  ]
+                )
+                #Sort the list based on Creation date and get the first ami id from the list
+                image_list = sorted(list(response),key=attrgetter('creation_date'))
+                first_ami_id = image_list[0].id
+                response_data['AmiId'] = first_ami_id
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physical_resource_id)
+                return
+              except Exception:
+                cfnresponse.send(event, context, cfnresponse.FAILED, response_data, physical_resource_id)
+                return
+
+  GetOldAMILambdaInvoke:
+    Type: AWS::CloudFormation::CustomResource
+    Version: "1.0"
+    Properties:
+      ServiceToken: !GetAtt GetOldAMILambdaFunction.Arn
+
+  OldWindowsAmiIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      DataType: aws:ec2:image
+      Description: Old Windows 2019 AMI ID for com workshop compliance graph
+      Name: /com-workshop/windows-2019-old-ami-hooks
+      Type: String
+      Value: !GetAtt GetOldAMILambdaInvoke.AmiId
+
+#-------------------------------------------------
+# Lambda function to get old AWS provided Amazon Linux 2 AMI 
+#-------------------------------------------------
+
+  GetOldAL2AMILambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: getOldAL2AMI-Hooks
+      Role: !GetAtt GetOldAMILambdaFunctionRole.Arn
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      Timeout: 15
+      Tags:
+        - Key: Workload
+          Value: com-workshop
+      Code:
+        ZipFile: |
+      
+          import boto3
+          import os
+          import cfnresponse
+          from operator import attrgetter
+
+          def lambda_handler(event, context):
+            
+            response_data = {}
+            physical_resource_id = event['PhysicalResourceId'] if 'PhysicalResourceId' in event else None
+            request_type = event['RequestType']
+            
+            if request_type == 'Delete':
+              response_data['Message'] = 'SSM Parameter will be deleted by CFN'
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physical_resource_id)
+              return
+
+            if request_type == 'Create' or request_type == 'Update':
+              try:
+                # Define the region and AMI Name
+                aws_region = aws_region = os.environ['AWS_REGION']
+                ami_name = "amzn2-ami-kernel-5.10-hvm*-x86_64-gp2"
+    
+                # Create a Boto3 resource for EC2 service and filter based on AMI name
+                ec2_resource = boto3.resource('ec2', region_name = aws_region)
+                response = ec2_resource.images.filter(
+                  Filters=[
+                    {
+                      'Name': 'name',
+                      'Values': [ami_name]
+                    },
+                    {
+                      'Name': 'owner-alias',
+                      'Values': ['amazon']
+                    }
+                  ]
+                )
+                #Sort the list based on Creation date and get the first ami id from the list
+                image_list = sorted(list(response),key=attrgetter('creation_date'))
+                first_ami_id = image_list[0].id
+                response_data['AmiId'] = first_ami_id
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physical_resource_id)
+                return
+              except Exception:
+                cfnresponse.send(event, context, cfnresponse.FAILED, response_data, physical_resource_id)
+                return
+
+  GetOldAL2AMILambdaInvoke:
+    Type: AWS::CloudFormation::CustomResource
+    Version: "1.0"
+    Properties:
+      ServiceToken: !GetAtt GetOldAL2AMILambdaFunction.Arn
+
+  OldAL2AmiIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      DataType: aws:ec2:image
+      Description: Old Amazon Linux 2 AMI ID for COM workshop
+      Name: /com-workshop/al2-old-ami-hooks
+      Type: String
+      Value: !GetAtt GetOldAL2AMILambdaInvoke.AmiId
+
+# Create EC2 Linux
+  WebServerLinuxInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !GetAtt OldAL2AmiIdParameter.Value
+      InstanceType: t2.medium
+      IamInstanceProfile: !Ref EC2ManagedInstanceProfile
+      Tags:
+        - Key: Name
+          Value: ADV COM WS - Web Host - Linux Apache
+        - Key: Env
+          Value: Workshop
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum install httpd -y
+          chkconfig httpd on
+          systemctl start httpd
+          echo '<!DOCTYPE html><body style="color:#FFFFFF;background-color:#FFA500"><center>' > /var/www/html/index.html
+          echo '<h1>The Linux Apache server is up and running. The website is ready!</h1>'>> /var/www/html/index.html
+          echo '</center></body></html>'>> /var/www/html/index.html
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref MainSecurityGroup
+          AssociatePublicIpAddress: 'true'
+          DeviceIndex: '0'
+          DeleteOnTermination: 'true'
+          SubnetId: !Ref FirstSubnet
+
+# Create EC2 Windows
+  WebServerWindowsInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !GetAtt OldWindowsAmiIdParameter.Value
+      InstanceType: t2.medium
+      IamInstanceProfile: !Ref EC2ManagedInstanceProfile
+      Tags:
+        - Key: Name
+          Value: ADV COM WS - Web Host - Windows IIS
+        - Key: Env
+          Value: Workshop
+      UserData:
+        Fn::Base64: |
+          <powershell>
+          Install-WindowsFeature Web-Server -IncludeManagementTools
+          remove-item  C:\inetpub\wwwroot\iisstart.htm
+          Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $('<!DOCTYPE html><body style="color:#FFFFFF;background-color:#0072C6"><center>')
+          Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $('<h1>The Windows IIS server is up and running. The website is ready!</h1>')
+          Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $('</center></body></html>')
+          </powershell>
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref MainSecurityGroup
+          AssociatePublicIpAddress: 'true'
+          DeviceIndex: '0'
+          DeleteOnTermination: 'true'
+          SubnetId: !Ref SecondSubnet
+
+# SSM Documents to STOP/START/CHECK IIS - WINDOWS PLATFORM
+  StartIISService:
+    Type: AWS::SSM::Document
+    Properties:
+      Content:
+        schemaVersion: '2.2'
+        description: This document runs a PowerShell command on Windows instances.
+        mainSteps:
+        - action: aws:runPowerShellScript
+          name: StartIISService
+          precondition:
+            StringEquals:
+              - platformType
+              - Windows
+          inputs:
+            timeoutSeconds: '60'
+            runCommand:
+            - Start-Service -Name W3SVC
+      TargetType: "/AWS::EC2::Instance"
+      DocumentFormat: YAML
+      DocumentType: Command
+      Name: ADV-COM-WS-Windows-StartIISAdmin
+  StopIISService:
+    Type: AWS::SSM::Document
+    Properties:
+      Content:
+        schemaVersion: '2.2'
+        description: This document runs a PowerShell command on Windows instances.
+        mainSteps:
+        - action: aws:runPowerShellScript
+          name: StopIISService
+          precondition:
+            StringEquals:
+              - platformType
+              - Windows
+          inputs:
+            timeoutSeconds: '60'
+            runCommand:
+            - Stop-Service -Name W3SVC
+      TargetType: "/AWS::EC2::Instance"
+      DocumentFormat: YAML
+      DocumentType: Command
+      Name: ADV-COM-WS-Windows-StopIISAdmin
+  UpdateIISService:
+    Type: AWS::SSM::Document
+    Properties:
+      Content:
+        schemaVersion: '2.2'
+        description: This document runs a PowerShell command on Windows instances.
+        mainSteps:
+        - action: aws:runPowerShellScript
+          name: UpdateIISService
+          precondition:
+            StringEquals:
+              - platformType
+              - Windows
+          inputs:
+            timeoutSeconds: '60'
+            runCommand:
+            - remove-item  C:\inetpub\wwwroot\iisstart.htm
+            - Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $('<!DOCTYPE html><body style="color:#82d682;background-color:#0072C6"><center>')
+            - Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $('<h1>Congrats you have finished patching the Windows IIS server using AWS-RunPatchBaselineWithHooks</h1>')
+            - Add-Content -Path "C:\inetpub\wwwroot\iisstart.htm" -Value $('</center></body></html>')
+      TargetType: "/AWS::EC2::Instance"
+      DocumentFormat: YAML
+      DocumentType: Command
+      Name: ADV-COM-WS-Windows-UpdateIISAdmin
+
+# SSM Documents to STOP/START/UPDATE APACHE - LINUX PLATFORM
+  StartApacheService:
+    Type: AWS::SSM::Document
+    Properties:
+      Content:
+        schemaVersion: '2.2'
+        description: This document runs command on Linux instances.
+        mainSteps:
+        - action: aws:runShellScript
+          name: StartApacheService
+          precondition:
+            StringEquals:
+              - platformType
+              - Linux
+          inputs:
+            timeoutSeconds: '60'
+            workingDirectory: /tmp
+            runCommand:
+            - sudo systemctl start httpd
+      TargetType: "/AWS::EC2::Instance"
+      DocumentFormat: YAML
+      DocumentType: Command
+      Name: ADV-COM-WS-Linux-StartApache
+  StopApacheService:
+    Type: AWS::SSM::Document
+    Properties:
+      Content:
+        schemaVersion: '2.2'
+        description: This document runs command on Linux instances.
+        mainSteps:
+        - action: aws:runShellScript
+          name: StopApacheService
+          precondition:
+            StringEquals:
+              - platformType
+              - Linux
+          inputs:
+            timeoutSeconds: '60'
+            workingDirectory: /tmp
+            runCommand:
+            - sudo systemctl stop httpd
+      TargetType: "/AWS::EC2::Instance"
+      DocumentFormat: YAML
+      DocumentType: Command
+      Name: ADV-COM-WS-Linux-StopApache
+  UpdateApacheService:
+    Type: AWS::SSM::Document
+    Properties:
+      Content:
+        schemaVersion: '2.2'
+        description: This document runs command on Linux instances.
+        mainSteps:
+        - action: aws:runShellScript
+          name: UpdateApacheService
+          precondition:
+            StringEquals:
+              - platformType
+              - Linux
+          inputs:
+            timeoutSeconds: '60'
+            workingDirectory: /tmp
+            runCommand:
+            - sudo systemctl status httpd
+            - sudo rm /var/www/html/index.html
+            - echo '<!DOCTYPE html><body style="color:#006400;background-color:#FFA500"><center>' > /var/www/html/index.html
+            - echo '<h1>Congrats you have finished patching the Linux Apache server using AWS-RunPatchBaselineWithHooks</h1>'>> /var/www/html/index.html
+            - echo '</center></body></html>'>> /var/www/html/index.html
+      TargetType: "/AWS::EC2::Instance"
+      DocumentFormat: YAML
+      DocumentType: Command
+      Name: ADV-COM-WS-Linux-UpdateApache
+
+# Website Links for both Linux and Windows 
+Outputs:
+  LinuxPublicDNS:
+    Value: !Sub http://${WebServerLinuxInstance.PublicDnsName}
+    Description: Linux Web Host Public URL
+  WindowsPublicDNS:
+    Value: !Sub http://${WebServerWindowsInstance.PublicDnsName}
+    Description: Windows Web Host Public URL
