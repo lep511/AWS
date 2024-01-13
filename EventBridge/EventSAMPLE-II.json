@@ -1,0 +1,61 @@
+{
+  "id": "1234567890",
+  "type": "user_login",
+  "timestamp": "2023-03-08T12:00:00Z",
+  "data": {
+    "user_id": "abc123",
+    "email": "user@example.com",
+    "ip_address": "192.168.1.1",
+    "device_info": {
+      "os": "iOS",
+      "device_model": "iPhone 13 Pro Max"
+    },
+    "location": {
+      "latitude": 37.422408,
+      "longitude": -122.084068
+    },
+    "referrer": "https://www.google.com/",
+    "landing_page": "https://www.example.com/",
+    "session_id": "12345678901234567890",
+    "events": [
+      {
+        "type": "page_view",
+        "timestamp": "2023-03-08T12:01:00Z",
+        "data": {
+          "page_url": "https://www.example.com/product-page.html"
+        }
+      },
+      {
+        "type": "add_to_cart",
+        "timestamp": "2023-03-08T12:02:00Z",
+        "data": {
+          "product_id": "1234567890",
+          "quantity": 1
+        }
+      },
+      {
+        "type": "purchase",
+        "timestamp": "2023-03-08T12:03:00Z",
+        "data": {
+          "product_ids": [
+            "1234567890",
+            "9876543210"
+          ],
+          "quantities": [
+            1,
+            2
+          ],
+          "total_price": 100.00
+        }
+      }
+    ]
+  },
+  "metadata": {
+    "source": "web",
+    "device_type": "mobile",
+    "os_version": "15.0",
+    "browser": "Chrome",
+    "browser_version": "98.0.4758.102",
+    "language": "en-US"
+  }
+}
