@@ -16,7 +16,7 @@ class DecimalEncoder_(json.JSONEncoder):
                 return int(o)
         return super(DecimalEncoder, self).default(o)
 
-def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None, limit=None, scan_index_forward=True):
+def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=False, consumed_capacity=None, limit=None, reverse=True):
     """
     Gets item data from the table.
     :param table: The table object.
@@ -26,7 +26,7 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
     :param consistent_read: If True, then a strongly consistent read is used.
     :param consumed_capacity: Return the consumed capacity. Valid values: None, "TOTAL", "INDEXES". Default: None.
     :param limit: The maximum number of items to evaluate (not necessarily the number of matching items). Default: None.
-    :param scan_index_forward: If True, then the order of the index is ascending. If False, then the order of the index is descending. Default: True.
+    :param reverse: If True, then the order of the search is ascending. If False, then the order of the search is descending. Default: True.
     :return: The data about the requested item.
     """
     if consumed_capacity is None or False: consumed_capacity = 'NONE'
@@ -67,8 +67,8 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
         handle_error(f"The format of the main key is incorrect, it should be: {pk_type}")
         return
         
-    if not sk_name:
-        # If the sort key does not exist only run get_item
+    if not sk_name and not index_name:
+        # If the sort key does not exist and the index is not specified only the get_item method is used
         response = table.get_item(
             Key={pk_name: pk_value},
             ConsistentRead=consistent_read,
@@ -85,7 +85,7 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
                         Limit=limit,
-                        ScanIndexForward=scan_index_forward
+                        ScanIndexForward=reverse
                     )
                     data_items = check_result(response, consumed_capacity, pk_value, sk_value)
                     return data_items
@@ -101,7 +101,7 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
                         Limit=limit,
-                        ScanIndexForward=scan_index_forward
+                        ScanIndexForward=reverse
                     )
                     data_items = check_result(response, consumed_capacity, pk_value, sk_value)
                     return data_items
@@ -142,7 +142,13 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
         elif sk_value.endswith("*"):
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).begins_with(sk_value[:-1])
             
-        elif re.search(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.*_\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.*$', sk_value):
+        # Find 23-10-03_23-10-06
+        elif re.search(r'\d{2}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}', sk_value):
+            value = sk_value.split("_")
+            qry = Key(pk_name).eq(pk_value) & Key(sk_name).between(*value)
+        
+        # Find 2023-10-03_2023-10-06
+        elif re.search(r'\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}', sk_value):
             value = sk_value.split("_")
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).between(*value)
  
@@ -167,7 +173,7 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
                         Limit=limit,
-                        ScanIndexForward=scan_index_forward
+                        ScanIndexForward=reverse
                     )
                 except ClientError as error:
                     handle_error(error)
@@ -182,7 +188,7 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
                         Limit=limit,
-                        ScanIndexForward=scan_index_forward
+                        ScanIndexForward=reverse
                     )
                 except ClientError as error:
                     handle_error(error)
@@ -213,7 +219,7 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                         ConsistentRead=consistent_read,
                         ReturnConsumedCapacity=consumed_capacity,
                         Limit=limit,
-                        ScanIndexForward=scan_index_forward
+                        ScanIndexForward=reverse
                     )
                 except ClientError as error:
                     handle_error(error)
@@ -238,10 +244,7 @@ def check_result(response, consumed_capacity, pk_value=None, sk_value=None):
         response['Items'] = json.loads(js_data)
         result = response
     else:
-        if sk_value:
-            print(f"Item not found: {pk_value} - {sk_value}")
-        else:
-            print(f"Item not found: {pk_value}")
+        print("Not found any items")
         result = None
         
     if consumed_capacity != 'NONE':

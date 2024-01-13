@@ -37,16 +37,10 @@ class DynamoTable:
         if not table_name:
             self.table_name = None
         elif not self.table_exists(table_name):
-            print(
-                "Table %s doesn't exist. To create use create_table() function.",
-                table_name)
+            print(f"Table {table_name} doesn't exist. To create use create_table() function.")
             self.table_name = None
-            raise ValueError("Table doesn't exist. To create use create_table() function.")
         else:
             self.select_table(table_name)
-            self.status_pitr = status_pitr
-            self.delete_protection = delete_protection
-            self.status_stream = status_stream
         
     def __repr__(self):
         if self.table_name != None:
@@ -303,7 +297,7 @@ class DynamoTable:
     
     
     def query(self, pk_value, sk_value=None, index_name=None, consistent_read=False, 
-              consumed_capacity=None, limit=None, scan_index_forward=True, to_pandas=False):
+              consumed_capacity=None, limit=None, reverse=True, to_pandas=False):
         """
         Queries an Amazon DynamoDB table and returns the matching items.
         :param pk_value: Primary key value.
@@ -313,10 +307,13 @@ class DynamoTable:
         :param consumed_capacity: Return the consumed capacity. Valid values: None, "TOTAL", "INDEXES". Default: None.
         :param to_pandas: If True, returns a pandas DataFrame. Default: True.
         :param limit: The maximum number of items to return. Default: None.
-        :param scan_index_forward: If True, then the order of the index is ascending. If False, then the order of the index is descending. Default: True.
+        :param reverse: If True, then the order of the search is ascending. If False, then the order of the search is descending. Default: True.
         :return: The item/items matching the query.
         """
-        response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity, limit, scan_index_forward)
+        response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity, limit, reverse)
+        
+        if not response:
+            return None
         
         if to_pandas:
             if not isinstance(response['Items'], list):
