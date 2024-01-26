@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Sample APP to create a Step Function State Machine that uses OpenAI to generate text
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: openai-text-generator
+    Description: >
+      Sample APP to create a Step Function State Machine that uses OpenAI to generate text
+    Author: Esteban Perez
+    SpdxLicenseId: MIT
+    Labels: ['openai', 'stepfunction', 'statemachine', 'text']
+  
+Parameters:
+  OpenAIKey:
+    Type: String
+    Description: OpenAI API Key
+    NoEcho: true
+    MinLength: 1
+    MaxLength: 100
+
+Resources:
+  OpenAIStepFunctionApiDestinationConnection:
+    Type: AWS::Events::Connection
+    Properties:
+      AuthorizationType: API_KEY
+      Description: Connection to OpenAI API
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: Authorization
+          ApiKeyValue: !Sub Bearer ${OpenAIKey}
+
+  OpenAIStepFunctionApiDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: OpenAIStepFunctionApiDestination
+      Description: OpenAIStepFunctionApiDestination
+      HttpMethod: POST
+      InvocationEndpoint: https://api.openai.com/v1/chat/completions
+      ConnectionArn: !GetAtt OpenAIStepFunctionApiDestinationConnection.Arn
+
+  OpenAIStepFunctionStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine/openai_api.json
+      DefinitionSubstitutions:
+        API_CONNECTION_ARN: !GetAtt OpenAIStepFunctionApiDestinationConnection.Arn
+      Tracing:
+        Enabled: True
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:InvokeHTTPEndpoint
+              Resource:
+                - !Sub arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:*
+              Condition:
+                StringEquals:
+                  states:HTTPEndpoint: https://api.openai.com/v1/chat/completions
+            - Effect: Allow
+              Action:
+                - events:RetrieveConnectionCredentials
+              Resource:
+                - !GetAtt OpenAIStepFunctionApiDestinationConnection.Arn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+              Resource:
+                - !GetAtt OpenAIStepFunctionApiDestinationConnection.SecretArn
+

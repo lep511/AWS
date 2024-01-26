@@ -1,0 +1,45 @@
+{
+    "Comment": "A state machine that calls a third-party API.",
+    "StartAt": "Call third-party API",
+    "States": {
+      "Call third-party API": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::http:invoke",
+        "Parameters": {
+          "Authentication": {
+            "ConnectionArn": "${API_CONNECTION_ARN}"
+          },
+          "ApiEndpoint": "https://api.openai.com/v1/chat/completions",
+          "Method": "POST",
+          "RequestBody": {
+            "model": "gpt-3.5-turbo-1106",
+            "response_format": {
+              "type": "json_object"
+            },
+            "messages": [
+              {
+                "role": "system",
+                "content": "You are a helpful assistant designed to output JSON."
+              },
+              {
+                "role": "user",
+                "content.$": "$.inputValue"
+              }
+            ]
+          }
+        },
+        "Retry": [
+          {
+            "ErrorEquals": [
+              "States.ALL"
+            ],
+            "BackoffRate": 2,
+            "IntervalSeconds": 1,
+            "MaxAttempts": 3,
+            "JitterStrategy": "FULL"
+          }
+        ],
+        "End": true
+      }
+    }
+  }
