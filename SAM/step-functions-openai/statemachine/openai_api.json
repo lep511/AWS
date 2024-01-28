@@ -1,45 +1,48 @@
 {
-    "Comment": "A state machine that calls a third-party API.",
-    "StartAt": "Call third-party API",
-    "States": {
-      "Call third-party API": {
-        "Type": "Task",
-        "Resource": "arn:aws:states:::http:invoke",
-        "Parameters": {
-          "Authentication": {
-            "ConnectionArn": "${API_CONNECTION_ARN}"
-          },
-          "ApiEndpoint": "https://api.openai.com/v1/chat/completions",
-          "Method": "POST",
-          "RequestBody": {
-            "model": "gpt-3.5-turbo-1106",
-            "response_format": {
-              "type": "json_object"
-            },
-            "messages": [
-              {
-                "role": "system",
-                "content": "You are a helpful assistant designed to output JSON."
+  "Comment":"A state machine that calls a third-party API.",
+  "StartAt":"Call third-party API",
+  "States":{
+     "Call third-party API":{
+        "Type":"Task",
+        "Resource":"arn:aws:states:::http:invoke",
+        "Parameters":{
+           "Authentication":{
+              "ConnectionArn":"${API_CONNECTION_ARN}"
+           },
+           "ApiEndpoint":"https://api.openai.com/v1/chat/completions",
+           "Method":"POST",
+           "RequestBody":{
+              "model":"gpt-3.5-turbo-1106",
+              "response_format":{
+                 "type":"json_object"
               },
-              {
-                "role": "user",
-                "content.$": "$.inputValue"
-              }
-            ]
-          }
+              "messages":[
+                 {
+                    "role":"system",
+                    "content":"You are a helpful assistant designed to output JSON."
+                 },
+                 {
+                    "role":"user",
+                    "content.$": "States.Format('Send a email from {} to {} where you discuss the weather. In the body, describe the current weather in {} as detailed as possible.\n\nRespond with json that adheres to the following jsonschema: {}', $.emailFrom, $.emailTo, $.location, $.schema)"
+                 }
+              ]
+           }
         },
-        "Retry": [
-          {
-            "ErrorEquals": [
-              "States.ALL"
-            ],
-            "BackoffRate": 2,
-            "IntervalSeconds": 1,
-            "MaxAttempts": 3,
-            "JitterStrategy": "FULL"
-          }
+        "Retry":[
+           {
+              "ErrorEquals":[
+                 "States.ALL"
+              ],
+              "BackoffRate":2,
+              "IntervalSeconds":1,
+              "MaxAttempts":3,
+              "JitterStrategy":"FULL"
+           }
         ],
-        "End": true
-      }
-    }
+        "End":true,
+        "ResultSelector": {
+            "response.$": "States.StringToJson($.ResponseBody.choices[0].message.content)"
+        }
+     }
   }
+}

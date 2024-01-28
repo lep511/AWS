@@ -1,3 +1,28 @@
 {
-    "inputValue": "Randomly generates 5 comments about a film"
-}
+    "emailFrom":"john.catron@example-pet-store.com",
+    "emailTo":"support@store.com",
+    "location":"Seattle, WA",
+    "schema":{
+       "$id":"https://example.com/person.schema.json",
+       "$schema":"https://json-schema.org/draft/2020-12/schema",
+       "title":"Mail",
+       "type":"object",
+       "properties":{
+          "emailFrom":{
+             "type":"string"
+          },
+          "emailTo":{
+             "type":"string"
+          },
+          "subject":{
+             "type":"string"
+          },
+          "body":{
+             "type":"string"
+          },
+          "temperature":{
+             "type":"integer"
+          }
+       }
+    }
+ }
