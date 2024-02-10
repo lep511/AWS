@@ -1,7 +1,7 @@
 import datetime
 import re
 import six
-import schema.karte.chatevent
+import event_test
 
 class Marshaller:
     PRIMITIVE_TYPES = (float, bool, bytes, six.text_type) + six.integer_types
@@ -62,7 +62,7 @@ class Marshaller:
             if typeName in cls.NATIVE_TYPES_MAPPING:
                 typeName = cls.NATIVE_TYPES_MAPPING[typeName]
             else:
-                typeName = getattr(schema.karte.chatevent, typeName)
+                typeName = getattr(event_test, typeName)
 
         if typeName in cls.PRIMITIVE_TYPES:
             return cls.__unmarshall_primitive(data, typeName)
