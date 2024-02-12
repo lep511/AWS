@@ -51,7 +51,7 @@ Request:
     - eventId - Value in this attribute is used to choose PartitionKey in Kinesis stream. This example uses a single shard but when multiple shards are used, this eventId should be unique to share the load with multiple shards. Example: 55ad376f-86bf-4b06-9d3a-23237464dbd4
 - Request Method: POST
 - Request Header: "Content-Type: application/json"
-- Request Header: "Authorization: Basic <credentials>" (where credentials is the Base64 encoding of ID and password joined by a single colon :)
+- Request Header: "Authorization: Basic <**credentials**>" (where **credentials** is the Base64 encoding of ID and password joined by a single colon :)
 - Request Body: {"eventId":"value1", "message":"event message for testing"} (This could be any JSON payload)
 
 Example URL: https://abc1234def.execute-api.us-east-1.amazonaws.com/prod/submit/GatewayEventsStream/55ad376f-86bf-4b06-9d3a-23237464dbd4
