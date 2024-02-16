@@ -1,0 +1,8 @@
+[
+    {
+      "EventBusName": "Orders",
+      "Source": "com.aws.orders",
+      "Detail": "{ \"category\": \"lab-supplies\", \"value\": 415, \"location\": \"eu-west\" }",
+      "DetailType": "Order Notification"
+    }
+]
