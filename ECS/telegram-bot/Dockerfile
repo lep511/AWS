@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-RUN pip install python-telegram-bot google-generativeai
+RUN pip install python-telegram-bot google-generativeai requests
 
 ENV T_TOKEN=telegram_token
 ENV G_TOKEN=google_token
