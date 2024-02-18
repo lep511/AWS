@@ -1,0 +1,24 @@
+docker build -t telegram-bot .
+docker run --env-file dev.env telegram-bot
+
+aws ecr create-repository --repository-name=multiarchrepo
+export ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
+export AWS_REGION=$(aws configure get region)
+export ECR_URL=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+docker build --tag $ECR_URL/multiarchrepo:mygoapp-arm64 .
+
+aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URL
+docker push $ECR_URL/multiarchrepo:mygoapp-arm64
+
+docker pull $ECR_URL/multiarchrepo:mygoapp-arm64
+
+export TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+docker build --tag $ECR_URL/multiarchrepo:mygoapp-amd64 .
+aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URL
+docker push $ECR_URL/multiarchrepo:mygoapp-amd64
+
+docker pull $ECR_URL/multiarchrepo:mygoapp-arm64
+docker manifest create $ECR_URL/multiarchrepo:mygoapp --amend $ECR_URL/multiarchrepo:mygoapp-amd64 $ECR_URL/multiarchrepo:mygoapp-arm64
+docker manifest push $ECR_URL/multiarchrepo:mygoapp
+
+docker manifest inspect $ECR_URL/multiarchrepo:mygoapp
