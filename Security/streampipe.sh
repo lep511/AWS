@@ -14,6 +14,9 @@ steampipe plugin install steampipe
 steampipe plugin install aws
 git clone https://github.com/turbot/steampipe-mod-aws-compliance.git
 cd steampipe-mod-aws-compliance
+# Before running any benchmarks, it's recommended to generate your AWS credential report
+aws iam generate-credential-report
+# steampipe check benchmark.all_controls
 steampipe check aws_compliance.benchmark.cis_v300
 
 steampipe dashboard
