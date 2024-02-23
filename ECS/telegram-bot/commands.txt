@@ -1,5 +1,6 @@
 docker build -t telegram-bot .
 docker run --env-file dev.env telegram-bot
+// screen -dmS myWindow python3 docker run --env-file dev.env telegram-bot
 
 aws ecr create-repository --repository-name=multiarchrepo
 export ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
