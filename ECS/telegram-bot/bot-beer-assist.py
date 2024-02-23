@@ -9,6 +9,8 @@ import logging
 import random
 
 msg = ""
+start_text = "Hola, soy Marcel, tu asistente virtual en el mundo de Artistes Pintes. Estoy aquí para ayudarte a descubrir las cervezas artesanales únicas y de calidad que tenemos para ofrecer."
+
 resp_error = [
     "Lo siento, pero no puedo ayudarte con eso ahora mismo.",
     "No tengo la información que necesitas en este momento.",
@@ -34,7 +36,36 @@ token = os.environ.get('T_TOKEN')
 with open('text_assist.txt', 'r') as f:
     text_assist = f.read()
 
-def chat_gpt(user_data):
+history_chat = [
+    {
+        "role": "user",
+        "parts": [text_assist]
+    },
+    {
+        "role": "model",
+        "parts": [start_text]
+    }
+]
+
+
+def fix_text(text):
+    # .replace("*", "\\*")
+    return text.replace("* **", "\n\n**").replace("_", "\\_").replace("[", "\\[").replace("`", "\\`")
+    
+
+# Define a few command handlers. These usually take the two arguments update and
+# context.
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a message when the command /start is issued."""
+    user = update.effective_user
+    await update.message.reply_text(start_text)
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a message when the command /help is issued."""
+    text_help = "This bot is designed to assist you in looking up and understanding any topic."
+    await update.message.reply_text(text_help)
+
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     genai.configure(api_key=API_KEY)
     
     generation_config = {
@@ -48,36 +79,33 @@ def chat_gpt(user_data):
                 generation_config=generation_config
     )
     
-    prompt = text_assist + user_data
-    response = model.generate_content(prompt)
-        
-    try:
-        msg = response.text
-    except:
-        for candidate in response.candidates:
-            msg = [part.text for part in candidate.content.parts]
-            msg = " ".join(msg)
-        
-    return(msg)
-
-# Define a few command handlers. These usually take the two arguments update and
-# context.
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /start is issued."""
-    user = update.effective_user
-    text_start = "Hello there. Provide any topic to learn."
-    await update.message.reply_text(text_start)
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /help is issued."""
-    text_help = "This bot is designed to assist you in looking up and understanding any topic."
-    await update.message.reply_text(text_help)
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text_response_r = chat_gpt(update.message.text)
-    if not text_response_r:
-        text_response_r = random.choice(resp_error)
-    await update.message.reply_text(text_response_r, parse_mode="markdown")
+    chat = model.start_chat(history=history_chat)
+    response = chat.send_message(update.message.text, stream=True)
+    rest_text = ""
+       
+    for chunk in response:
+        try:
+            if len(chunk.text) > 10:
+                if "\n" in chunk.text:
+                    text_part = chunk.text.split("\n")
+                    full_response = fix_text(rest_text + text_part[0])
+                    await update.message.reply_text(full_response, parse_mode="markdown")
+                    rest_text = ""
+                    for part in text_part[1:]:
+                        rest_text += "\n" + part
+                else:
+                    rest_text += chunk.text
+            else:
+                rest_text += chunk.text
+        except:
+            for candidate in chunk.candidates:
+                msg = [part.text for part in candidate.content.parts]
+                msg = " ".join(msg)
+                rest_text += msg
+    
+    if len(rest_text) > 10:
+        rest_text = fix_text("\n\n" + rest_text)
+        await update.message.reply_text(rest_text, parse_mode="markdown")       
     
 async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     genai.configure(api_key=API_KEY)
@@ -114,7 +142,7 @@ async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not msg:
         text_response_r = random.choice(resp_error)
     
-    await update.message.reply_text(msg)
+    await update.message.reply_text(msg, parse_mode="markdown")
   
     
 def main() -> None:

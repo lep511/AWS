@@ -74,9 +74,9 @@ async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     ]
     
     response = model.generate_content(prompt_parts)    
-    await update.message.reply_text(response.text)
-  
-    
+    await update.message.reply_text(response.text, parse_mode="markdown")
+
+
 def main() -> None:
     """Start the bot."""
     # Create the Application and pass it your bot's token.
