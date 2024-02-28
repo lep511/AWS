@@ -23,3 +23,11 @@ docker manifest create $ECR_URL/multiarchrepo:mygoapp --amend $ECR_URL/multiarch
 docker manifest push $ECR_URL/multiarchrepo:mygoapp
 
 docker manifest inspect $ECR_URL/multiarchrepo:mygoapp
+
+
+
+----------------------------------------
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/a8v6k7j0
+docker build -t telegram-bot .
+docker tag telegram-bot:latest public.ecr.aws/a8v6k7j0/telegram-bot:latest
+docker push public.ecr.aws/a8v6k7j0/telegram-bot:latest

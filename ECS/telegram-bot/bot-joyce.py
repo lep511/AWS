@@ -9,7 +9,7 @@ import logging
 import random
 
 msg = ""
-start_text = "Hola, soy Marcel, tu asistente virtual en el mundo de Artistes Pintes. Estoy aquí para ayudarte a descubrir las cervezas artesanales únicas y de calidad que tenemos para ofrecer."
+start_text = "Hola, soy Samuel, tu asistente virtual en el mundo de James Joyce. Estoy aquí para compartir contigo mi conocimiento sobre el Ulises."
 
 resp_error = [
     "Lo siento, pero no puedo ayudarte con eso ahora mismo.",
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 API_KEY = os.environ.get('G_TOKEN')
 token = os.environ.get('T_TOKEN')
 
-with open('text_assist.txt', 'r') as f:
+with open('text_assist_ulysses.txt', 'r') as f:
     text_assist = f.read()
 
 history_chat = [
@@ -66,6 +66,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     rest_text = ""
+    full_text_part = ""
     genai.configure(api_key=API_KEY)
     
     generation_config = {
@@ -79,7 +80,14 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 generation_config=generation_config
     )
     
+    global history_chat
+    if len(history_chat) > 18:
+        history_chat = history_chat[:2] + history_chat[-16:]
+        logger.info("History chat truncated.")
+        logger.info(f"History chat: {history_chat}")
+        
     chat = model.start_chat(history=history_chat)
+    
     try:
         response = chat.send_message(update.message.text, stream=True)
     except:
@@ -92,6 +100,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     if "\n" in chunk.text:
                         text_part = chunk.text.split("\n")
                         full_response = fix_text(rest_text + text_part[0])
+                        full_text_part += full_response
                         await update.message.reply_text(full_response, parse_mode="markdown")
                         rest_text = ""
                         for part in text_part[1:]:
@@ -108,8 +117,13 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
         if len(rest_text) > 10:
             rest_text = fix_text("\n\n" + rest_text)
-            await update.message.reply_text(rest_text, parse_mode="markdown")       
-    
+            full_text_part += rest_text
+            await update.message.reply_text(rest_text, parse_mode="markdown")
+        
+        history_chat.append({"role": "user", "parts": [update.message.text]})
+        history_chat.append({"role": "model", "parts": [full_text_part]})
+        len_hitory = len(history_chat)
+               
 async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     genai.configure(api_key=API_KEY)
     model = genai.GenerativeModel(model_name="gemini-1.0-pro-vision-latest")
@@ -128,7 +142,7 @@ async def image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     ]
     
     prompt_parts = [
-        "Extrae el nombre y tipo de cerveza y compara con nuestros productos.\n",
+        "Explica esta pagina del Ulises de James Joyce.\n",
         text_assist,
         image_parts[0]
     ]
