@@ -9,15 +9,15 @@
     "serverlessConsole.services": [
         {
             "type": "dynamodb",
-            "title": "Songs",
-            "tableName": "Songs",
+            "title": "VersionNumTable",
+            "tableName": "VersionNumTable",
             "awsProfile": "default",
             "region": "us-east-1"
         },
         {
             "type": "dynamodb",
-            "title": "StarbucksLocations",
-            "tableName": "StarbucksLocations",
+            "title": "VersionTable",
+            "tableName": "VersionTable",
             "awsProfile": "default",
             "region": "us-east-1"
         }
