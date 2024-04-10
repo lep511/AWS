@@ -1,0 +1,14 @@
+{
+  "Version": "1.0",
+  "Parameters": {
+    "RuleName": "MyRule",
+    "Description": "MyRule",
+    "SourceRuntime": "python3.11",
+    "CodeKey": "MyRuleus-east-1.zip",
+    "InputParameters": "{\"desiredInstanceType\": \"t2.micro\"}",
+    "OptionalParameters": "{}",
+    "SourceEvents": "AWS::EC2::Instance",
+    "SourcePeriodic": "TwentyFour_Hours"
+  },
+  "Tags": "[]"
+}

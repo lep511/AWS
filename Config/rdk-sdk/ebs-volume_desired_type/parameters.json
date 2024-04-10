@@ -1,0 +1,13 @@
+{
+  "Version": "1.0",
+  "Parameters": {
+    "RuleName": "ebs-volume_desired_type",
+    "Description": "ebs-volume_desired_type",
+    "SourceRuntime": "python3.9",
+    "CodeKey": "ebs-volume_desired_typeus-east-1.zip",
+    "InputParameters": "{\"desiredvolumeType\": \"gp3\"}",
+    "OptionalParameters": "{}",
+    "SourceEvents": "AWS::EC2::Volume"
+  },
+  "Tags": "[]"
+}
