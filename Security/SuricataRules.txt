@@ -1,0 +1,36 @@
+# Block DNS public resolver access
+drop dns $HOME_NET any -> !$HOME_NET 53 (msg:"Drop DNS protocol outbound on port 53"; reference:url,https://attack.mitre.org/techniques/T1048/; sid:2023060303;)
+
+# This Suricata rule triggers an alert when it detects established network traffic 
+# heading towards a server on port 443 that is not using the expected Transport Layer Security (TLS) protocol.
+alert tcp any any -> any 443 (msg:"SURICATA Port 443 but not TLS"; flow:to_server,established; app-layer-protocol:!tls; sid:2271003;
+
+# Suricata Compatible IPS rules
+drop icmp $HOME_NET any -> 8.8.8.8 any (msg:"Block ICMP traffic to 8.8.8.8"; sid:2023060801;)
+
+# Block DNS over TLS (DoT)
+drop tls $HOME_NET any -> !$HOME_NET 853 (msg:"Drop use of TLS for DNS over TLS (DoT)";sid:2023060301;)
+
+# Block Direct-to-IP HTTP Traffic
+drop http $HOME_NET any -> !$HOME_NET any (http.host; content:"."; pcre:"/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/"; msg:"Block HTTP direct to IP via http host header (common malware/rootkit download technique"; flow:to_server, established; sid:12345;)
+
+# Block HTTP from using HTTPS/TLS port 443
+drop tcp $HOME_NET any -> !$HOME_NET 443 (msg:"Dropped use of TCP/443 destination by protocol other than TLS"; flow:established; app-layer-protocol:!tls; reference:url,https://attack.mitre.org/techniques/T1571/; sid:7671011;)
+
+# Block Outbound FTP protocol
+drop tcp $HOME_NET any -> !$HOME_NET 20:21 (msg:"Drop FTP outbound on TCP ports 20 and 21"; reference:url,https://attack.mitre.org/techniques/T1048/; sid:2023060304;)
+
+# Block LDAP Ports used by Log4J
+drop ip $HOME_NET any -> !$HOME_NET [1389,1388,1234,12344,9999,8085,1343] (msg:"Drop LDAP ports used by Log4J exploits"; reference:url,https://aws.amazon.com/blogs/security/using-aws-security-services-to-protect-against-detect-and-respond-to-the-log4j-vulnerability/; sid:2023060305;)
+
+# Block HTTP Outbound over non-standard ports
+drop http $HOME_NET any -> !$HOME_NET !80 (msg:"Drop use of HTTP on non-standard port"; reference:url,https://attack.mitre.org/techniques/T1571/; sid:72775012;)
+
+# Block SSH Outbound over non-standard port
+drop ssh $HOME_NET any -> !$HOME_NET !22 (msg:"Drop use of SSH on non-standard port"; reference:url,https://attack.mitre.org/techniques/T1571/; sid:2171910;)
+
+# Block SSH Outbound
+drop ssh $HOME_NET any -> !$HOME_NET any (msg:"Drop SSH over any port (create allow rules for trusted exceptions)"; reference:url,https://attack.mitre.org/techniques/T1048/; sid:2023060401;)
+
+# Block SMB Traffic Outbound
+drop smb $HOME_NET any -> !$HOME_NET any (msg:"Drop SMB protocol outbound on any port."; reference:url,https://attack.mitre.org/techniques/T1048/; sid:2023060402;)
