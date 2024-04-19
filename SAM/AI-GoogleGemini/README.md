@@ -2,7 +2,7 @@
 
 ### About BIC code for containers
 
-![Image](https://www.bic-code.org/wp-content/uploads/2022/06/idnumber.png)
+![Image](src/idnumber.png)
 
 The BIC code is a unique identification code for containers. It consists of 11 characters, of which the first 4 are letters and the last 7 are numbers. The first 3 characters are the owner code, the next 6 are the serial number of the container, and the last 2 are the check digit. The check digit is calculated using the Luhn algorithm. The BIC code is also called the ISO 6346 code.
 

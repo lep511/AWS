@@ -11,10 +11,6 @@ Parameters:
     Type: String
     Description: Google API Key
     Default: '<YOUR_GoogleAPIKey_HERE>'
-  Prompt:
-    Type: String
-    Description: Prompt
-    Default: 'Extract the text from this image'
   BucketNamePrefix:
     Type: String
     Default: ai-gemini-app
@@ -29,13 +25,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: app.lambda_handler
-      Runtime: python3.9
+      Runtime: python3.12
       Timeout: 120
       MemorySize: 512
       Environment:
         Variables:
           API_KEY: !Ref ApiKey
-          PROMPT: !Ref Prompt
           TABLE_NAME: !Ref TableName
       Policies:
         - S3CrudPolicy:

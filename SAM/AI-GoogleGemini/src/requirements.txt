@@ -1,3 +1,1 @@
 google-generativeai
-Pillow
-botocore
