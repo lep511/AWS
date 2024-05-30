@@ -1,0 +1,350 @@
+{
+  "Name": "waf-workshop-webacl",
+  "Id": "1bf67440-cdfe-4237-999e-8327e3dca716",
+  "ARN": "arn:aws:wafv2:us-east-1:641057698858:global/webacl/waf-workshop-webacl/1bf67440-cdfe-4237-999e-8327e3dca716",
+  "DefaultAction": {
+    "Allow": {}
+  },
+  "Description": "Use this WebACL to complete the workshop",
+  "Rules": [
+    {
+      "Name": "AWS-AWSManagedRulesCommonRuleSet",
+      "Priority": 0,
+      "Statement": {
+        "ManagedRuleGroupStatement": {
+          "VendorName": "AWS",
+          "Name": "AWSManagedRulesCommonRuleSet"
+        }
+      },
+      "OverrideAction": {
+        "None": {}
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "AWS-AWSManagedRulesCommonRuleSet"
+      }
+    },
+    {
+      "Name": "AWS-AWSManagedRulesSQLiRuleSet",
+      "Priority": 1,
+      "Statement": {
+        "ManagedRuleGroupStatement": {
+          "VendorName": "AWS",
+          "Name": "AWSManagedRulesSQLiRuleSet"
+        }
+      },
+      "OverrideAction": {
+        "None": {}
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "AWS-AWSManagedRulesSQLiRuleSet"
+      }
+    },
+    {
+      "Name": "path-block",
+      "Priority": 2,
+      "Statement": {
+        "ByteMatchStatement": {
+          "SearchString": "/includes",
+          "FieldToMatch": {
+            "UriPath": {}
+          },
+          "TextTransformations": [
+            {
+              "Priority": 0,
+              "Type": "URL_DECODE"
+            }
+          ],
+          "PositionalConstraint": "STARTS_WITH"
+        }
+      },
+      "Action": {
+        "Block": {
+          "CustomResponse": {
+            "ResponseCode": 554
+          }
+        }
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "path-block"
+      }
+    },
+    {
+      "Name": "AWS-AWSManagedRulesBotControlRuleSet",
+      "Priority": 3,
+      "Statement": {
+        "ManagedRuleGroupStatement": {
+          "VendorName": "AWS",
+          "Name": "AWSManagedRulesBotControlRuleSet",
+          "ScopeDownStatement": {
+            "NotStatement": {
+              "Statement": {
+                "RegexPatternSetReferenceStatement": {
+                  "ARN": "arn:aws:wafv2:us-east-1:641057698858:global/regexpatternset/static-content/406566db-20a0-4cd2-a90a-02a5cab51c5b",
+                  "FieldToMatch": {
+                    "UriPath": {}
+                  },
+                  "TextTransformations": [
+                    {
+                      "Priority": 0,
+                      "Type": "NONE"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "ManagedRuleGroupConfigs": [
+            {
+              "AWSManagedRulesBotControlRuleSet": {
+                "InspectionLevel": "COMMON"
+              }
+            }
+          ],
+          "RuleActionOverrides": [
+            {
+              "Name": "CategoryAdvertising",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategoryArchiver",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategoryContentFetcher",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategoryEmailClient",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategoryHttpLibrary",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategoryLinkChecker",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategoryMiscellaneous",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategoryMonitoring",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategoryScrapingFramework",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategorySearchEngine",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategorySecurity",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategorySeo",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategorySocialMedia",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "CategoryAI",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "SignalAutomatedBrowser",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "SignalKnownBotDataCenter",
+              "ActionToUse": {
+                "Count": {}
+              }
+            },
+            {
+              "Name": "SignalNonBrowserUserAgent",
+              "ActionToUse": {
+                "Count": {}
+              }
+            }
+          ]
+        }
+      },
+      "OverrideAction": {
+        "None": {}
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "AWS-AWSManagedRulesBotControlRuleSet"
+      }
+    },
+    {
+      "Name": "zyborg-block",
+      "Priority": 4,
+      "Statement": {
+        "LabelMatchStatement": {
+          "Scope": "LABEL",
+          "Key": "awswaf:managed:aws:bot-control:bot:name:zyborg"
+        }
+      },
+      "Action": {
+        "Block": {}
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "zyborg-block"
+      }
+    },
+    {
+      "Name": "phpcrawl-rate-limiter",
+      "Priority": 5,
+      "Statement": {
+        "RateBasedStatement": {
+          "Limit": 100,
+          "EvaluationWindowSec": 300,
+          "AggregateKeyType": "IP",
+          "ScopeDownStatement": {
+            "LabelMatchStatement": {
+              "Scope": "LABEL",
+              "Key": "awswaf:managed:aws:bot-control:bot:name:phpcrawl"
+            }
+          }
+        }
+      },
+      "Action": {
+        "Block": {
+          "CustomResponse": {
+            "ResponseCode": 429,
+            "ResponseHeaders": [
+              {
+                "Name": "Retry-After",
+                "Value": "900"
+              }
+            ]
+          }
+        }
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "phpcrawl-rate-limiter"
+      }
+    },
+    {
+      "Name": "api-protection",
+      "Priority": 6,
+      "Statement": {
+        "AndStatement": {
+          "Statements": [
+            {
+              "ByteMatchStatement": {
+                "SearchString": "/api/listproducts.php",
+                "FieldToMatch": {
+                  "UriPath": {}
+                },
+                "TextTransformations": [
+                  {
+                    "Priority": 0,
+                    "Type": "NONE"
+                  }
+                ],
+                "PositionalConstraint": "EXACTLY"
+              }
+            },
+            {
+              "NotStatement": {
+                "Statement": {
+                  "RegexPatternSetReferenceStatement": {
+                    "ARN": "arn:aws:wafv2:us-east-1:641057698858:global/regexpatternset/number-1-to-100/57a5f03a-1c6e-4e4e-998d-f5f4c0fd5815",
+                    "FieldToMatch": {
+                      "JsonBody": {
+                        "MatchPattern": {
+                          "IncludedPaths": [
+                            "/numrecords"
+                          ]
+                        },
+                        "MatchScope": "VALUE",
+                        "InvalidFallbackBehavior": "NO_MATCH",
+                        "OversizeHandling": "CONTINUE"
+                      }
+                    },
+                    "TextTransformations": [
+                      {
+                        "Priority": 0,
+                        "Type": "NONE"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "Action": {
+        "Block": {
+          "CustomResponse": {
+            "ResponseCode": 400
+          }
+        }
+      },
+      "VisibilityConfig": {
+        "SampledRequestsEnabled": true,
+        "CloudWatchMetricsEnabled": true,
+        "MetricName": "api-protection"
+      }
+    }
+  ],
+  "VisibilityConfig": {
+    "SampledRequestsEnabled": true,
+    "CloudWatchMetricsEnabled": true,
+    "MetricName": "ExampleWebACLMetric"
+  },
+  "Capacity": 1043,
+  "ManagedByFirewallManager": false,
+  "LabelNamespace": "awswaf:641057698858:webacl:waf-workshop-webacl:"
+}
