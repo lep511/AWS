@@ -40,21 +40,23 @@ EventBridge Pipes polls for messages from the SQS queue, EventBridge pipe enrich
 
 ## Testing
 
-Provide steps to trigger the integration and show what should be observed if successful.
+Using the sam remote invoke command.
 
-1. Stream logs from StepFunctions LogGroup 
+1. You can send messages to Amazon SQS queues. The AWS SAM CLI returns the following:
 
-```
-sam logs --cw-log-group <LogGroup Name> --tail
-```
-
-2. Put a message into the queue
+    * Message ID
+    * MD5 of message body
+    * Response metadata 
 
 ```
-aws sqs send-message --queue-url ENTER_YOUR_SQS_QUEUE_URL --message-body file://event.json
+sam remote invoke SourceQueue --stack-name $STACK_NAME --event-file event.json
 ```
 
-3. Observe the logs for the new execution.
+2. Observe the logs in real time.
+
+```
+sam logs -t --cw-log-group sqs-pipes-api-logs  --stack-name $STACK_NAME
+```
 
 ## Cleanup
  

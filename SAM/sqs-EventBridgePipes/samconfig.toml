@@ -1,8 +1,8 @@
 version = 0.1
 [default.deploy.parameters]
-stack_name = "new-app-test"
+stack_name = "sqs-app-new"
 resolve_s3 = true
-s3_prefix = "new-app-test"
+s3_prefix = "sqs-app-new"
 region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
 parameter_overrides = "MyApiWithPathURL=\"https://api.zippopotam.us/us/*\""
