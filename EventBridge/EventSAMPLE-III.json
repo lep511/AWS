@@ -1,0 +1,25 @@
+[
+    {
+      "Time": "2016-01-14T01:02:03Z",
+      "Source": "com.aws.orders",
+      "Resources": [
+        "resource1",
+        "resource2"
+      ],
+      "DetailType": "myDetailType",
+      "EventBusName": "Orders",
+      "Detail": "{ \"category\": \"lab-supplies-1\", \"key2\": \"value2\" }"
+    },
+    {
+        "Time": "2016-01-14T01:03:43Z",
+        "Source": "com.aws.orders",
+        "Resources": [
+          "resource1",
+          "resource2"
+        ],
+        "DetailType": "myDetailType",
+        "EventBusName": "Orders",
+        "Detail": "{ \"category\": \"lab-supplies-2\", \"key2\": \"value2\" }"
+      }
+
+  ]
