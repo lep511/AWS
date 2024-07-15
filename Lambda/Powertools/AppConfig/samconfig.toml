@@ -1,0 +1,9 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "app-config-new"
+resolve_s3 = true
+s3_prefix = "app-config-new"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+parameter_overrides = "DynamoDBTableName=\"DemoAppConfigTable\""
+image_repositories = []
