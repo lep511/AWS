@@ -1,12 +1,7 @@
 # Link: https://api.slack.com/tools/block-kit-builder
-import json
-import sys
-import os
 from slack_sdk.webhook import WebhookClient
-
-# Enable debug logging
-import logging
-logging.basicConfig(level=logging.DEBUG)
+from datetime import datetime
+import os
 
 config_icon = "https://awsvideocatalog.com/images/aws/png/PNG%20Light/Management%20&%20Governance/AWS-Config.png"
 security_hub_icon = "https://d2908q01vomqb2.cloudfront.net/22d200f8670dbdb3e253a90eee5098477c95c23d/2022/12/13/SecurityHublogo.jpg"
@@ -14,7 +9,6 @@ inspector_icon = "https://help.sumologic.com/img/integrations/amazon-aws/inspect
 guardduty_icon = "https://awsvideocatalog.com/images/aws/png/PNG%20Light/Security,%20Identity,%20&%20Compliance/Amazon-GuardDuty.png"
 iam_analyzer_icon = "https://www.checkpoint.com/wp-content/uploads/amazon-aws-security-iam-analyzer-icon.png"
 macie_icon = "https://awsvideocatalog.com/images/aws/png/PNG%20Light/Security,%20Identity,%20&%20Compliance/Amazon-Macie.png"
-
 
 def lambda_handler(event, context):
     print(event)
@@ -39,14 +33,15 @@ def lambda_handler(event, context):
 def security_hub(event):
     # Findings
     for finding in event['findings']:
-        web_rule = 'https://www.google.com'
-        button_text = "Google"
         title = finding['Title']
         region = finding.get('Region')
         account = finding.get('AwsAccountId')
         product_name = finding['ProductName']
+        product_aws = finding['ProductArn'].split('/')[-1]
         resource_id = finding['Resources'][0]['Id']
         severity = finding['Severity']['Label']
+        web_rule = f'https://{region}.console.aws.amazon.com/{product_aws}/'
+        button_text = finding['ProductName']
 
         main_txt = f"*{title}*"
         main_txt += f"\n\n• *Product Name:* {product_name}"
@@ -69,6 +64,25 @@ def security_hub(event):
         elif 'SourceUrl' in finding:
             web_rule = finding['SourceUrl']
             button_text = "Link to finding"
+        
+        # Filter Vulnerabilities
+        if 'Vulnerabilities' in finding:
+            try:
+                description += "\n\n• *Vulnerabilities details:*"
+                for url in finding['Vulnerabilities'][0]['ReferenceUrls']:
+                    description += f"\n       - {url}"
+            except:
+                pass
+        
+        # Filter Note
+        if 'Note' in finding:
+            description += f"\n\n• *Note:* {finding['Note']['Text']}"
+            description += f"\n       - Updated by {finding['Note']['UpdatedBy']}"
+            # Convert the date string
+            date_str = finding['Note']['UpdatedAt']
+            date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            formatted_date = date_obj.strftime("%A, %B %d, %Y at %I:%M %p %Z")
+            description += f"\n       - Updated at {formatted_date}"
         
         # Filter by product name and set icon
         if finding['ProductName'] == 'Config':
@@ -102,7 +116,6 @@ def config_event(event, title=None):
     account = event.get('awsAccountId')
     rule_name = event.get('configRuleName')
     type_event = event.get('messageType')
-    new_eval_result = event.get('newEvaluationResult')
     resource_type = event['newEvaluationResult']['evaluationResultIdentifier']['evaluationResultQualifier']['resourceType']
     resource_id = event['newEvaluationResult']['evaluationResultIdentifier']['evaluationResultQualifier']['resourceId']
     description = event['newEvaluationResult'].get('annotation')
@@ -169,8 +182,8 @@ def send_to_slack(event_response):
             blocks=event_response
         )
         assert response_slack.status_code == 200
-        assert response_slack.body == "ok"
+        assert response_slack.body == "Message sent."
         print(f"[INFO] {response_slack.body}")
     
-    except Exception as e:
-        print(f"[ERROR] {e}")
+    except AssertionError:
+        pass
