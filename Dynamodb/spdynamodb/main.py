@@ -57,6 +57,17 @@ class DynamoTable:
             rep = "The table has not yet been selected"
         return rep
     
+    def list_tables(self):
+        """
+        Returns all tables in a region
+        return: A dict with the following keys: 'Region' and 'Tables'
+        """
+        response = {"Region": self.region}
+        response["Tables"] = []
+        for table_name in self.dyn_resource.tables.all():
+            response["Tables"].append(table_name.name)
+        return response
+    
     def table_exists(self, table_name):
         """
         Determines whether a table exists. As a side effect, stores the table in
@@ -234,7 +245,80 @@ class DynamoTable:
                 self.table.name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
+    
+       
+    def get_item(self, pk_value, sk_value=None, consistent_read=False):
+        """
+        Gets item from the table.
+        
+        :param pk_value: The value of the primary key.
+        :param sk_value: The value of the sort key. Default: None.
+        :param consistent_read: True = Consistent read. Default: False.
+        """
+        try:
+            if sk_value is None:
+                response = self.table.get_item(
+                    Key={self.table.key_schema[0]['AttributeName']: pk_value},
+                    ConsistentRead=consistent_read
+                )
+            else:
+                response = self.table.get_item(
+                    Key={
+                        self.table.key_schema[0]['AttributeName']: pk_value, 
+                        self.table.key_schema[1]['AttributeName']: sk_value
+                    },
+                    ConsistentRead=consistent_read
+                )
+        except ClientError as err:
+            print(
+                "Couldn't get item from table %s. Here's why: %s: %s",
+                self.table.name,
+                err.response['Error']['Code'], err.response['Error']['Message'])
+            raise
+        else:
+            if 'Item' in response:
+                return response['Item']
+            else:
+                print(f"Item not found in table {self.table.name}.")
+                return None
+            
+                
+    def delete_item(self, pk_value, sk_value=None):
+        """
+        Delete item from the table.
 
+        :param pk_value: The value of the primary key.
+        :param sk_value: The value of the sort key. Default: None.
+        :return: True if the item was deleted, None if the item not found.
+        """
+        try:
+            if sk_value is None:
+                response = self.table.delete_item(
+                    Key={self.table.key_schema[0]['AttributeName']: pk_value},
+                    ReturnValues="ALL_OLD"
+                )
+            else:
+                response = self.table.delete_item(
+                    Key={
+                        self.table.key_schema[0]['AttributeName']: pk_value,
+                        self.table.key_schema[1]['AttributeName']: sk_value
+                    },
+                    ReturnValues="ALL_OLD"
+                )
+        except ClientError as err:
+            print(
+                "Couldn't delete item from table %s. Here's why: %s: %s",
+                self.table.name,
+                err.response['Error']['Code'], err.response['Error']['Message'])
+            raise
+        else:
+            if "Attributes" in response:
+                return True
+            else:
+                print(f"Item not found in table {self.table.name}.")
+                return None
+        
+    
     def scan_att(self, att_name, query, to_pandas=False, consumed_capacity=False, pages=None):
         scan_kwargs = {
             'FilterExpression': Attr(att_name).eq(query),
@@ -312,16 +396,17 @@ class DynamoTable:
         """
         response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity, limit, reverse)
         
-        if not response:
+        if not "Items" in response:
+            print(f"No items found in table {self.table_name}.")
             return None
         
         if to_pandas:
             if not isinstance(response['Items'], list):
-                return pd.DataFrame([response])
+                return pd.DataFrame([response['Items']])
             else:
                 return pd.DataFrame(response['Items'])
                 
-        return response
+        return response['Items']
     
     
     def query_partiql(self, query, consumed_capacity=None, to_pandas=False):
