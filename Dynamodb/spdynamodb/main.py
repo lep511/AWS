@@ -431,10 +431,8 @@ class DynamoTable:
         """
         if value == "ENABLED":
             point_in_time_recovery = True
-        elif value == "DISABLED":
-            point_in_time_recovery = False
         else:
-            raise ValueError("Value must be either 'ENABLED' or 'DISABLED'")
+            raise ValueError("Value must be 'ENABLED' to activate PITR.")
         
         if self.status_pitr == value:
             print(f"Point-in-time recovery is already {value}.")
@@ -446,7 +444,6 @@ class DynamoTable:
                     'PointInTimeRecoveryEnabled': point_in_time_recovery
                 }
             )
-            print(f"Point-in-time recovery turned on successfully.")
             self.status_pitr = value
         except ClientError as err:
             print(
