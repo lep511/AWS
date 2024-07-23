@@ -91,9 +91,10 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                     return data_items
                 except ClientError as error:
                     handle_error(error)
-                    return
+                    raise
                 except BaseException as error:
-                    print("Unknown error while querying: " + error.response['Error']['Message'])    
+                    print("Unknown error while querying: " + error.response['Error']['Message'])
+                    raise    
             else:    
                 try:
                     response = table.query(
@@ -107,9 +108,10 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                     return data_items
                 except ClientError as error:
                     handle_error(error)
-                    return
+                    raise
                 except BaseException as error:
-                    print("Unknown error while querying: " + error.response['Error']['Message'])    
+                    print("Unknown error while querying: " + error.response['Error']['Message'])
+                    raise
 
         elif isinstance(sk_value, (int, float)):
             sk_value = Decimal(str(sk_value))
@@ -142,16 +144,16 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
         elif sk_value.endswith("*"):
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).begins_with(sk_value[:-1])
             
-        # Find 23-10-03_23-10-06
-        elif re.search(r'\d{2}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}', sk_value):
+        # Find 23-10-03_
+        elif re.findall(r"\d{2}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?_", sk_value):
             value = sk_value.split("_")
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).between(*value)
         
-        # Find 2023-10-03_2023-10-06
-        elif re.search(r'\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}', sk_value):
+        # Find 2023-10-03_
+        elif re.findall(r"\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?_", sk_value):
             value = sk_value.split("_")
             qry = Key(pk_name).eq(pk_value) & Key(sk_name).between(*value)
- 
+             
         elif re.search(r'\d+_\d+', sk_value):
             value = sk_value.split("_")
             value_dec = [Decimal(x) for x in value]
@@ -177,10 +179,10 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                     )
                 except ClientError as error:
                     handle_error(error)
-                    return
+                    raise
                 except BaseException as error:
                     print("Unknown error while getting item: " + error.response['Error']['Message'])
-                    return
+                    raise
             else:
                 try:
                     response = table.query(
@@ -192,10 +194,10 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                     )
                 except ClientError as error:
                     handle_error(error)
-                    return
+                    raise
                 except BaseException as error:
                     print("Unknown error while getting item: " + error.response['Error']['Message'])
-                    return
+                    raise
         else:
             if not index_exist:
                 try:
@@ -206,10 +208,10 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                     )
                 except ClientError as error:
                     handle_error(error)
-                    return
+                    raise
                 except BaseException as error:
                     print("Unknown error while getting item: " + error.response['Error']['Message'])
-                    return
+                    raise
                     
             else:
                 try:
@@ -223,10 +225,10 @@ def query_main(table, pk_value, sk_value=None, index_name=None, consistent_read=
                     )
                 except ClientError as error:
                     handle_error(error)
-                    return
+                    raise
                 except BaseException as error:
                     print("Unknown error while getting item: " + error.response['Error']['Message'])
-                    return
+                    raise
                     
     data_items = check_result(response, consumed_capacity, pk_value, sk_value)
     return data_items
@@ -244,7 +246,6 @@ def check_result(response, consumed_capacity, pk_value=None, sk_value=None):
         response['Items'] = json.loads(js_data)
         result = response
     else:
-        print("Not found any items")
         result = None
         
     if consumed_capacity != 'NONE':
@@ -262,11 +263,11 @@ def query_partiql_main(query, parameters=None, consumed_capacity=None, dyn_table
         response = dyn_table.meta.client.execute_statement(Statement=query, ReturnConsumedCapacity=consumed_capacity)
     except ClientError as error:
         handle_error(error)
-        return
+        raise
     
     except BaseException as error:
         print("Unknown error while executing executeStatement operation: " + error.response['Error']['Message'])
-        return
+        raise
     
     if consumed_capacity != 'NONE':
         response_json = json.loads(json.dumps(response['ConsumedCapacity'], cls=DecimalEncoder_))
@@ -274,7 +275,6 @@ def query_partiql_main(query, parameters=None, consumed_capacity=None, dyn_table
         print(f"Consumed Capacity: {consumed_capacity_count}")
         
     if len(response.get('Items')) == 0:
-        print("Not found any items")
         return None
        
     return response

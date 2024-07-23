@@ -1,4 +1,5 @@
 from spdynamodb.models import query_main, query_partiql_main
+from spdynamodb.models.functions import convert_floats_to_decimals
 from spdynamodb.models import handle_error
 from decimal import Decimal
 from io import BytesIO
@@ -228,6 +229,7 @@ class DynamoTable:
         Adds a item to the table.
         :param item: The item to add to the table.
         """
+        item = convert_floats_to_decimals(item)
         if compress:
             for att in item:
                 if type(att) == str:
@@ -270,10 +272,7 @@ class DynamoTable:
                     ConsistentRead=consistent_read
                 )
         except ClientError as err:
-            print(
-                "Couldn't get item from table %s. Here's why: %s: %s",
-                self.table.name,
-                err.response['Error']['Code'], err.response['Error']['Message'])
+            print(f"[ERROR] Couldn't get item from table {self.table.name}. {err.response['Error']['Message']}")
             raise
         else:
             if 'Item' in response:
@@ -395,6 +394,10 @@ class DynamoTable:
         :return: The item/items matching the query.
         """
         response = query_main(self.table, pk_value, sk_value, index_name, consistent_read, consumed_capacity, limit, reverse)
+        
+        if not response:
+            print(f"No items found in table {self.table_name}.")
+            return None
         
         if not "Items" in response:
             print(f"No items found in table {self.table_name}.")
