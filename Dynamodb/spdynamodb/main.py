@@ -45,19 +45,34 @@ class DynamoTable:
         
     def __repr__(self):
         if self.table_name != None:
-            self.table.reload()
-            rep = f"- Table name: {self.table_name}\
-            \n- Table arn: {self.table_arn}\
-            \n- Table creation: {self.table.creation_date_time.strftime('%Y-%m-%d %H:%M:%S')}\
-            \n- {self.table.key_schema}\
-            \n- {self.table.attribute_definitions}\
-            \n- Point-in-time recovery status: {self.status_pitr}  |  Delete protection: {self.delete_protection}"
-            if self.status_stream != "OFF":
-                rep += f"\n- Stream enabled: True  |  Stream view type: {self.table.stream_specification['StreamViewType']}"
+            info = self.get_info()
+            rep = "Table info:\n"
+            for key, value in info.items():
+                rep += f" - {key}: {value}\n"
         else:
             rep = "The table has not yet been selected"
         return rep
     
+    
+    def get_info(self):
+        if self.table_name != None:
+            info = {
+                "Table name": self.table_name,
+                "Table arn": self.table_arn,
+                "Table creation": self.table.creation_date_time.strftime('%Y-%m-%dT%H:%M:%S'),
+                "Key schema": self.table.key_schema,
+                "Attribute definitions": self.table.attribute_definitions,
+                "Point-in-time recovery status": self.status_pitr,
+                "Delete protection": self.delete_protection,
+                "Stream enabled": self.status_stream
+            }
+            if self.status_stream != "OFF":
+                info["Stream view type"] = self.table.stream_specification['StreamViewType']
+            if self.tags:
+                info["Tags"] = self.tags
+            return info
+                        
+                        
     def list_tables(self):
         """
         Returns all tables in a region
@@ -84,10 +99,7 @@ class DynamoTable:
             if err.response['Error']['Code'] == 'ResourceNotFoundException':
                 exists = False
             else:
-                print(
-                    "Couldn't check for existence of %s. Here's why: %s: %s",
-                    table_name,
-                    err.response['Error']['Code'], err.response['Error']['Message'])
+                handle_error(err)
                 raise
         else:
             self.table_arn = self.table.table_arn
@@ -103,6 +115,8 @@ class DynamoTable:
                 self.bill_mode = self.table.billing_mode_summary['BillingMode']
             else:
                 self.bill_mode = 'PROVISIONED'
+            list_tags = self.table.meta.client.list_tags_of_resource(ResourceArn=self.table_arn)
+            self.tags = list_tags['Tags']
             
     @property
     def all_tables(self):
@@ -121,9 +135,10 @@ class DynamoTable:
                      sort_key=None, 
                      sort_key_type=None,
                      provisioned=True, # or 'PAY_PER_REQUEST'
-                     rcu=5, 
-                     wcu=5,
-                     infrequent_access=False
+                     read_capacity=5, 
+                     write_capacity=5,
+                     infrequent_access=False,
+                     tags=[]
                     ):
         """
         Creates an Amazon DynamoDB table.
@@ -133,17 +148,22 @@ class DynamoTable:
         :param sort_key: Sort key name. Default: None.
         :param sort_key_type: Sort key type. Default: None.
         :param provisioned: True = PROVISIONED, False = PAY_PER_REQUEST. Default: True.
-        :param rcu: (Read Capacity Units) Default: 10. The maximum number of strongly consistent reads 
+        :param read_capacity: (Read Capacity Units) Default: 10. The maximum number of strongly consistent reads 
                     consumed per second before DynamoDB returns a ThrottlingException. Default: 5.
-        :param wcu: (WriteCapacityUnits) Default: 10. The maximum number of writes consumed per second 
+        :param write_capacity: (WriteCapacityUnits) Default: 10. The maximum number of writes consumed per second 
                     before DynamoDB returns a ThrottlingException. Default: 5.
         :param infrequent_access: False = Table STANDARD, True = Table STANDARD_INFREQUENT_ACCESS. Default False.
-        """           
+        :param tags: e.g. tags = [{'Key': 'string', 'Value': 'string'}]. Default no tags.
+        :return: The newly created table.
+        """        
         
         infrequent_access = "STANDARD_INFREQUENT_ACCESS" if infrequent_access else "STANDARD"
         key_schema = [{'AttributeName': partition_key, 'KeyType': 'HASH'}]
         att_definition=[{'AttributeName': partition_key, 'AttributeType': partition_key_type}]
-        
+      
+        if isinstance(tags, map):
+            tags = [tags]
+          
         if sort_key != None:
             key_schema.append({'AttributeName': sort_key, 'KeyType': 'RANGE'})
             att_definition.append({'AttributeName': sort_key, 'AttributeType': sort_key_type})
@@ -155,10 +175,11 @@ class DynamoTable:
                     TableName=table_name, 
                     KeySchema = key_schema, 
                     AttributeDefinitions = att_definition,
-                    ProvisionedThroughput={'ReadCapacityUnits': rcu,
-                                           'WriteCapacityUnits': wcu
+                    ProvisionedThroughput={'ReadCapacityUnits': read_capacity,
+                                           'WriteCapacityUnits': write_capacity
                                           },
-                    TableClass = infrequent_access
+                    TableClass = infrequent_access,
+                    Tags=tags
                 )
             else:
                 self.bill_mode = 'PAY_PER_REQUEST'
@@ -167,20 +188,21 @@ class DynamoTable:
                     KeySchema = key_schema, 
                     AttributeDefinitions = att_definition,
                     BillingMode="PAY_PER_REQUEST",
-                    TableClass = infrequent_access
+                    TableClass = infrequent_access,
+                    Tags=tags
                 )
             self.table.wait_until_exists()
             self.table_name = table_name
 
         except ClientError as err:
-            print(
-                "Couldn't create table %s. Here's why: %s: %s", table_name,
-                err.response['Error']['Code'], err.response['Error']['Message'])
+            handle_error(err)
             raise
         else:
             print("Table created successfully!")
             self.table_arn = self.table.table_arn
+            self.tags = tags
     
+        
     def batch_pandas(self, dataframe, compress=False):
         shuffle_df = dataframe.sample(frac=1).reset_index(drop=True)
         json_df = shuffle_df.fillna("").to_json(orient="records")
@@ -188,7 +210,8 @@ class DynamoTable:
         if compress:
             parsed = self.convert_binary(parsed)      
         self.write_batch(parsed)
-        
+    
+    
     def load_json(self, json_file, compress=False):
         try:
             with open(json_file) as json_data:
@@ -202,6 +225,7 @@ class DynamoTable:
         self.write_batch(parsed)
         print(f"Data loaded successfully from {json_file}.")
     
+    
     def write_batch(self, items):
         """
         Fills an Amazon DynamoDB table with the specified data, using the Boto3
@@ -214,15 +238,17 @@ class DynamoTable:
                        the keys required by the schema that was specified when the
                        table was created.
         """
+        start_time = time.time()
         try:
             with self.table.batch_writer() as writer:
                 for item in items:
                     writer.put_item(Item=item)
         except ClientError as err:
-            print(
-                "Couldn't load data into table %s. Here's why: %s: %s", self.table.name,
-                err.response['Error']['Code'], err.response['Error']['Message'])
+            handle_error(err)
             raise
+        else:
+            total_time = round(time.time() - start_time, 2)
+            print(f"Data loaded successfully in {total_time} seconds.")
 
     def add_item(self, item, compress=False):
         """
@@ -242,10 +268,7 @@ class DynamoTable:
                 Item=item
             )
         except ClientError as err:
-            print(
-                "Couldn't add item to table %s. Here's why: %s: %s",
-                self.table.name,
-                err.response['Error']['Code'], err.response['Error']['Message'])
+            handle_error(err)
             raise
     
        
@@ -305,10 +328,7 @@ class DynamoTable:
                     ReturnValues="ALL_OLD"
                 )
         except ClientError as err:
-            print(
-                "Couldn't delete item from table %s. Here's why: %s: %s",
-                self.table.name,
-                err.response['Error']['Code'], err.response['Error']['Message'])
+            handle_error(err)
             raise
         else:
             if "Attributes" in response:
@@ -370,10 +390,7 @@ class DynamoTable:
                     ':r': Decimal(str(rating)), ':p': plot},
                 ReturnValues="UPDATED_NEW")
         except ClientError as err:
-            print(
-                "Couldn't update movie %s in table %s. Here's why: %s: %s",
-                title, self.table_name,
-                err.response['Error']['Code'], err.response['Error']['Message'])
+            handle_error(err)
             raise
         else:
             return response['Attributes']
@@ -443,9 +460,7 @@ class DynamoTable:
                 BackupName=backup_name
             )
         except ClientError as err:
-            print(
-                f"Couldn't create a backup for {self.table_name}. Here's why: {err.response['Error']['Code']} \
-                {err.response['Error']['Message']}")
+            handle_error(err)
             raise
         else:
             print(f"Backup {backup_name} created successfully.")
@@ -461,9 +476,7 @@ class DynamoTable:
                 TableName=self.table_name
             )
         except ClientError as err:
-            print(
-                f"Couldn't get the status of deletion protection for {self.table_name}. Here's why: \
-                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            handle_error(err)
             raise
         else:
             return response['Table']['DeletionProtectionEnabled']
@@ -478,7 +491,7 @@ class DynamoTable:
             raise TypeError("The value must be either True or False.")
         
         if self.delete_protection == value:
-            print(f"Deletion protection for {self.table_name} is already set to {value}.")
+            print(f"Deletion protection for table: {self.table_name} is already set to {value}.")
             return
         
         try:
@@ -487,12 +500,10 @@ class DynamoTable:
                 DeletionProtectionEnabled = value
             )
         except ClientError as err:
-            print(
-                f"Couldn't set deletion protection for {self.table_name}. Here's why: \
-                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            handle_error(err)
             raise
         else:
-            print(f"Deletion protection for {self.table_name} set to {value}.")
+            print(f"Deletion protection for table: {self.table_name} set to {value}.")
     
     @property
     def status_pitr(self):
@@ -504,9 +515,7 @@ class DynamoTable:
                 TableName=self.table_name
             )
         except ClientError as err:
-            print(
-                f"Couldn't get the status of point-in-time recovery for {self.table_name}. Here's why: \
-                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            handle_error(err)
             raise
         else:
             return response['ContinuousBackupsDescription']['PointInTimeRecoveryDescription']['PointInTimeRecoveryStatus']
@@ -534,9 +543,7 @@ class DynamoTable:
             )
             self.status_pitr = value
         except ClientError as err:
-            print(
-                f"Couldn't turn on point-in-time recovery for {self.table_name}. Here's why: \
-                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            handle_error(err)
             raise
     
     @property
@@ -547,9 +554,7 @@ class DynamoTable:
         try:
             response = self.table.stream_specification
         except ClientError as err:
-            print(
-                f"Couldn't get the status of DynamoDB streams for {self.table_name}. Here's why: \
-                {err.response['Error']['Code']} {err.response['Error']['Message']}")
+            handle_error(err)
             raise
         else:
             if response:
@@ -623,23 +628,23 @@ class DynamoTable:
             return    
         
     
-    def create_global_secondary_index(self, att_name, att_type, i_name=None, sort_index=None, 
-                                      sort_type=None, proj_type="ALL", i_rcu=5, i_wcu=5):
+    def create_global_secondary_index(self, att_name, att_type, index_name=None, sort_index=None, 
+                                      sort_type=None, proj_type="ALL", read_capacity=5, write_capacity=5):
         """
         Add a global secondary index to a DynamoDB table
         :param att_name: Name of attribute.
         :param att_type: Attribute type (S-String, N-Number, B-Binary).
         :param sort_index: Name of sort index. Default: None
         :param sort_type: Attribute type (S-String, N-Number, B-Binary). Default: None
-        :param i_name: Name of index. Default: <att_name>-index
+        :param index_name: Name of index. Default: <att_name>-index
         :param proj_type: Represents attributes that are copied (projected) from the table into the global secondary index
                           (ALL, KEYS_ONLY, [list of INCLUDE non-key attribute])
-        :param i_rcu: Read capacity units. Default: 5
-        :param i_wcu: Write capacity units. Default: 5
+        :param read_capacity: Read capacity units. Default: 5
+        :param write_capacity: Write capacity units. Default: 5
         """
         # Check index name
-        if not i_name:
-            i_name = att_name + "-index"
+        if not index_name:
+            index_name = att_name + "-index"
         
         # Check parameter proj_type
         if type(proj_type) == list:
@@ -666,7 +671,7 @@ class DynamoTable:
         gsi_main =  [
                         {
                             "Create": {
-                                "IndexName": i_name,
+                                "IndexName": index_name,
                                 "KeySchema": key_schema,
                                 "Projection": project
                                 # Global secondary indexes have read and write capacity separate from the underlying table.
@@ -677,8 +682,8 @@ class DynamoTable:
         # If not selected PAY_PER_REQUEST when create table
         if self.bill_mode == "PROVISIONED":
             provisiones_thro = {
-                                "ReadCapacityUnits": i_rcu,
-                                "WriteCapacityUnits": i_wcu
+                                "ReadCapacityUnits": read_capacity,
+                                "WriteCapacityUnits": write_capacity
             }
             gsi_main[0]['Create']['ProvisionedThroughput'] = provisiones_thro
         
@@ -691,10 +696,7 @@ class DynamoTable:
             )
             self.table.reload()
         except ClientError as err:
-            print(
-                "Global secondary index could not be created in table %s. Here's why: %s: %s",
-                self.table_name,
-                err.response['Error']['Code'], err.response['Error']['Message'])
+            handle_error(err)
             raise
 
     def check_status_gsi(self, index_name=None):
