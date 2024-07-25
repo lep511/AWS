@@ -32,7 +32,7 @@ Metadata:
       Frequency:
         default: Snapshot delivery frequency
       TopicArn:
-        default: SNS topic name
+        default: SNS topic ARN
       NotificationEmail:
         default: Notification Email (optional)
 
@@ -136,6 +136,9 @@ Resources:
             Action: s3:GetBucketAcl
             Resource:
               - !Sub "arn:${AWS::Partition}:s3:::${ConfigBucket}"
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref "AWS::AccountId"
           - Sid: AWSConfigBucketDelivery
             Effect: Allow
             Principal:
@@ -144,6 +147,9 @@ Resources:
             Action: s3:PutObject
             Resource:
               - !Sub "arn:${AWS::Partition}:s3:::${ConfigBucket}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref "AWS::AccountId"
           - Sid: AWSConfigBucketSecureTransport
             Action:
               - s3:*

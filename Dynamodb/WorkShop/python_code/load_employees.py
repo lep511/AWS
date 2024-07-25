@@ -3,13 +3,10 @@ import boto3
 import time
 import csv
 import sys
-from lab_config import boto_args
 
-def import_csv(tableName, fileName):
-    dynamodb = boto3.resource(**boto_args)
-    dynamodb_table = dynamodb.Table(tableName)
+def import_csv(fileName, dynamodb_table):
     count = 0
-
+    begin_time = time.time()
     time1 = time.time()
     with open(fileName, 'r', encoding="utf-8") as csvfile:
         myreader = csv.reader(csvfile, delimiter=',')
@@ -40,7 +37,6 @@ def import_csv(tableName, fileName):
                 newEmployee['is_manager'] = row[10]
                 newEmployee['GSI_2_PK'] = str(newEmployee['is_manager'])
                 newEmployee['GSI_2_SK'] = "root"
-
 
             item = dynamodb_table.put_item(Item=newEmployee)
 
@@ -80,15 +76,6 @@ def import_csv(tableName, fileName):
                 time2 = time.time() - time1
                 print("employee count: %s in %s" % (count, time2))
                 time1 = time.time()
-    return count
-
-if __name__ == "__main__":
-    args = sys.argv[1:]
-    tableName = args[0]
-    fileName = args[1]
-
-    begin_time = time.time()
-    count = import_csv(tableName, fileName)
-
-    # print summary
+    
     print('RowCount: %s, Total seconds: %s' %(count, (time.time() - begin_time)))
+    return count
