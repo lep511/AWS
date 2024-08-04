@@ -34,6 +34,7 @@ class DynamoTable:
         self.session = boto3.Session(profile_name=profile_name, region_name=region_name)
         self.dyn_resource = self.session.resource("dynamodb", region_name=region_name)
         self.region = region_name
+        self.status = "No table selected."
         self.__keyType = {"S": "s", "N": 0, "B": b"b"}
         if not table_name:
             self.table_name = None
@@ -134,7 +135,7 @@ class DynamoTable:
                      partition_key_type, 
                      sort_key=None, 
                      sort_key_type=None,
-                     provisioned=True, # or 'PAY_PER_REQUEST'
+                     provisioned=False, # PAY_PER_REQUEST is default
                      read_capacity=5, 
                      write_capacity=5,
                      infrequent_access=False,
@@ -147,7 +148,7 @@ class DynamoTable:
         :param partition_key_type: Primary key type.
         :param sort_key: Sort key name. Default: None.
         :param sort_key_type: Sort key type. Default: None.
-        :param provisioned: True = PROVISIONED, False = PAY_PER_REQUEST. Default: True.
+        :param provisioned: False = PAY_PER_REQUEST (), True = PROVISIONED. Default: False.
         :param read_capacity: (Read Capacity Units) Default: 10. The maximum number of strongly consistent reads 
                     consumed per second before DynamoDB returns a ThrottlingException. Default: 5.
         :param write_capacity: (WriteCapacityUnits) Default: 10. The maximum number of writes consumed per second 
@@ -202,7 +203,33 @@ class DynamoTable:
             self.table_arn = self.table.table_arn
             self.tags = tags
     
+    
+    @property
+    def status(self):
+        """
+        Returns the status of a table.
+        :param table_name: The name of the table.
+        :return: The table status.
+        """
+        if self.table_name == None:
+            return self.status
+        try:
+            table = self.dyn_resource.Table(self.table_name)
+            table.load()
+            status = table.table_status
+        except ClientError as err:
+            handle_error(err)
+            raise
+        else:
+            return status
+
+
+    @status.setter
+    def status(self, value):
+        if self.table_name != None:
+            raise Exception("Can't set attribute status")
         
+
     def batch_pandas(self, dataframe, compress=False):
         shuffle_df = dataframe.sample(frac=1).reset_index(drop=True)
         json_df = shuffle_df.fillna("").to_json(orient="records")
