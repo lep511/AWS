@@ -63,6 +63,7 @@ class DynamoTable:
                 "Table creation": self.table.creation_date_time.strftime('%Y-%m-%dT%H:%M:%S'),
                 "Key schema": self.table.key_schema,
                 "Attribute definitions": self.table.attribute_definitions,
+                "Table class": self.table_class,
                 "Point-in-time recovery status": self.status_pitr,
                 "Delete protection": self.delete_protection,
                 "Stream enabled": self.status_stream
@@ -118,7 +119,12 @@ class DynamoTable:
                 self.bill_mode = 'PROVISIONED'
             list_tags = self.table.meta.client.list_tags_of_resource(ResourceArn=self.table_arn)
             self.tags = list_tags['Tags']
-            
+            self.table_class = self.table.table_class_summary['TableClass']
+            if self.table_class == 'STANDARD_INFREQUENT_ACCESS':
+                self.infrequent_access = True
+            else:
+                self.infrequent_access = False
+
     @property
     def all_tables(self):
         """
@@ -202,7 +208,53 @@ class DynamoTable:
             print("Table created successfully!")
             self.table_arn = self.table.table_arn
             self.tags = tags
+            self.table_class = self.table.table_class_summary['TableClass']
+            if self.table_class == 'STANDARD_INFREQUENT_ACCESS':
+                self.infrequent_access = True
+            else:
+                self.infrequent_access = False
     
+    @property
+    def infrequent_access(self):
+        """
+        Returns the table class of the table.
+        :param table_name: The name of the table.
+        :return: The table class.
+        """
+        if self.table_name == None:
+            return
+        if self.table_class == 'STANDARD_INFREQUENT_ACCESS':
+            return True
+        else:
+            return False
+    
+    @infrequent_access.setter
+    def infrequent_access(self, value):
+        if not self.table_name:
+            raise Exception("Can't set attribute infrequent_access. No table selected.")
+
+        if self.infrequent_access == value:
+            return
+
+        if isinstance(value, bool):
+            if value:
+                class_value = "STANDARD_INFREQUENT_ACCESS"
+            else:
+                class_value = "STANDARD"
+        else:
+            raise ValueError("Value must be a boolean (True or False).")
+        
+        try:
+            self.table.update(
+                TableClass=class_value
+            )
+            self.table.wait_until_exists()
+        except ClientError as err:
+            handle_error(err)
+            raise
+        else:
+            self.table_class = class_value
+            print(f"Table class updated successfully to {class_value}!")
     
     @property
     def status(self):
