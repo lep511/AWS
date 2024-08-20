@@ -278,8 +278,7 @@ class DynamoTable:
 
     @status.setter
     def status(self, value):
-        if self.table_name != None:
-            raise Exception("Can't set attribute status")
+        pass
         
 
     def batch_pandas(self, dataframe, compress=False):
