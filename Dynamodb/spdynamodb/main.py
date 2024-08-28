@@ -1,6 +1,7 @@
 from spdynamodb.models import query_main, query_partiql_main
 from spdynamodb.models.functions import convert_floats_to_decimals
 from spdynamodb.models import handle_error
+from spdynamodb.models import reserved_words
 from decimal import Decimal
 from io import BytesIO
 from datetime import datetime
@@ -34,6 +35,7 @@ class DynamoTable:
         self.session = boto3.Session(profile_name=profile_name, region_name=region_name)
         self.dyn_resource = self.session.resource("dynamodb", region_name=region_name)
         self.region = region_name
+        self.reserved_words = reserved_words()
         self.status = "No table selected."
         self.__keyType = {"S": "s", "N": 0, "B": b"b"}
         if not table_name:
@@ -141,9 +143,9 @@ class DynamoTable:
                      partition_key_type, 
                      sort_key=None, 
                      sort_key_type=None,
-                     provisioned=False, # PAY_PER_REQUEST is default
-                     read_capacity=5, 
-                     write_capacity=5,
+                     provisioned=False, # PAY_PER_REQUEST is default if not set <<read_capacity>> or <<write_capacity>>
+                     read_capacity=None, 
+                     write_capacity=None,
                      infrequent_access=False,
                      tags=[]
                     ):
@@ -155,10 +157,10 @@ class DynamoTable:
         :param sort_key: Sort key name. Default: None.
         :param sort_key_type: Sort key type. Default: None.
         :param provisioned: False = PAY_PER_REQUEST (), True = PROVISIONED. Default: False.
-        :param read_capacity: (Read Capacity Units) Default: 10. The maximum number of strongly consistent reads 
-                    consumed per second before DynamoDB returns a ThrottlingException. Default: 5.
-        :param write_capacity: (WriteCapacityUnits) Default: 10. The maximum number of writes consumed per second 
-                    before DynamoDB returns a ThrottlingException. Default: 5.
+        :param read_capacity: (Read Capacity Units) The maximum number of strongly consistent reads 
+                    consumed per second before DynamoDB returns a ThrottlingException. Default: None.
+        :param write_capacity: (WriteCapacityUnits) The maximum number of writes consumed per second 
+                    before DynamoDB returns a ThrottlingException. Default: None.
         :param infrequent_access: False = Table STANDARD, True = Table STANDARD_INFREQUENT_ACCESS. Default False.
         :param tags: e.g. tags = [{'Key': 'string', 'Value': 'string'}]. Default no tags.
         :return: The newly created table.
@@ -174,6 +176,15 @@ class DynamoTable:
         if sort_key != None:
             key_schema.append({'AttributeName': sort_key, 'KeyType': 'RANGE'})
             att_definition.append({'AttributeName': sort_key, 'AttributeType': sort_key_type})
+            
+        if provisioned:
+            if not read_capacity:
+                raise ValueError("read_capacity must be set when provisioned is True.")
+            if not write_capacity:
+                raise ValueError("write_capacity must be set when provisioned is True.")
+        
+        if read_capacity and write_capacity:
+            provisioned = True
             
         try:
             if provisioned:
