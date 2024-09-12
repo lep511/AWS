@@ -1,0 +1,14 @@
+sudo bash
+export PATH=$PATH:/usr/local/bin
+EC2_AVAIL_ZONE=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone`
+EC2_REGION="`echo \"$EC2_AVAIL_ZONE\" | sed 's/[a-z]$//'`"
+ACCOUNTID=`curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .accountId`
+aws eks update-kubeconfig --region $EC2_REGION --name GuardDuty-Demo
+
+kubectl cluster-info
+
+curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+export PATH=$PATH:/home/ssm-user/.kubescape/bin
+
+# Scan the in-context EKS cluster
+kubescape scan framework mitre

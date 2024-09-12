@@ -1,0 +1,57 @@
+<html>
+<head><meta http-equiv="Access-Control-Allow-Origin" content="*"></head>
+<script>
+var endpoint;
+var counter;
+
+function updateStatus(endpoint, querystring, callback) {
+  var xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+     callback(this.responseText);
+    }
+  };
+  console.log(endpoint+querystring);
+  xhttp.open("GET", endpoint+"/"+querystring, true);
+  xhttp.send();
+}
+
+function submitQuery() {
+  endpoint = document.getElementById('endpoint').value;
+  var country = document.getElementById('country').value;
+  querystring = "?action=execute_report&country_name="+country;
+
+  updateStatus(endpoint, querystring, function(status){
+    query_id = status.split('"').join('');
+    document.getElementById("status").innerHTML = query_id;
+    querystring = "?action=check_report_status&query_id="+query_id;
+    counter = 1;
+    checkStatus(endpoint, querystring, function(){
+      querystring = "?action=get_report_results&query_id="+query_id;
+      updateStatus(endpoint, querystring, function(status){
+        var jsonString = "<pre>" + JSON.stringify(JSON.parse(status),null,2) + "</pre>";
+        document.getElementById("status").innerHTML = jsonString;
+      });
+    });
+  });
+}
+
+function checkStatus(endpoint, querystring, callback) {
+  updateStatus(endpoint, querystring, function(status){
+    if (status == "\"FINISHED\"")
+      callback();
+    else {
+      document.getElementById("status").innerHTML = counter + ": " + status;
+      setTimeout('', 1000);
+      counter++;
+      checkStatus(endpoint, querystring, callback)
+    }
+  });
+}
+
+</script>
+<label for=endpoint>Endpoint:</label><input id=endpoint type=text style="width:100%"><br>
+<label for=country>Country:</label><input id=country type=text style="width:100%">
+<button type="button" onclick=submitQuery()>Submit</button>
+<div id=status>
+</div>
