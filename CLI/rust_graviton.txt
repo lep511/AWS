@@ -1,0 +1,31 @@
+#!/bin/bash
+sudo dnf update
+sudo dnf upgrade --releasever=2023.6.20241031 -y
+sudo dnf install pip -y
+sudo dnf install gcc -y
+sudo dnf install pkg-config perl-FindBin openssl-devel -y
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. "$HOME/.cargo/env"
+pip install cargo-lambda
+
+--------------------------------------------------------------
+
+R8g - Instances
+
+--------------------------------------------------------------
+
+cargo lambda build --arm64 --release --output-format zip
+cargo lambda deploy
+
+--------------------------------------------------------------
+
+sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/vscode.repo > /dev/null
+
+dnf check-update
+sudo dnf install code -y
+
+code tunnel
+---------------------------------------
+gnu-error
+
